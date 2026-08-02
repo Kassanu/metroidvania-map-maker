@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { setActivePinia } from 'pinia'
+import { createTestPinia } from '@/test-setup'
 import { mount } from '@vue/test-utils'
 import IconPicker from './IconPicker.vue'
 import IconLibraryPanel from './IconLibraryPanel.vue'
 import { PLATE_ROUNDED_SQUARE } from '@/canvas/iconBadge'
 import { ICONS, getIcon } from '@/icons/registry'
+import { useArmedIconStore } from '@/stores/armedIcon'
+import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
 
 describe('IconPicker', () => {
   it('shows every icon in the catalogue, derived rather than listed', () => {
@@ -70,6 +74,10 @@ describe('IconPicker', () => {
 })
 
 describe('IconLibraryPanel', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
   it('is the picker, in a different home', () => {
     // One component, two homes: the panel adds a place to stand and nothing
     // else, so search and the grid cannot drift between them.
@@ -81,5 +89,35 @@ describe('IconLibraryPanel', () => {
   it('does not take focus when the sidebar shows it', () => {
     const panel = mount(IconLibraryPanel, { attachTo: document.body })
     expect(document.activeElement).not.toBe(panel.find('input').element)
+  })
+
+  it('arms on pick, and loads that icon’s colours into the toolbar', async () => {
+    const panel = mount(IconLibraryPanel)
+    const entry = ICONS[1]
+    const option = panel
+      .findAll('.icon-option')
+      .find((button) => button.text().includes(entry.name))!
+
+    await option.trigger('click')
+
+    // Picking here arms rather than places: the panel has no cell to place in.
+    expect(useArmedIconStore().iconType).toBe(entry.id)
+    // And the swatches load the icon's own pair, so what the grid shows is what
+    // lands on the map until a swatch is overridden.
+    expect(useMarkupDefaultsStore().colors).toEqual(entry.defaultColors)
+  })
+
+  it('marks the armed icon, since nothing else shows it once the popup closes', async () => {
+    const panel = mount(IconLibraryPanel)
+    const option = panel.findAll('.icon-option')[0]
+
+    await option.trigger('click')
+    expect(panel.findAll('.icon-option.armed')).toHaveLength(1)
+    expect(option.attributes('aria-pressed')).toBe('true')
+
+    // Clicking the armed icon again disarms it, one of the three routes out.
+    await option.trigger('click')
+    expect(useArmedIconStore().isArmed).toBe(false)
+    expect(panel.findAll('.icon-option.armed')).toHaveLength(0)
   })
 })

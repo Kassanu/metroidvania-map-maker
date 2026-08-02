@@ -33,13 +33,11 @@ describe('Toolbar', () => {
     expect(wrapper.find('.brush-size').exists()).toBe(false)
   })
 
-  // The erase toggle is the one control Door mode has so far. It belongs in
-  // the dynamic per-mode toolbar section, meant eventually for Draw, Door
-  // and Markup, but only Draw and Door have it built. It is also the only
-  // erase route touch has, since right-click and the stylus eraser end are
-  // the other two.
+  // The toggle belongs to every mode with deletable content, which is Draw,
+  // Door and Markup. It is also the only erase route touch has, since
+  // right-click and the stylus eraser end are the other two.
   describe('the erase toggle', () => {
-    it('is present in Door mode as well as Draw', async () => {
+    it('is present in every mode with something to erase', async () => {
       const modeStore = useModeStore()
       const wrapper = mount(Toolbar)
       expect(wrapper.find('.erase-toggle-button').exists()).toBe(true)
@@ -50,8 +48,13 @@ describe('Toolbar', () => {
       // Door's own section, not Draw's left on screen.
       expect(wrapper.find('.brush-size').exists()).toBe(false)
 
-      // And absent from the modes whose tools are unbuilt.
       modeStore.setMode('markup')
+      await nextTick()
+      expect(wrapper.find('.erase-toggle-button').exists()).toBe(true)
+      expect(wrapper.find('.replace-button').exists()).toBe(true)
+
+      // And absent from the one mode whose tools are still unbuilt.
+      modeStore.setMode('select')
       await nextTick()
       expect(wrapper.find('.erase-toggle-button').exists()).toBe(false)
     })

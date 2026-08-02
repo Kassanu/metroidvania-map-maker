@@ -2,6 +2,7 @@
 import ZoomControl from '../ZoomControl.vue'
 import DrawToolbar from './DrawToolbar.vue'
 import DoorToolbar from './DoorToolbar.vue'
+import MarkupToolbar from './MarkupToolbar.vue'
 
 import { computed } from 'vue'
 import { useModeStore } from '@/stores/mode'
@@ -11,18 +12,11 @@ import { t } from '@/i18n'
 const modeStore = useModeStore()
 const ui = useUiStore()
 
-// Placeholder text for the modes whose tools are unbuilt. Draw and Door have
-// real components instead: see the template.
-const modeOptionsLabel = computed(() => {
-  switch (modeStore.active) {
-    case 'select':
-      return t('toolbar.modeOptions.select')
-    case 'markup':
-      return t('toolbar.modeOptions.markup')
-    default:
-      return ''
-  }
-})
+// Placeholder text for the modes whose tools are unbuilt. Draw, Door and
+// Markup have real components instead: see the template.
+const modeOptionsLabel = computed(() =>
+  modeStore.active === 'select' ? t('toolbar.modeOptions.select') : '',
+)
 </script>
 
 <template>
@@ -36,6 +30,7 @@ const modeOptionsLabel = computed(() => {
     <span class="toolbar-divider" aria-hidden="true" />
     <DrawToolbar v-if="modeStore.active === 'draw'" />
     <DoorToolbar v-else-if="modeStore.active === 'door'" />
+    <MarkupToolbar v-else-if="modeStore.active === 'markup'" />
     <div v-else class="toolbar-group dynamic">{{ modeOptionsLabel }}</div>
     <button
       type="button"

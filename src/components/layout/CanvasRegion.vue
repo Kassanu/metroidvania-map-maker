@@ -8,6 +8,8 @@ import { useModeStore } from '@/stores/mode'
 import { useToolsStore } from '@/stores/tools'
 import { useActiveRoomStore } from '@/stores/activeRoom'
 import { usePendingTeleportStore } from '@/stores/pendingTeleport'
+import { useArmedIconStore } from '@/stores/armedIcon'
+import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
 import { useSelectionStore } from '@/stores/selection'
 import { resolveZone, zoneTolerances, type DrawZone } from '@/canvas/drawZone'
 import { pushEscHandler } from '@/hotkeys/escStack'
@@ -21,10 +23,16 @@ import {
   resolveDoorTarget,
   type DoorTarget,
 } from '@/canvas/doorTarget'
-import { markupCursor, resolveMarkupTarget, type MarkupTarget } from '@/canvas/markupTarget'
+import {
+  armedPlacementAt,
+  markupCursor,
+  resolveMarkupTarget,
+  type MarkupTarget,
+} from '@/canvas/markupTarget'
 import IconPickerPopover from './IconPickerPopover.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
 import { deleteTransition } from '@/core/ops/doors'
+import { placeIcon } from '@/core/ops/markup'
 import { cellCentre, teleportScene } from '@/canvas/teleports'
 import { RULER_THICKNESS } from '@/canvas/renderRuler'
 import { brushOffset } from '@/canvas/brush'
@@ -43,6 +51,7 @@ import type { BrushPreview, HoveredHandle } from '@/canvas/renderMap'
 import type { WorldPoint } from '@/canvas/stroke'
 import type { MapId, TransitionId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
+import type { IconRegistryEntry } from '@/icons/registry'
 import { useCanvasRenderer } from '@/composables/useCanvasRenderer'
 import { useResizeObserver } from '@/composables/useResizeObserver'
 import { useSystemColorScheme } from '@/composables/useSystemColorScheme'
@@ -61,6 +70,8 @@ const modeStore = useModeStore()
 const tools = useToolsStore()
 const activeRoom = useActiveRoomStore()
 const pendingTeleport = usePendingTeleportStore()
+const armedIcon = useArmedIconStore()
+const markupDefaults = useMarkupDefaultsStore()
 const selection = useSelectionStore()
 
 const container = ref<HTMLDivElement | null>(null)
@@ -460,7 +471,17 @@ function handleMarkupPress(event: PointerEvent) {
       if (cellKey(Math.floor(point.x), Math.floor(point.y)) !== target.cell) leftCell = true
     },
     onEnd: () => {
-      if (leftCell || target.kind !== 'room') return
+      if (leftCell) return
+      // An armed icon replaces the click column for every row: it places here
+      // rather than selecting, and the picker does not open. Selecting or
+      // editing an existing object requires disarming first.
+      const armed = armedIcon.iconType
+      if (armed !== null) {
+        if (armedPlacementAt(target, markupDefaults.replace) === 'not-in-a-room') return
+        placeIconAt(armed, target.cell)
+        return
+      }
+      if (target.kind !== 'room') return
       openIconPicker(target.cell)
     },
   })
@@ -655,10 +676,35 @@ function closeIconPicker() {
   pickerCell.value = null
 }
 
-// Placing what the picker returns is the placement chunk's job; for now the
-// choice closes the popup.
-function handleIconPicked() {
+// The popup was opened at a cell, so picking there places rather than arms: one
+// icon, in the cell you clicked, and the popup has done its job.
+//
+// The entry's own colours, loaded into the toolbar on the way through, so the
+// swatches agree with what just landed and a later armed placement matches it.
+function handleIconPicked(entry: IconRegistryEntry) {
+  const cell = pickerCell.value
   closeIconPicker()
+  if (!cell) return
+  markupDefaults.loadColors(entry.defaultColors)
+  placeIconAt(entry.id, cell)
+}
+
+// Both placement routes end here: the popup's pick and a click while armed.
+// One op, differing only in the chrome that led to it.
+//
+// Colours come from the toolbar rather than the registry, because the user may
+// have overridden a swatch since the icon was armed.
+function placeIconAt(iconType: string, cell: CellKey) {
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (!tab || !map) return
+
+  model.run(t('history.placeIcon'), mapScope(tab.id), (tx) =>
+    placeIcon(tx, map, cell, iconType, markupDefaults.colors, {
+      replace: markupDefaults.replace,
+    }),
+  )
+  draw()
 }
 
 // What Markup mode's pointer is over, as a row of its table. The same shape as
@@ -805,7 +851,14 @@ function cursorAt(point: ScreenPoint | null, zone: DrawZone | null): string | nu
   }
   if (modeStore.active === 'markup') {
     const target = markupTargetAt(point)
-    return target && markupCursor(target, tools.erase)
+    if (!target) return null
+    // The armed state changes what every row's click does, so it reaches the
+    // cursor too: one source, read by dispatch and cursor alike.
+    return markupCursor(
+      target,
+      tools.erase,
+      armedIcon.isArmed ? { replace: markupDefaults.replace } : null,
+    )
   }
   return cursorFor(zone)
 }
@@ -1013,6 +1066,29 @@ watch(
   { flush: 'sync' },
 )
 
+// `Esc` disarms, in the tier between a live gesture and the selection. That
+// ordering is the peeling order the stack exists for: a drag in progress aborts
+// first, then the thing the next click would do, then what is selected.
+//
+// The tier has been reserved since the Esc stack was written and this is what
+// fills it. Registered only while armed, like the two above, so it never
+// swallows an `Esc` meant for a lower tier.
+let popArmedIconEsc: (() => void) | null = null
+watch(
+  () => armedIcon.isArmed,
+  (armed) => {
+    if (armed && !popArmedIconEsc) {
+      popArmedIconEsc = pushEscHandler('armedIcon', () => armedIcon.disarm())
+      return
+    }
+    if (!armed && popArmedIconEsc) {
+      popArmedIconEsc()
+      popArmedIconEsc = null
+    }
+  },
+  { flush: 'sync' },
+)
+
 // `Esc` clears the selection, in the selection tier: tier 5 deselects
 // everything. It sits below the pending teleport deliberately: a half-drawn
 // gesture is more urgent than a selection, which is exactly the peeling order
@@ -1042,6 +1118,7 @@ watch(
 onUnmounted(() => {
   popActiveRoomEsc?.()
   popPendingTeleportEsc?.()
+  popArmedIconEsc?.()
   popSelectionEsc?.()
 })
 

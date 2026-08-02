@@ -58,13 +58,55 @@ export function resolveMarkupTarget(point: ScreenPoint, scene: HitScene): Markup
   return { kind: 'room', cell, roomId }
 }
 
+// What an armed icon would do with a click, which is not what the table says a
+// click does: while armed, every row's click column is replaced by "place the
+// armed icon here".
+//
+// Three answers, because a refused placement has to look refused before the
+// click rather than after it. `blocked` is the cell-occupied case with replace
+// off, which the toolbar's checkbox is what resolves.
+export type ArmedPlacement = 'place' | 'replace' | 'blocked' | 'not-in-a-room'
+
+export function armedPlacementAt(target: MarkupTarget, replace: boolean): ArmedPlacement {
+  // Icons must be placed inside a room; lines are the thing with no room owner,
+  // so a line row on bare grid is still nowhere to put an icon.
+  if (target.kind === 'empty' || target.roomId === null) return 'not-in-a-room'
+  // The cell holds one already. Any other row means the cell is free, since an
+  // icon outranks both line rows in the same cell.
+  if (target.kind !== 'icon') return 'place'
+  return replace ? 'replace' : 'blocked'
+}
+
 // The cursor for a target. Derived from the same resolver dispatch reads: one
 // source, every reader, so a cursor cannot promise a gesture that is not there.
 //
 // While erasing, only rows with something to delete offer a cursor. A line's
 // body has nothing: peel works from an end, and right-clicking a body does
 // nothing at all.
-export function markupCursor(target: MarkupTarget, erasing = false): string | null {
+//
+// An armed icon outranks both columns, because it has replaced the click for
+// every row. Erase still outranks it: the toggle governs the whole primary
+// button, so a placement cursor over a cell a click would delete from would be
+// a lie.
+export function markupCursor(
+  target: MarkupTarget,
+  erasing = false,
+  armed: { replace: boolean } | null = null,
+): string | null {
+  if (armed && !erasing) {
+    switch (armedPlacementAt(target, armed.replace)) {
+      case 'not-in-a-room':
+        return null
+      // Refused before the press, so "nothing happened" is never the first
+      // thing the user learns about the replace rule.
+      case 'blocked':
+        return 'not-allowed'
+      case 'place':
+      case 'replace':
+        return 'copy'
+    }
+  }
+
   switch (target.kind) {
     // Both start a line on a drag, so both aim rather than point. `empty` is a
     // real target here, which is where this parts company with Door mode.

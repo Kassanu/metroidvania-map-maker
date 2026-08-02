@@ -13,7 +13,12 @@ import type { IconRegistryEntry } from '@/icons/registry'
 // Icons render in their own canonical colours, so the grid says what will land
 // on the map rather than showing a wall of one colour.
 
-const props = withDefaults(defineProps<{ autofocus?: boolean }>(), { autofocus: false })
+// `armedId` marks the icon whose next click places it. The popup never passes
+// one: it places on pick and closes, so nothing there is ever left armed.
+const props = withDefaults(defineProps<{ autofocus?: boolean; armedId?: string | null }>(), {
+  autofocus: false,
+  armedId: null,
+})
 const emit = defineEmits<{ pick: [entry: IconRegistryEntry] }>()
 
 const { query, results } = useIconCatalog()
@@ -39,7 +44,14 @@ onMounted(() => {
     />
     <ul v-if="results.length > 0" class="icon-grid" :aria-label="t('panel.iconLibrary')">
       <li v-for="entry in results" :key="entry.id">
-        <button type="button" class="icon-option" :title="entry.name" @click="emit('pick', entry)">
+        <button
+          type="button"
+          class="icon-option"
+          :class="{ armed: entry.id === props.armedId }"
+          :aria-pressed="props.armedId === null ? undefined : entry.id === props.armedId"
+          :title="entry.name"
+          @click="emit('pick', entry)"
+        >
           <IconBadge
             :art="{ plate: entry.plate ?? PLATE_ROUNDED_SQUARE, glyph: entry.glyph }"
             :colors="entry.defaultColors"
@@ -100,6 +112,12 @@ onMounted(() => {
 .icon-option:focus-visible {
   border-color: var(--accent);
   outline: none;
+}
+/* Armed, not merely hovered: this icon is what the next click on the map
+   places, and once the popup closes there is nothing else showing that. */
+.icon-option.armed {
+  border-color: var(--accent);
+  background: var(--accent-soft, var(--surface-active));
 }
 
 .icon-empty {

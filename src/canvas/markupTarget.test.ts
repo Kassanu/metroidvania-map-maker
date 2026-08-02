@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { markupCursor, resolveMarkupTarget } from './markupTarget'
+import { armedPlacementAt, markupCursor, resolveMarkupTarget } from './markupTarget'
 import { hitTest, lineEndRadius, type HitScene } from './hitTest'
 import { createProject } from '@/core/factory'
 import { Transaction } from '@/core/journal'
@@ -204,5 +204,78 @@ describe('markupCursor', () => {
     // The two rows that do delete keep theirs.
     expect(markupCursor(resolveMarkupTarget(centre('1,1'), scene), true)).toBe('pointer')
     expect(markupCursor(resolveMarkupTarget(from, scene), true)).toBe('pointer')
+  })
+})
+
+describe('armedPlacementAt', () => {
+  it('places on a free room cell, whatever else is in it', () => {
+    const { scene } = fixture()
+
+    expect(armedPlacementAt(resolveMarkupTarget(centre('4,0'), scene), false)).toBe('place')
+    // A line row still means the cell is free: an icon outranks both line rows
+    // in the same cell, so anything but `icon` is somewhere an icon can go.
+    const crossing = resolveMarkupTarget(centre('0,0'), scene)
+    expect(crossing.kind).toBe('line-end')
+    expect(armedPlacementAt(crossing, false)).toBe('place')
+  })
+
+  it('is blocked on an occupied cell until replace is on', () => {
+    const { scene } = fixture()
+    const occupied = resolveMarkupTarget(centre('1,1'), scene)
+    expect(occupied.kind).toBe('icon')
+
+    expect(armedPlacementAt(occupied, false)).toBe('blocked')
+    expect(armedPlacementAt(occupied, true)).toBe('replace')
+  })
+
+  it('refuses outside every room, on a line row as much as bare grid', () => {
+    const { scene } = fixture()
+
+    expect(armedPlacementAt(resolveMarkupTarget(centre('9,9'), scene), true)).toBe('not-in-a-room')
+    // Lines may live outside rooms; icons may not, so a line hit out there is
+    // still nowhere to put one.
+    const outside = resolveMarkupTarget(centre('6,6'), scene)
+    expect(outside.kind).toBe('line-end')
+    expect(armedPlacementAt(outside, true)).toBe('not-in-a-room')
+  })
+})
+
+describe('markupCursor while armed', () => {
+  it('replaces the click column for every row', () => {
+    const { scene } = fixture()
+    const armed = { replace: false }
+
+    // A room cell would open the picker unarmed; a line end would select.
+    // Armed, both place, so both say so.
+    expect(markupCursor(resolveMarkupTarget(centre('4,0'), scene), false, armed)).toBe('copy')
+    expect(markupCursor(resolveMarkupTarget(centre('0,0'), scene), false, armed)).toBe('copy')
+  })
+
+  it('shows a refusal before the press, not after it', () => {
+    const { scene } = fixture()
+    const occupied = resolveMarkupTarget(centre('1,1'), scene)
+
+    // "Nothing happened" must never be how the user first learns the rule.
+    expect(markupCursor(occupied, false, { replace: false })).toBe('not-allowed')
+    expect(markupCursor(occupied, false, { replace: true })).toBe('copy')
+  })
+
+  it('offers nothing where an icon cannot go', () => {
+    const { scene } = fixture()
+    expect(markupCursor(resolveMarkupTarget(centre('9,9'), scene), false, { replace: true })).toBe(
+      null,
+    )
+  })
+
+  it('lets erase outrank it, since the toggle governs the whole button', () => {
+    const { scene } = fixture()
+    const icon = resolveMarkupTarget(centre('1,1'), scene)
+
+    // While erasing, a click deletes rather than places, so a placement cursor
+    // would promise something that will not happen.
+    expect(markupCursor(icon, true, { replace: false })).toBe('pointer')
+    expect(markupCursor(resolveMarkupTarget(centre('4,0'), scene), true, { replace: false })).toBe(
+      null,
+    )
   })
 })

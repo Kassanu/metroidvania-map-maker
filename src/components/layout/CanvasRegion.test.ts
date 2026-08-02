@@ -11,6 +11,9 @@ import { useToolsStore } from '@/stores/tools'
 import { useActiveRoomStore } from '@/stores/activeRoom'
 import { usePendingTeleportStore } from '@/stores/pendingTeleport'
 import { useSelectionStore } from '@/stores/selection'
+import { useArmedIconStore } from '@/stores/armedIcon'
+import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
+import { getIcon } from '@/icons/registry'
 import { pushEscHandler, resolveEscape } from '@/hotkeys/escStack'
 import { PROJECT_SCOPE, mapScope, useModelStore } from '@/stores/model'
 import { updateSetting } from '@/core/ops/project'
@@ -3499,5 +3502,219 @@ describe('CanvasRegion Markup mode picker', () => {
     expect(below).not.toHaveBeenCalled()
     pop()
     wrapper.unmount()
+  })
+})
+
+describe('CanvasRegion Markup mode placement', () => {
+  let mounted: ReturnType<typeof mount> | null = null
+
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  afterEach(() => {
+    mounted?.unmount()
+    mounted = null
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    mounted = wrapper
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 }) as DOMRect
+    viewport.setPointerCapture = () => {}
+    return { wrapper, viewport }
+  }
+
+  function pointer(type: string, init: PointerEventInit = {}) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, ...init })
+  }
+
+  function at(x: number, y: number) {
+    const tabsStore = useTabsStore()
+    const tile = useModelStore().tileSize
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    return {
+      clientX: (x - camera.pan.x) * tile * camera.zoom,
+      clientY: (y - camera.pan.y) * tile * camera.zoom,
+    }
+  }
+
+  async function inMarkupMode() {
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    model.run('Setup', mapScope(mapId), (tx) => {
+      const map = model.project.mapsById.get(mapId)!
+      paintCells(tx, model.project, map, ['0,0', '1,0', '0,1', '1,1'], { areaId: WORLD_AREA_ID })
+    })
+    useModeStore().setMode('markup')
+    await nextTick()
+    return mapId
+  }
+
+  async function click(viewport: HTMLElement, point: { clientX: number; clientY: number }) {
+    viewport.dispatchEvent(pointer('pointerdown', point))
+    viewport.dispatchEvent(pointer('pointerup', point))
+    await nextTick()
+    await nextTick()
+  }
+
+  function iconsOn(mapId: MapId) {
+    return [...useModelStore().project.mapsById.get(mapId)!.icons.values()]
+  }
+
+  it('places the armed icon on a click, without opening the picker', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    useArmedIconStore().arm('save')
+    await nextTick()
+
+    await click(viewport, at(1.5, 0.5))
+
+    const icons = iconsOn(mapId)
+    expect(icons).toHaveLength(1)
+    expect(icons[0].cell).toBe('1,0')
+    expect(icons[0].iconType).toBe('save')
+    // The armed icon replaces the click column: the picker must not also open.
+    expect(document.querySelector('.icon-picker-popover')?.getAttribute('data-state')).not.toBe(
+      'open',
+    )
+  })
+
+  it('stays armed, so several clicks place several icons', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    useArmedIconStore().arm('save')
+    await nextTick()
+
+    await click(viewport, at(0.5, 0.5))
+    await click(viewport, at(1.5, 0.5))
+    await click(viewport, at(0.5, 1.5))
+
+    expect(iconsOn(mapId)).toHaveLength(3)
+    expect(useArmedIconStore().isArmed).toBe(true)
+  })
+
+  it('takes the colours from the toolbar, not from the registry', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    const defaults = useMarkupDefaultsStore()
+    useArmedIconStore().arm('save')
+    // Arming loads the icon's own pair; overriding a swatch afterwards sticks.
+    defaults.loadColors({ plateColor: '#3b7dd8', glyphColor: '#f5f7fa' })
+    defaults.setPlateColor('#abcdef')
+    await nextTick()
+
+    await click(viewport, at(1.5, 0.5))
+
+    expect(iconsOn(mapId)[0].plateColor).toBe('#abcdef')
+    expect(iconsOn(mapId)[0].glyphColor).toBe('#f5f7fa')
+  })
+
+  it('is blocked on an occupied cell until replace is on', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    const armed = useArmedIconStore()
+    const defaults = useMarkupDefaultsStore()
+    armed.arm('save')
+    await nextTick()
+    await click(viewport, at(1.5, 0.5))
+    const first = iconsOn(mapId)[0].id
+
+    // Blocked: the cell keeps the icon it had, and nothing new appears.
+    armed.arm('missile')
+    await click(viewport, at(1.5, 0.5))
+    expect(iconsOn(mapId)).toHaveLength(1)
+    expect(iconsOn(mapId)[0].id).toBe(first)
+
+    defaults.setReplace(true)
+    await click(viewport, at(1.5, 0.5))
+    expect(iconsOn(mapId)).toHaveLength(1)
+    expect(iconsOn(mapId)[0].iconType).toBe('missile')
+  })
+
+  it('places nothing outside a room, and does not open the picker either', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    useArmedIconStore().arm('save')
+    await nextTick()
+
+    await click(viewport, at(9.5, 9.5))
+
+    expect(iconsOn(mapId)).toHaveLength(0)
+    expect(document.querySelector('.icon-picker-popover')?.getAttribute('data-state')).not.toBe(
+      'open',
+    )
+  })
+
+  it('is one undo step, whichever route placed it', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    const model = useModelStore()
+    useArmedIconStore().arm('save')
+    await nextTick()
+
+    await click(viewport, at(1.5, 0.5))
+    expect(iconsOn(mapId)).toHaveLength(1)
+
+    model.undo()
+    expect(iconsOn(mapId)).toHaveLength(0)
+    expect(checkInvariants(model.project)).toEqual([])
+  })
+
+  it('places from the popup at the cell it was opened on', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+
+    // Unarmed: the click opens the picker, and picking places there.
+    await click(viewport, at(1.5, 0.5))
+    expect(document.querySelector('.icon-picker-popover')?.getAttribute('data-state')).toBe('open')
+
+    const option = document.querySelector('.icon-picker-popover .icon-option') as HTMLElement
+    option.click()
+    await nextTick()
+    await nextTick()
+
+    const icons = iconsOn(mapId)
+    expect(icons).toHaveLength(1)
+    expect(icons[0].cell).toBe('1,0')
+    // The popup places and closes; it never leaves anything armed.
+    expect(useArmedIconStore().isArmed).toBe(false)
+    expect(document.querySelector('.icon-picker-popover')?.getAttribute('data-state')).not.toBe(
+      'open',
+    )
+  })
+
+  it('places the popup’s pick in its own colours, and loads them into the toolbar', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+
+    await click(viewport, at(1.5, 0.5))
+    const option = document.querySelector('.icon-picker-popover .icon-option') as HTMLElement
+    option.click()
+    await nextTick()
+    await nextTick()
+
+    // What the grid showed is what landed, and the swatches now agree with it.
+    const entry = getIcon(iconsOn(mapId)[0].iconType)!
+    expect(iconsOn(mapId)[0].plateColor).toBe(entry.defaultColors.plateColor)
+    expect(useMarkupDefaultsStore().colors).toEqual(entry.defaultColors)
+  })
+
+  it('disarms on Esc, above the selection tier and below a live gesture', async () => {
+    mountCanvas()
+    await inMarkupMode()
+    const armed = useArmedIconStore()
+    const below = vi.fn()
+    const pop = pushEscHandler('selection', below)
+    armed.arm('save')
+    await nextTick()
+
+    expect(resolveEscape()).toBe(true)
+
+    expect(armed.isArmed).toBe(false)
+    // First match wins: the selection tier below must not also fire.
+    expect(below).not.toHaveBeenCalled()
+    pop()
   })
 })

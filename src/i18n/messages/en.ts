@@ -51,6 +51,10 @@ export const en = {
   // the erase column deletes whatever is under the pointer, and the undo entry
   // is named before the target is resolved.
   'history.deleteTransition': 'Delete Transition',
+  // One label for both placement routes, the popup's pick and a click while
+  // armed: they are the same op, and the undo entry should not say which
+  // chrome the user reached it through.
+  'history.placeIcon': 'Place Icon',
 
   'common.close': 'Close',
   'common.cancel': 'Cancel',
@@ -147,7 +151,6 @@ export const en = {
   'toolbar.areaTitle':
     'The area new rooms are drawn into. Growing an existing room keeps its own area.',
   'toolbar.modeOptions.select': 'Select options: rooms / cells',
-  'toolbar.modeOptions.markup': 'Markup options: replace-on-occupied · line color · erase',
 
   'zoom.label': 'Zoom',
   'zoom.options': 'Zoom options',
@@ -201,6 +204,15 @@ export const en = {
   'panel.hierarchy': 'Hierarchy',
   'panel.iconLibrary': 'Icon Library',
   'panel.inspector': 'Inspector',
+
+  'toolbar.markup.label': 'Markup options',
+  'toolbar.markup.plate': 'Plate',
+  'toolbar.markup.glyph': 'Glyph',
+  'toolbar.markup.replace': 'Replace',
+  'toolbar.markup.replaceTitle': 'Replace an icon already on the cell',
+  'toolbar.markup.disarm': 'Disarm',
+  'toolbar.markup.disarmTitle': 'Stop placing this icon (Esc)',
+  'toolbar.markup.eraseTitle': 'Erase: delete icons, peel lines from an end',
 
   'iconPicker.search': 'Search icons',
   'iconPicker.empty': 'No icons match "{query}"',
