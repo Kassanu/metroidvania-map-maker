@@ -73,6 +73,7 @@ export interface SceneInput {
   showLines: boolean
   showAllLabels: boolean
   hoveredLabel: string | null
+  selectedMarkup: ReadonlySet<string>
 }
 
 // Backing-store pixels for a CSS-pixel box, so lines land on device pixels
@@ -139,6 +140,7 @@ export function useCanvasRenderer(targets: CanvasTargets, scene: () => SceneInpu
       showLines: current.showLines,
       showAllLabels: current.showAllLabels,
       hoveredLabel: current.hoveredLabel,
+      selectedMarkup: current.selectedMarkup,
     }
     renderMap(mainCtx, width, height, mapScene)
 

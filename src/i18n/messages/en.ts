@@ -59,6 +59,8 @@ export const en = {
   'history.drawLine': 'Draw Line',
   'history.extendLine': 'Extend Line',
   'history.deleteIcon': 'Delete Icon',
+  'history.deleteLine': 'Delete Line',
+  'history.deleteSelection': 'Delete Selection',
   'history.peelLine': 'Erase Line',
 
   'common.close': 'Close',

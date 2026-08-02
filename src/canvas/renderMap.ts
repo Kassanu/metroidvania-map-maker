@@ -3,7 +3,7 @@ import type { Camera } from './camera'
 import type { CanvasPalette } from './palette'
 import { doorOpening, doorRuns, wallGaps, type DoorRun, type OpenSpan } from './doorRuns'
 import { elevatorShafts, type ElevatorShaft } from './elevators'
-import { drawIconBadge, UNKNOWN_ICON_ART, type IconArt } from './iconBadge'
+import { drawIconBadge, drawIconPlate, UNKNOWN_ICON_ART, type IconArt } from './iconBadge'
 import { cellCentre, type TeleportEnd, type TeleportScene } from './teleports'
 import { parseCell, segmentFromEdge } from '@/core/cell'
 import type { CellKey, EdgeKey } from '@/core/cell'
@@ -59,6 +59,13 @@ export interface MapScene {
   // flags above: a hidden object's label goes with it.
   showAllLabels: boolean
   hoveredLabel: string | null
+  // Icons and lines currently selected on this map, as a halo behind each.
+  //
+  // Its own set rather than a place in `selected` above, because the two are
+  // gated differently: a transition's halo goes with the transitions layer,
+  // where a selected icon's goes with the icons layer and a selected line's
+  // with the lines layer.
+  selectedMarkup: ReadonlySet<string>
   // Colour lives on the area, never on the room, so the renderer needs the
   // project's areas to resolve a room's fill. Passed in rather than reached
   // for, because this file sees no store and no project.
@@ -391,6 +398,9 @@ export function renderMap(
   //
   // Lines are an overlay with no room owner, so they sit above the transitions
   // they are free to cross rather than among them.
+  // Before both layers, so each object paints back over the middle of its own
+  // halo and leaves a ring, the way a selected teleport's marker does.
+  drawMarkupSelection(ctx, scene, map)
   if (scene.showLines) drawLines(ctx, scene, map)
   if (scene.showIcons) drawIcons(ctx, scene, map)
   // After both, so a label is never buried under the neighbour it sits beside.
@@ -703,14 +713,9 @@ function drawLines(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     ctx.setLineDash([])
-    ctx.beginPath()
-    const start = worldPointOf(line.points[0], scene)
-    ctx.moveTo(start.x, start.y)
-    for (const point of line.points.slice(1)) {
-      const at = worldPointOf(point, scene)
-      ctx.lineTo(at.x, at.y)
-    }
+    tracePath(ctx, line.points, scene)
     ctx.stroke()
+    const start = worldPointOf(line.points[0], scene)
 
     // In the line's own colour, unlike a teleport's arrow: that one sits on a
     // shaft it would vanish into, where this one is part of the line it ends.
@@ -760,6 +765,68 @@ function drawIcons(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel
       y: y + (h - size) / 2,
       size,
     })
+  }
+}
+
+// A line's polyline through its cell centres. Shared by the line and by its
+// selection halo, so the two shapes cannot drift: a halo that traced the path
+// differently would show as a fringe along one side.
+function tracePath(ctx: CanvasRenderingContext2D, points: readonly CellKey[], scene: MapScene) {
+  ctx.beginPath()
+  const start = worldPointOf(points[0], scene)
+  ctx.moveTo(start.x, start.y)
+  for (const point of points.slice(1)) {
+    const at = worldPointOf(point, scene)
+    ctx.lineTo(at.x, at.y)
+  }
+}
+
+// The halo behind a selected icon or line: the object's own shape drawn wider
+// underneath it, which is the language a selected transition already speaks.
+//
+// Gated per layer rather than as a whole, so hiding icons takes a selected
+// icon's halo with it. A ring around nothing would be worse than no ring.
+//
+// Arrowheads are deliberately not haloed. A chevron widened by three pixels
+// reads as a blob rather than as an outline, and the line it caps is haloed
+// right up to it.
+function drawMarkupSelection(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
+  if (scene.selectedMarkup.size === 0) return
+
+  ctx.strokeStyle = scene.palette.selection
+
+  if (scene.showLines) {
+    const width = clamp(MARKUP_LINE_PX * scene.camera.zoom, MIN_WALL_PX, MAX_WALL_PX)
+    ctx.lineWidth = width + SELECTION_HALO_PX * 2
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    ctx.setLineDash([])
+    for (const line of map.lines.values()) {
+      if (!scene.selectedMarkup.has(line.id) || line.points.length < 2) continue
+      tracePath(ctx, line.points, scene)
+      ctx.stroke()
+    }
+    ctx.lineJoin = 'miter'
+    ctx.lineCap = 'butt'
+    ctx.lineWidth = 1
+  }
+
+  if (scene.showIcons) {
+    for (const icon of map.icons.values()) {
+      if (!scene.selectedMarkup.has(icon.id)) continue
+      const [x, y, w, h] = cellRect(icon.cell, scene)
+      const size = w * ICON_CELL_FRACTION + SELECTION_HALO_PX * 2
+      drawIconPlate(
+        ctx,
+        scene.iconArt.get(icon.iconType) ?? UNKNOWN_ICON_ART,
+        scene.palette.selection,
+        {
+          x: x + (w - size) / 2,
+          y: y + (h - size) / 2,
+          size,
+        },
+      )
+    }
   }
 }
 

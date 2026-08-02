@@ -179,6 +179,7 @@ function scene(overrides: Partial<MapScene> = {}): MapScene {
     // labels draws none, so every label assertion has to ask for one.
     showAllLabels: false,
     hoveredLabel: null,
+    selectedMarkup: new Set(),
     areas: new Map(),
     lockTypes: new Map(),
     iconArt: iconArtCatalogue(),
@@ -2277,6 +2278,67 @@ describe('renderMap markup layers and labels', () => {
     // middle vertex, and lifted clear of the stroke it names.
     expect(line.at[0]).toBeCloseTo(TILE * 1.5)
     expect(line.at[1]).toBeLessThan(TILE * 2.5)
+  })
+
+  it('haloes a selected line along its own path, under the line', () => {
+    const { ctx, strokes } = fakeContext()
+    const { project, map, lineId } = markup()
+
+    draw(ctx, { map, areas: project.areas, selectedMarkup: new Set([lineId]) })
+
+    const halo = strokes.findIndex((stroke) => stroke.style === '#selection')
+    const line = strokes.findIndex((stroke) => stroke.style === '#line')
+    // Under it, so the line paints back over the middle and leaves a ring.
+    expect(halo).toBeGreaterThanOrEqual(0)
+    expect(halo).toBeLessThan(line)
+    // The same path, wider: a halo that traced it differently would fringe.
+    expect(strokes[halo].segments).toEqual(strokes[line].segments)
+    expect(strokes[halo].width).toBeGreaterThan(strokes[line].width)
+  })
+
+  it('haloes a selected icon with its own plate, under the badge', () => {
+    const { ctx, badges } = fakeContext()
+    const { project, map, iconId } = markup()
+
+    draw(ctx, { map, areas: project.areas, selectedMarkup: new Set([iconId]) })
+
+    const art = iconArtCatalogue().get('save')!
+    // Plate, plate, glyph: the halo is the badge's own shape drawn first and
+    // wider, so only its rim is ever seen.
+    expect(badges.map((badge) => badge.style)).toEqual([
+      '#selection',
+      TEST_ICON_COLORS.plateColor,
+      TEST_ICON_COLORS.glyphColor,
+    ])
+    expect(badges[0].data).toBe(art.plate)
+    expect(badges[0].scale).toBeGreaterThan(badges[1].scale)
+  })
+
+  it('draws no halo for anything that is not selected', () => {
+    const { ctx, strokes, badges } = fakeContext()
+    const { project, map } = markup()
+
+    draw(ctx, { map, areas: project.areas })
+
+    expect(strokes.some((stroke) => stroke.style === '#selection')).toBe(false)
+    expect(badges.every((badge) => badge.style !== '#selection')).toBe(true)
+  })
+
+  it('takes a halo away with the layer that owns it', () => {
+    const icons = fakeContext()
+    const lines = fakeContext()
+    const { project, map, iconId, lineId } = markup()
+    const selectedMarkup = new Set([iconId, lineId])
+    const shown = { map, areas: project.areas, selectedMarkup }
+
+    draw(icons.ctx, { ...shown, showIcons: false })
+    draw(lines.ctx, { ...shown, showLines: false })
+
+    // A ring around nothing would be worse than no ring.
+    expect(icons.badges.every((badge) => badge.style !== '#selection')).toBe(true)
+    expect(icons.strokes.some((stroke) => stroke.style === '#selection')).toBe(true)
+    expect(lines.strokes.some((stroke) => stroke.style === '#selection')).toBe(false)
+    expect(lines.badges.some((badge) => badge.style === '#selection')).toBe(true)
   })
 
   it('puts an even-length line’s label between its two central cells', () => {

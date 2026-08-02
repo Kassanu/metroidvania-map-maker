@@ -39,6 +39,7 @@ import { deleteTransition } from '@/core/ops/doors'
 import {
   createLine,
   deleteIcon,
+  deleteLine,
   extendLine,
   peelLine,
   placeIcon,
@@ -58,7 +59,7 @@ import { startPointerDrag } from '@/composables/pointerDrag'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
 import { cellKey } from '@/core/cell'
 import type { GhostGesture } from '@/gestures/ghostGesture'
-import type { MapModel } from '@/core/types'
+import type { MapModel, ObjectRef } from '@/core/types'
 import type { BrushPreview, HoveredHandle } from '@/canvas/renderMap'
 import type { WorldPoint } from '@/canvas/stroke'
 import type { IconId, LineId, MapId, TransitionId } from '@/core/ids'
@@ -217,6 +218,7 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       showLines: markupForced() || (canvasView.showMarkup && canvasView.showLines),
       showAllLabels: canvasView.showAllLabels,
       hoveredLabel,
+      selectedMarkup: selectedMarkup(),
       showGrid: canvasView.showGrid,
       showRulers: canvasView.showRulers,
       rulerUnits: canvasView.rulerUnits,
@@ -239,6 +241,7 @@ function markupForced(): boolean {
 // not "selected here". And the selection is `ObjectRef[]` because rooms, icons
 // and lines share it; only the transitions concern this layer.
 const EMPTY_SELECTION: ReadonlySet<TransitionId> = new Set()
+const EMPTY_MARKUP_SELECTION: ReadonlySet<string> = new Set()
 
 function selectedTransitions(): ReadonlySet<TransitionId> {
   const tab = tabsStore.activeTab
@@ -248,6 +251,35 @@ function selectedTransitions(): ReadonlySet<TransitionId> {
     if (item.kind === 'transition') ids.add(item.id)
   }
   return ids
+}
+
+// The same filter for the markup half. Its own set rather than a widened
+// `selectedTransitions`, because the renderer gates the two behind different
+// layer toggles and one set would have to be split there instead.
+function selectedMarkup(): ReadonlySet<string> {
+  const tab = tabsStore.activeTab
+  if (!tab || selection.mapId !== tab.id || selection.isEmpty) return EMPTY_MARKUP_SELECTION
+  const ids = new Set<string>()
+  for (const item of selection.selected) {
+    if (item.kind === 'icon' || item.kind === 'line') ids.add(item.id)
+  }
+  return ids
+}
+
+// Which object a click on this row selects, or null for the rows that select
+// nothing. Both line rows answer the same line: which end the pointer is near
+// changes what a drag does, never what is selected.
+function markupRefOf(target: MarkupTarget): ObjectRef | null {
+  switch (target.kind) {
+    case 'icon':
+      return { kind: 'icon', id: target.id }
+    case 'line-end':
+    case 'line-body':
+      return { kind: 'line', id: target.id }
+    case 'room':
+    case 'empty':
+      return null
+  }
 }
 
 // Pointer position within the canvas: what anchored zoom and cell tracking
@@ -630,6 +662,8 @@ function handleMarkupPress(event: PointerEvent) {
     return
   }
 
+  const tab = tabsStore.activeTab
+
   // Resolved at press time and reused on release, so a click means the cell it
   // started in rather than wherever the pointer drifted inside the dead zone.
   let leftCell = false
@@ -689,6 +723,17 @@ function handleMarkupPress(event: PointerEvent) {
         placeIconAt(armed, target.cell)
         return
       }
+      // The selection column, which every row answers. Select beats create, the
+      // rule Door mode already follows: a click that found an object selects it
+      // rather than offering to put a new one on top of it.
+      const ref = markupRefOf(target)
+      if (ref && tab) {
+        selection.set([ref], tab.id)
+        return
+      }
+      // Clicking off everything deselects, which the picker opening on top of
+      // is fine: the picker is about the cell, not about the selection.
+      selection.clear()
       if (target.kind !== 'room') return
       openIconPicker(target.cell)
     },
@@ -1493,26 +1538,51 @@ watch(
 const { prefersDark } = useSystemColorScheme()
 watch([() => themeStore.mode, prefersDark], () => repaintForTheme())
 
-// `Delete`/`Backspace` on the selection. A transition selection is the first
-// thing in the app this hotkey can act on.
+// `Delete`/`Backspace` on the selection: transitions, icons and lines, whichever
+// the selection holds.
 //
-// Goes through the same op right-click does, so the two delete routes cannot
-// disagree about what deleting means or what the undo entry is called. Only
-// transitions: rooms are selected in Draw mode, where the active room is not a
-// selection at all, and icons and lines do not exist yet.
+// Goes through the same ops the right-click routes do, so no two delete routes
+// can disagree about what deleting means. Rooms are absent because Draw mode's
+// active room is not a selection; it has no canvas deselect and this key must
+// not destroy it.
+//
+// It is also the *only* way to delete a whole line in one step. Erase on a
+// line's body does nothing by design, so without this a line could only be
+// peeled away segment by segment.
 useHotkeyAction('deleteSelection', () => {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
   if (!tab || !map || selection.mapId !== tab.id) return
-  const ids = [...selectedTransitions()]
-  if (ids.length === 0) return
+
+  const transitions = [...selectedTransitions()]
+  const icons: IconId[] = []
+  const lines: LineId[] = []
+  for (const item of selection.selected) {
+    if (item.kind === 'icon') icons.push(item.id)
+    if (item.kind === 'line') lines.push(item.id)
+  }
+  if (transitions.length + icons.length + lines.length === 0) return
 
   // One transaction for the whole selection, not one each: multi-select is in
   // for v1, and deleting three doors with one keypress must undo as one step.
-  model.run(t('history.deleteTransition'), mapScope(tab.id), (tx) => {
-    for (const id of ids) deleteTransition(tx, model.project, map, id)
+  model.run(deleteSelectionLabel(), mapScope(tab.id), (tx) => {
+    for (const id of transitions) deleteTransition(tx, model.project, map, id)
+    for (const id of icons) deleteIcon(tx, map, id)
+    for (const id of lines) deleteLine(tx, map, id)
   })
 })
+
+// The undo entry for the key above. A selection of one kind names that kind, so
+// the entry reads the same as the right-click that deletes the same object; a
+// mixed selection has no truthful specific name and says so.
+function deleteSelectionLabel(): string {
+  const kinds = new Set(selection.selected.map((item) => item.kind))
+  if (kinds.size > 1) return t('history.deleteSelection')
+  const [kind] = kinds
+  if (kind === 'icon') return t('history.deleteIcon')
+  if (kind === 'line') return t('history.deleteLine')
+  return t('history.deleteTransition')
+}
 
 useResizeObserver(container, resize)
 

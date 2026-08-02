@@ -55,6 +55,24 @@ function pathFor(data: string): Path2D {
 }
 
 // `rect` is the square the badge fills, in CSS pixels.
+// The plate alone, in one flat colour: the selection halo, which is the badge's
+// own shape drawn wider and underneath it. Glyphless on purpose, because the
+// badge paints back over the middle and only the rim is ever seen.
+export function drawIconPlate(
+  ctx: CanvasRenderingContext2D,
+  art: IconArt,
+  color: string,
+  rect: { x: number; y: number; size: number },
+): void {
+  const scale = rect.size / ICON_VIEWBOX
+  ctx.save()
+  ctx.translate(rect.x, rect.y)
+  ctx.scale(scale, scale)
+  ctx.fillStyle = color
+  ctx.fill(pathFor(art.plate))
+  ctx.restore()
+}
+
 export function drawIconBadge(
   ctx: CanvasRenderingContext2D,
   art: IconArt,
