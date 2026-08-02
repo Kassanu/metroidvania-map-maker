@@ -202,6 +202,12 @@ export const en = {
   'panel.iconLibrary': 'Icon Library',
   'panel.inspector': 'Inspector',
 
+  'iconPicker.search': 'Search icons',
+  'iconPicker.empty': 'No icons match "{query}"',
+  // The popup, which opens at a map cell rather than from a button, so it says
+  // which cell it is about to place into.
+  'iconPicker.atCell': 'Place an icon at {cell}',
+
   'canvas.label': 'Map canvas',
   // The pending teleport's prompt. Names the escape route as well as the ask,
   // because the pending state is the one thing on the canvas with no pointer

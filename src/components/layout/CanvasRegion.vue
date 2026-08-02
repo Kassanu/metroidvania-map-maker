@@ -12,7 +12,7 @@ import { useSelectionStore } from '@/stores/selection'
 import { resolveZone, zoneTolerances, type DrawZone } from '@/canvas/drawZone'
 import { pushEscHandler } from '@/hotkeys/escStack'
 import { useHotkeyAction } from '@/hotkeys/useHotkeyAction'
-import { DEFAULT_PAN, screenToWorld, type ScreenPoint } from '@/canvas/viewport'
+import { DEFAULT_PAN, screenToWorld, worldToScreen, type ScreenPoint } from '@/canvas/viewport'
 import { pageBounds } from '@/canvas/page'
 import { centerOn, panByScreen, wheelZoom } from '@/canvas/camera'
 import {
@@ -22,6 +22,7 @@ import {
   type DoorTarget,
 } from '@/canvas/doorTarget'
 import { markupCursor, resolveMarkupTarget, type MarkupTarget } from '@/canvas/markupTarget'
+import IconPickerPopover from './IconPickerPopover.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
 import { deleteTransition } from '@/core/ops/doors'
 import { cellCentre, teleportScene } from '@/canvas/teleports'
@@ -429,7 +430,47 @@ function handleDoubleClick(event: MouseEvent) {
   openTeleportEnd(target.leadsTo)
 }
 
+// Markup's click column, for the one row that has somewhere to go yet: a click
+// on a room cell with nothing on it opens the picker there.
+//
+// Click and drag are told apart the way Door mode tells them apart: the drag
+// primitive's dead zone, plus a latch for having left the origin cell. A press
+// that wandered is not a click, even if it came back, and a drag that never
+// left the cell draws no line and must not open the picker on the way out.
+function handleMarkupPress(event: PointerEvent) {
+  const action = strokeActionFor(event, tools.erase)
+  if (action !== 'paint') return
+
+  const local = localPoint(event)
+  const target = local && markupTargetAt(local)
+  if (!target) return
+  event.preventDefault()
+
+  // Resolved at press time and reused on release, so a click means the cell it
+  // started in rather than wherever the pointer drifted inside the dead zone.
+  let leftCell = false
+
+  startPointerDrag(event, {
+    buttons: [event.button],
+    deadZone: DRAG_DEAD_ZONE,
+    resolveTarget: () => container.value,
+    onMove: (context) => {
+      const point = worldPoint(context.event)
+      if (!point) return
+      if (cellKey(Math.floor(point.x), Math.floor(point.y)) !== target.cell) leftCell = true
+    },
+    onEnd: () => {
+      if (leftCell || target.kind !== 'room') return
+      openIconPicker(target.cell)
+    },
+  })
+}
+
 function handlePointerDown(event: PointerEvent) {
+  if (modeStore.active === 'markup') {
+    handleMarkupPress(event)
+    return
+  }
   if (modeStore.active === 'door') {
     handleDoorPress(event)
     return
@@ -589,6 +630,35 @@ function doorTargetAt(point: ScreenPoint): DoorTarget | null {
     camera: { pan: tab.pan, zoom: tab.zoom },
     tileSize: model.tileSize,
   })
+}
+
+// The picker popup's anchor: the cell it was opened at, and that cell's centre
+// in viewport pixels. Null when it is closed.
+//
+// Position is captured once, at open. The popup dismisses rather than follows
+// when the map moves, so there is nothing to recompute; the watch below is what
+// enforces that.
+const pickerCell = ref<CellKey | null>(null)
+const pickerAt = ref<{ x: number; y: number } | null>(null)
+
+function openIconPicker(cell: CellKey) {
+  const tab = tabsStore.activeTab
+  if (!tab) return
+  const centre = cellCentre(cell)
+  // Viewport pixels, which is the anchor element's own coordinate space.
+  pickerAt.value = worldToScreen(centre.x, centre.y, tab, model.tileSize)
+  pickerCell.value = cell
+}
+
+function closeIconPicker() {
+  pickerAt.value = null
+  pickerCell.value = null
+}
+
+// Placing what the picker returns is the placement chunk's job; for now the
+// choice closes the popup.
+function handleIconPicked() {
+  closeIconPicker()
 }
 
 // What Markup mode's pointer is over, as a row of its table. The same shape as
@@ -842,6 +912,29 @@ watch(
 // appear and disappear only on the next unrelated edit. It also has to catch up
 // what the pointer is over, because while pending the cursor answers a
 // different question (see `cursorAt`) without the pointer having moved.
+// The picker is anchored to a point on the map, and its position is captured
+// once at open, so anything that moves the map under it makes that position a
+// lie. Closing on the camera itself rather than on the wheel and drag handlers
+// catches every route there is: the zoom control, fit-to-screen, keyboard pan,
+// a tab switch restoring another camera.
+//
+// Dismiss rather than follow, deliberately: a popup that chases its cell ends
+// up off the edge of the viewport, still open and pointing at nothing.
+watch(
+  () => {
+    const tab = tabsStore.activeTab
+    return tab ? [tab.id, tab.zoom, tab.pan.x, tab.pan.y].join(':') : null
+  },
+  () => closeIconPicker(),
+)
+
+// Leaving Markup takes its chrome with it: nothing else in the app can open
+// this, so a popup outliving the mode would be unreachable and unexplained.
+watch(
+  () => modeStore.active,
+  () => closeIconPicker(),
+)
+
 watch([() => activeRoom.isArmed, () => model.rev, () => model.structureRev], () => draw())
 watch(
   () => pendingTeleport.isPending,
@@ -1074,6 +1167,14 @@ onMounted(resize)
         {{ t('canvas.pickTeleportDestination') }}
       </div>
       <div v-if="canvasView.showCoords" class="coords-overlay">{{ coordsLabel }}</div>
+      <!-- Anchored to a map cell rather than to a control, so it lives inside
+           the viewport whose coordinate space its anchor is positioned in. -->
+      <IconPickerPopover
+        :at="pickerAt"
+        :cell="pickerCell"
+        @pick="handleIconPicked"
+        @close="closeIconPicker"
+      />
     </div>
   </section>
 </template>

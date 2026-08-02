@@ -3304,3 +3304,200 @@ describe('CanvasRegion Door mode selection', () => {
     wrapper.unmount()
   })
 })
+
+describe('CanvasRegion Markup mode picker', () => {
+  // The popup is portalled to the body, so a test that fails before its own
+  // unmount would leave it there for the next one to find. Teardown has to be
+  // unconditional.
+  let mounted: ReturnType<typeof mount> | null = null
+
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  afterEach(() => {
+    mounted?.unmount()
+    mounted = null
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    mounted = wrapper
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 }) as DOMRect
+    viewport.setPointerCapture = () => {}
+    return { wrapper, viewport }
+  }
+
+  function pointer(type: string, init: PointerEventInit = {}) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, ...init })
+  }
+
+  function at(x: number, y: number) {
+    const tabsStore = useTabsStore()
+    const tile = useModelStore().tileSize
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    return {
+      clientX: (x - camera.pan.x) * tile * camera.zoom,
+      clientY: (y - camera.pan.y) * tile * camera.zoom,
+    }
+  }
+
+  function aRoom() {
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    model.run('Setup', mapScope(mapId), (tx) => {
+      const map = model.project.mapsById.get(mapId)!
+      paintCells(tx, model.project, map, ['0,0', '1,0', '0,1', '1,1'], { areaId: WORLD_AREA_ID })
+    })
+    useModeStore().setMode('markup')
+    return mapId
+  }
+
+  // A tick after the mode change, because the watch that closes the picker on
+  // leaving Markup flushes on the microtask queue: entering the mode and
+  // clicking in the same tick would queue that watch behind the open.
+  async function inMarkupMode() {
+    aRoom()
+    await nextTick()
+  }
+
+  // The popup is portalled out of the component, so it is found on the document
+  // rather than in the wrapper.
+  //
+  // Read through `data-state` rather than presence: Reka keeps a closed layer
+  // mounted until its exit animation ends, and jsdom fires no animation events,
+  // so a dismissed popup stays in the DOM here where a browser would drop it.
+  function pickerIsOpen() {
+    return document.querySelector('.icon-picker-popover')?.getAttribute('data-state') === 'open'
+  }
+
+  async function click(viewport: HTMLElement, point: { clientX: number; clientY: number }) {
+    viewport.dispatchEvent(pointer('pointerdown', point))
+    viewport.dispatchEvent(pointer('pointerup', point))
+    await nextTick()
+    await nextTick()
+  }
+
+  it('opens at the clicked cell, with the library in it', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    await inMarkupMode()
+
+    await click(viewport, at(1.5, 0.5))
+
+    expect(pickerIsOpen()).toBe(true)
+    // The same component the sidebar docks, so the grid is here too.
+    expect(document.querySelectorAll('.icon-picker-popover .icon-option').length).toBeGreaterThan(0)
+    wrapper.unmount()
+  })
+
+  it('does not open on a press that became a drag', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    await inMarkupMode()
+
+    const from = at(1.5, 0.5)
+    viewport.dispatchEvent(pointer('pointerdown', from))
+    // Past the dead zone and out of the origin cell: this is a line drag, and a
+    // drag that draws nothing is still not a click.
+    viewport.dispatchEvent(
+      pointer('pointermove', {
+        clientX: from.clientX + DRAG_DEAD_ZONE * 4,
+        clientY: from.clientY,
+      }),
+    )
+    viewport.dispatchEvent(pointer('pointerup', at(0.5, 0.5)))
+    await nextTick()
+    await nextTick()
+
+    expect(pickerIsOpen()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('does not open on bare grid: an icon needs a room', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    await inMarkupMode()
+
+    await click(viewport, at(9.5, 9.5))
+
+    expect(pickerIsOpen()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('does not open in another mode', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    await inMarkupMode()
+    useModeStore().setMode('door')
+    await nextTick()
+
+    await click(viewport, at(1.5, 0.5))
+
+    expect(pickerIsOpen()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('dismisses when the map moves under it rather than following', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    await inMarkupMode()
+    const tabsStore = useTabsStore()
+
+    await click(viewport, at(1.5, 0.5))
+    expect(pickerIsOpen()).toBe(true)
+
+    // Its position was captured once, at open. Panning would make that a lie,
+    // so it closes. Driven through the store rather than the wheel handler
+    // because every route into the camera has to close it, not just that one.
+    tabsStore.setCamera(tabsStore.activeTabId, { pan: { x: 3, y: 3 }, zoom: 1 })
+    await nextTick()
+
+    expect(pickerIsOpen()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('dismisses on zoom, for the same reason', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    await inMarkupMode()
+    const tabsStore = useTabsStore()
+
+    await click(viewport, at(1.5, 0.5))
+    expect(pickerIsOpen()).toBe(true)
+
+    tabsStore.setCamera(tabsStore.activeTabId, { pan: DEFAULT_PAN, zoom: 2 })
+    await nextTick()
+
+    expect(pickerIsOpen()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('dismisses on leaving Markup, since nothing else can open it', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    await inMarkupMode()
+
+    await click(viewport, at(1.5, 0.5))
+    expect(pickerIsOpen()).toBe(true)
+
+    useModeStore().setMode('draw')
+    await nextTick()
+
+    expect(pickerIsOpen()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('closes on Esc without reaching the tier below it', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    await inMarkupMode()
+    const below = vi.fn()
+    const pop = pushEscHandler('selection', below)
+
+    await click(viewport, at(1.5, 0.5))
+    expect(pickerIsOpen()).toBe(true)
+
+    expect(resolveEscape()).toBe(true)
+    await nextTick()
+
+    expect(pickerIsOpen()).toBe(false)
+    // First match wins: the picker sits on the dialog tier, above selection.
+    expect(below).not.toHaveBeenCalled()
+    pop()
+    wrapper.unmount()
+  })
+})
