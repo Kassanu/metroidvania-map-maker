@@ -1,0 +1,330 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 1,
+  "project": {
+    "name": "Dev Fixture",
+    "settings": {
+      "tileSize": 32,
+      "backgroundColor": "#101014",
+      "gridColor": null,
+      "gridInExports": false
+    },
+    "lockTypes": [
+      {
+        "id": "open",
+        "name": "Open",
+        "color": null,
+        "glyph": null
+      },
+      {
+        "id": "locked",
+        "name": "Locked",
+        "color": "#e23b3b",
+        "glyph": null
+      },
+      {
+        "id": "lock_01",
+        "name": "Missile Door",
+        "color": "#e23b3b",
+        "glyph": "M"
+      }
+    ],
+    "areas": [
+      {
+        "id": "world",
+        "name": "World",
+        "cellColor": null,
+        "wallColor": null,
+        "notes": ""
+      },
+      {
+        "id": "area_01",
+        "name": "Crateria",
+        "cellColor": "#3a5f7d",
+        "wallColor": "#7fb2d9",
+        "notes": ""
+      }
+    ],
+    "maps": [
+      {
+        "id": "map_01",
+        "name": "Surface",
+        "notes": "",
+        "rooms": [
+          {
+            "id": "room_01",
+            "areaId": "area_01",
+            "name": "Landing Site",
+            "notes": "",
+            "cells": [
+              [0, 0],
+              [1, 0],
+              [2, 0],
+              [0, 1],
+              [1, 1],
+              [2, 1],
+              [0, 2],
+              [1, 2],
+              [2, 2]
+            ],
+            "innerWalls": [
+              {
+                "seg": [
+                  [1, 0],
+                  [1, 1]
+                ],
+                "style": "dotted"
+              }
+            ]
+          },
+          {
+            "id": "room_02",
+            "areaId": "world",
+            "name": "Corridor",
+            "notes": "",
+            "cells": [
+              [3, 0],
+              [4, 0],
+              [3, 1],
+              [4, 1]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_04",
+            "areaId": "area_01",
+            "name": "West Wing",
+            "notes": "",
+            "cells": [
+              [0, 5],
+              [1, 5],
+              [0, 6],
+              [1, 6]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_05",
+            "areaId": "world",
+            "name": "East Wing",
+            "notes": "",
+            "cells": [
+              [5, 5],
+              [6, 5],
+              [5, 6],
+              [6, 6]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_06",
+            "areaId": "world",
+            "name": "Sub Level",
+            "notes": "",
+            "cells": [
+              [0, 9],
+              [1, 9],
+              [2, 9],
+              [0, 10],
+              [1, 10],
+              [2, 10]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_07",
+            "areaId": "area_01",
+            "name": "Annex",
+            "notes": "",
+            "cells": [
+              [3, 9],
+              [3, 10]
+            ],
+            "innerWalls": []
+          }
+        ],
+        "transitions": [
+          {
+            "id": "tr_01",
+            "locks": {
+              "a": "lock_01",
+              "b": "open"
+            },
+            "notes": "",
+            "oneWay": false,
+            "type": "edge",
+            "geometry": {
+              "segments": [
+                {
+                  "cell": [3, 0],
+                  "side": "W",
+                  "aSide": "lo"
+                },
+                {
+                  "cell": [3, 1],
+                  "side": "W",
+                  "aSide": "lo"
+                }
+              ]
+            }
+          },
+          {
+            "id": "tr_02",
+            "locks": {
+              "a": "open",
+              "b": "open"
+            },
+            "notes": "",
+            "oneWay": false,
+            "type": "teleport",
+            "geometry": {
+              "a": {
+                "mapId": "map_01",
+                "cell": [0, 2]
+              },
+              "b": {
+                "mapId": "map_02",
+                "cell": [1, 1]
+              }
+            }
+          },
+          {
+            "id": "tr_03",
+            "locks": {
+              "a": "open",
+              "b": "open"
+            },
+            "notes": "",
+            "oneWay": false,
+            "type": "elevator",
+            "geometry": {
+              "a": [1, 5],
+              "b": [5, 5],
+              "axis": "h"
+            }
+          },
+          {
+            "id": "tr_04",
+            "locks": {
+              "a": "locked",
+              "b": "open"
+            },
+            "notes": "",
+            "oneWay": true,
+            "type": "elevator",
+            "geometry": {
+              "a": [0, 6],
+              "b": [0, 9],
+              "axis": "v"
+            }
+          },
+          {
+            "id": "tr_05",
+            "locks": {
+              "a": "open",
+              "b": "open"
+            },
+            "notes": "",
+            "oneWay": false,
+            "type": "teleport",
+            "geometry": {
+              "a": {
+                "mapId": "map_01",
+                "cell": [2, 2]
+              },
+              "b": {
+                "mapId": "map_01",
+                "cell": [1, 10]
+              }
+            }
+          },
+          {
+            "id": "tr_06",
+            "locks": {
+              "a": "open",
+              "b": "open"
+            },
+            "notes": "",
+            "oneWay": false,
+            "type": "edge",
+            "geometry": {
+              "segments": [
+                {
+                  "cell": [3, 9],
+                  "side": "W",
+                  "aSide": "lo"
+                }
+              ]
+            }
+          },
+          {
+            "id": "tr_07",
+            "locks": {
+              "a": "locked",
+              "b": "locked"
+            },
+            "notes": "",
+            "oneWay": true,
+            "type": "edge",
+            "geometry": {
+              "segments": [
+                {
+                  "cell": [3, 10],
+                  "side": "W",
+                  "aSide": "lo"
+                }
+              ]
+            }
+          }
+        ],
+        "icons": [
+          {
+            "id": "ic_01",
+            "iconType": "save",
+            "cell": [1, 1],
+            "label": "",
+            "notes": ""
+          }
+        ],
+        "lines": [
+          {
+            "id": "ln_01",
+            "color": "#d9a441",
+            "points": [
+              [0, 4],
+              [1, 4],
+              [2, 4]
+            ],
+            "arrowStart": false,
+            "arrowEnd": true,
+            "label": "",
+            "notes": ""
+          }
+        ]
+      },
+      {
+        "id": "map_02",
+        "name": "Caves",
+        "notes": "",
+        "rooms": [
+          {
+            "id": "room_03",
+            "areaId": "area_01",
+            "name": "Vault",
+            "notes": "",
+            "cells": [
+              [0, 0],
+              [1, 0],
+              [0, 1],
+              [1, 1]
+            ],
+            "innerWalls": []
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      }
+    ]
+  }
+}

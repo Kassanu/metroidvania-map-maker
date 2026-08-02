@@ -1,0 +1,49 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Test / tooling output
+coverage
+/playwright-report
+/test-results
+/playwright/.cache
+
+# vite-plugin-pwa dev service worker output
+dev-dist
+
+# TS build info
+*.tsbuildinfo
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local agent working files
+.claude
+
+# src/lib is application source. A bare `lib/` rule in a global gitignore
+# matches it, so re-include it here.
+!/src/lib/

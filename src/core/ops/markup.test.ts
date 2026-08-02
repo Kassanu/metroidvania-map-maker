@@ -1,0 +1,134 @@
+import { describe, it, expect } from 'vitest'
+import { makeRoom, ok, refusal, rect, setup, tx } from '../testUtils'
+import {
+  createLine,
+  deleteLine,
+  extendLine,
+  normalizePath,
+  peelLine,
+  placeIcon,
+  repositionIcon,
+  translateLine,
+} from './markup'
+import { moveRooms } from './rooms'
+
+const LINE_DEFAULTS = { color: '#ffcc00', arrowStart: false, arrowEnd: true }
+
+describe('icons', () => {
+  it('places one inside a room and indexes it by cell', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, rect(0, 0, 2, 1))
+    const transaction = tx(map)
+    const icon = ok(placeIcon(transaction, map, '0,0', 'save'))
+    expect(icon.cell).toBe('0,0')
+    expect(map.iconAtCell.get('0,0')).toBe(icon.id)
+  })
+
+  it('refuses a cell outside every room, saying why', () => {
+    const { map } = setup()
+    const transaction = tx(map)
+    expect(refusal(placeIcon(transaction, map, '0,0', 'save'))).toBe('not-in-a-room')
+  })
+
+  it('blocks an occupied cell unless replace is on', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, rect(0, 0, 2, 1))
+    const transaction = tx(map)
+    const first = ok(placeIcon(transaction, map, '0,0', 'save'))
+
+    // The reason is the one the "replace" checkbox exists to resolve, so the
+    // toolbar can act on it rather than just seeing "no".
+    expect(refusal(placeIcon(transaction, map, '0,0', 'boss'))).toBe('cell-occupied')
+
+    ok(placeIcon(transaction, map, '0,0', 'boss', { replace: true }))
+    expect(map.icons.has(first.id)).toBe(false)
+    expect(map.icons.size).toBe(1)
+  })
+
+  it('repositions into another room: ownership just follows the cell', () => {
+    const { project, map } = setup()
+    const a = makeRoom(project, map, rect(0, 0, 1, 1))
+    const b = makeRoom(project, map, rect(3, 0, 1, 1))
+    const transaction = tx(map)
+    const icon = ok(placeIcon(transaction, map, '0,0', 'save'))
+
+    ok(repositionIcon(transaction, map, icon.id, '3,0'))
+    expect(map.cellOwner.get(icon.cell)).toBe(b.id)
+    expect(map.cellOwner.get('0,0')).toBe(a.id)
+  })
+})
+
+describe('lines', () => {
+  it('needs at least one segment', () => {
+    const { map } = setup()
+    const transaction = tx(map)
+    expect(refusal(createLine(transaction, map, ['0,0'], LINE_DEFAULTS))).toBe('too-short')
+    ok(createLine(transaction, map, ['0,0', '1,1'], LINE_DEFAULTS))
+  })
+
+  it('may live entirely outside any room', () => {
+    const { map } = setup()
+    const transaction = tx(map)
+    // No rooms exist at all. Lines are an independent overlay.
+    ok(createLine(transaction, map, ['0,0', '1,0', '2,0'], LINE_DEFAULTS))
+  })
+
+  it('accepts diagonal steps and rejects jumps', () => {
+    expect(normalizePath(['0,0', '1,1', '2,2'])).toHaveLength(3)
+    expect(normalizePath(['0,0', '5,5'])).toHaveLength(1)
+    expect(normalizePath(['0,0', '0,0', '1,0'])).toEqual(['0,0', '1,0'])
+  })
+
+  it('extends from either end', () => {
+    const { map } = setup()
+    const transaction = tx(map)
+    const line = ok(createLine(transaction, map, ['1,0', '2,0'], LINE_DEFAULTS))
+
+    extendLine(transaction, map, line.id, false, ['3,0'])
+    expect(line.points).toEqual(['1,0', '2,0', '3,0'])
+
+    extendLine(transaction, map, line.id, true, ['0,0'])
+    expect(line.points).toEqual(['0,0', '1,0', '2,0', '3,0'])
+  })
+
+  it('peels from an end and deletes the line once nothing is left', () => {
+    const { map } = setup()
+    const transaction = tx(map)
+    const line = ok(createLine(transaction, map, ['0,0', '1,0', '2,0'], LINE_DEFAULTS))
+
+    peelLine(transaction, map, line.id, false)
+    expect(line.points).toEqual(['0,0', '1,0'])
+
+    peelLine(transaction, map, line.id, false)
+    expect(map.lines.has(line.id)).toBe(false)
+  })
+
+  it('is untouched by room edits: it has no room owner', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 1))
+    const seed = tx(map)
+    const line = ok(createLine(seed, map, ['0,0', '1,0', '2,0'], LINE_DEFAULTS))
+    seed.commit()
+
+    const transaction = tx(map)
+    moveRooms(transaction, project, map, [room.id], 10, 10)
+    // The room moved; the line stayed exactly where it was drawn.
+    expect(line.points).toEqual(['0,0', '1,0', '2,0'])
+  })
+
+  it('translates only when moved as its own selected object', () => {
+    const { map } = setup()
+    const transaction = tx(map)
+    const line = ok(createLine(transaction, map, ['0,0', '1,0'], LINE_DEFAULTS))
+    translateLine(transaction, map, line.id, 2, 3)
+    expect(line.points).toEqual(['2,3', '3,3'])
+  })
+
+  it('deletes', () => {
+    const { map } = setup()
+    const transaction = tx(map)
+    const line = ok(createLine(transaction, map, ['0,0', '1,0'], LINE_DEFAULTS))
+    deleteLine(transaction, map, line.id)
+    expect(map.lines.size).toBe(0)
+  })
+})
