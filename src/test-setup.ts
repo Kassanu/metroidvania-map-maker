@@ -23,6 +23,17 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   }
 }
 
+// jsdom doesn't implement Path2D, which the icon badges are drawn with. The
+// stub keeps the path data so a fake context can assert which icon was drawn.
+if (typeof globalThis.Path2D === 'undefined') {
+  globalThis.Path2D = class Path2D {
+    readonly data: string
+    constructor(data = '') {
+      this.data = data
+    }
+  } as unknown as typeof globalThis.Path2D
+}
+
 // jsdom doesn't implement scrollIntoView (or real layout/scrolling at all).
 if (typeof Element.prototype.scrollIntoView === 'undefined') {
   Element.prototype.scrollIntoView = () => {}
@@ -71,6 +82,7 @@ export interface FakeContext2D {
   moveTo: Mock<(...args: number[]) => void>
   lineTo: Mock<(...args: number[]) => void>
   stroke: Mock<() => void>
+  fill: Mock<(path?: unknown) => void>
   save: Mock<() => void>
   restore: Mock<() => void>
   scale: Mock<(...args: number[]) => void>
@@ -95,6 +107,7 @@ function createFakeContext2D(): FakeContext2D {
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     stroke: vi.fn(),
+    fill: vi.fn(),
     save: vi.fn(),
     restore: vi.fn(),
     scale: vi.fn(),

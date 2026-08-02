@@ -9,6 +9,7 @@ import {
 } from '@/canvas/renderMap'
 import { RULER_THICKNESS, renderRuler, type RulerUnits } from '@/canvas/renderRuler'
 import type { Camera } from '@/canvas/camera'
+import type { IconArt } from '@/canvas/iconBadge'
 import type { TeleportScene } from '@/canvas/teleports'
 import type { BoxPreview } from '@/gestures/boxDrag'
 import type { Bounds } from '@/canvas/viewport'
@@ -40,6 +41,9 @@ export interface SceneInput {
   map: MapModel | null
   areas: ReadonlyMap<AreaId, Area>
   lockTypes: ReadonlyMap<LockTypeId, LockType>
+  // Art for every icon type this build knows. Resolved by the caller, so the
+  // renderer stays independent of where icon art comes from.
+  iconArt: ReadonlyMap<string, IconArt>
   // Both ends of every teleport on this map, near and far. Project-scoped,
   // so it arrives already prepared.
   teleports: TeleportScene
@@ -113,6 +117,7 @@ export function useCanvasRenderer(targets: CanvasTargets, scene: () => SceneInpu
       map: current.map,
       areas: current.areas,
       lockTypes: current.lockTypes,
+      iconArt: current.iconArt,
       teleports: current.teleports,
       ghost: current.ghost,
       brushPreview: current.brushPreview,

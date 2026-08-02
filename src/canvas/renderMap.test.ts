@@ -12,7 +12,10 @@ import { teleportScene } from './teleports'
 import { createNewArea } from '@/core/ops/project'
 import { Transaction } from '@/core/journal'
 import { edgeKey } from '@/core/cell'
-import { ok } from '@/core/testUtils'
+import { ok, TEST_ICON_COLORS } from '@/core/testUtils'
+import { placeIcon } from '@/core/ops/markup'
+import { iconArtCatalogue, getIcon } from '@/icons/registry'
+import { ICON_VIEWBOX, UNKNOWN_ICON_ART } from './iconBadge'
 import { OPEN_LOCK_ID, WORLD_AREA_ID } from '@/core/ids'
 import type { LockTypeId, MapId, TransitionId } from '@/core/ids'
 import type { MapModel, ProjectModel } from '@/core/types'
@@ -42,6 +45,12 @@ function fakeContext() {
   let cursor: number[] = [0, 0]
   let dash: number[] = []
   const labels: { text: string; style: string; at: number[] }[] = []
+  // Each fill(path) call with the path data and the transform it was drawn
+  // under, so a badge's colour, art and placed rect are all assertable. Only
+  // translate and uniform scale are tracked, which is all the badges use.
+  const badges: { style: string; data: string; x: number; y: number; scale: number }[] = []
+  let transform = { x: 0, y: 0, scale: 1 }
+  const saved: (typeof transform)[] = []
   const ctx = {
     fillStyle: '',
     strokeStyle: '',
@@ -71,8 +80,24 @@ function fakeContext() {
     setLineDash: vi.fn((segments: number[]) => {
       dash = segments
     }),
+    save: vi.fn(() => {
+      saved.push({ ...transform })
+    }),
+    restore: vi.fn(() => {
+      transform = saved.pop() ?? transform
+    }),
+    translate: vi.fn((x: number, y: number) => {
+      transform.x += x * transform.scale
+      transform.y += y * transform.scale
+    }),
+    scale: vi.fn((k: number) => {
+      transform.scale *= k
+    }),
+    fill: vi.fn((path: { data: string }) => {
+      badges.push({ style: ctx.fillStyle, data: path.data, ...transform })
+    }),
   }
-  return { ctx, fills, strokes, labels }
+  return { ctx, fills, strokes, labels, badges }
 }
 
 // A project with one map, built through the real ops so the model under test
@@ -124,6 +149,7 @@ function scene(overrides: Partial<MapScene> = {}): MapScene {
     showTeleportLines: true,
     areas: new Map(),
     lockTypes: new Map(),
+    iconArt: iconArtCatalogue(),
     teleports: { ends: [], lines: [] },
     ghost: null,
     brushPreview: null,
@@ -1851,5 +1877,110 @@ describe('renderMap active room handles', () => {
     const handle = strokes.findIndex((stroke) => stroke.style === '#handle')
     expect(wall).toBeGreaterThanOrEqual(0)
     expect(handle).toBeGreaterThan(wall)
+  })
+})
+
+describe('renderMap drawing icons', () => {
+  const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
+    renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
+
+  function mapWithIcon(iconType: string, colors = TEST_ICON_COLORS) {
+    return withMap((tx, project, map) => {
+      paintCells(tx, project, map, ['0,0', '1,0'], { areaId: WORLD_AREA_ID })
+      ok(placeIcon(tx, map, '1,0', iconType, colors))
+    })
+  }
+
+  it('draws the plate then the glyph, each in the icon’s own colour', () => {
+    const { ctx, badges } = fakeContext()
+    const { project, map } = mapWithIcon('save', {
+      plateColor: '#plate',
+      glyphColor: '#glyph',
+    })
+
+    draw(ctx, { map, areas: project.areas })
+
+    const art = iconArtCatalogue().get('save')!
+    // Plate first: the glyph has to read over it, and a sub-path wound against
+    // its shape shows the plate through rather than the room.
+    expect(badges).toEqual([
+      expect.objectContaining({ style: '#plate', data: art.plate }),
+      expect.objectContaining({ style: '#glyph', data: art.glyph }),
+    ])
+  })
+
+  it('centres the badge in its cell and scales the viewBox to it', () => {
+    const { ctx, badges } = fakeContext()
+    const { project, map } = mapWithIcon('save')
+
+    draw(ctx, { map, areas: project.areas })
+
+    // The icon is on (1,0), so its cell starts one tile in.
+    const size = TILE * 0.8
+    const margin = (TILE - size) / 2
+    expect(badges[0].x).toBeCloseTo(TILE + margin)
+    expect(badges[0].y).toBeCloseTo(margin)
+    // A viewBox unit maps to size/ICON_VIEWBOX pixels, so the badge fills
+    // exactly `size` however the viewBox is later re-cut.
+    expect(badges[0].scale).toBeCloseTo(size / ICON_VIEWBOX)
+  })
+
+  it('tracks zoom, because the badge belongs to the map rather than the screen', () => {
+    const { ctx, badges } = fakeContext()
+    const { project, map } = mapWithIcon('save')
+
+    draw(ctx, {
+      map,
+      areas: project.areas,
+      camera: { pan: { x: 0, y: 0 }, zoom: 2 },
+    })
+
+    expect(badges[0].scale).toBeCloseTo((TILE * 2 * 0.8) / ICON_VIEWBOX)
+  })
+
+  it('draws an unrecognised type as the fallback, in the icon’s colours', () => {
+    const { ctx, badges } = fakeContext()
+    // A project saved with an icon this build has since renamed or removed.
+    const { project, map } = mapWithIcon('no-such-icon-type', {
+      plateColor: '#plate',
+      glyphColor: '#glyph',
+    })
+
+    expect(() => draw(ctx, { map, areas: project.areas })).not.toThrow()
+
+    // Visible, and unmistakably not one of the real icons. The colours are
+    // still the user's: only the art is substituted.
+    expect(badges).toEqual([
+      expect.objectContaining({ style: '#plate', data: UNKNOWN_ICON_ART.plate }),
+      expect.objectContaining({ style: '#glyph', data: UNKNOWN_ICON_ART.glyph }),
+    ])
+  })
+
+  it('draws icons over the walls', () => {
+    const { ctx, strokes, badges } = fakeContext()
+    const { project, map } = mapWithIcon('save')
+
+    draw(ctx, { map, areas: project.areas })
+
+    // Paint order matches Markup's hit priority: a click in the cell finds the
+    // icon, so the icon has to be what is on top.
+    expect(strokes.some((stroke) => stroke.style === '#roomwall')).toBe(true)
+    expect(badges).toHaveLength(2)
+  })
+
+  it('takes art from the scene, so a build with no catalogue still draws', () => {
+    const { ctx, badges } = fakeContext()
+    const { project, map } = mapWithIcon('save')
+
+    // An empty catalogue is the same case as an unknown type: the renderer
+    // holds no registry of its own to fall back on. `save` is a real entry, so
+    // reaching for the registry rather than the scene would draw the floppy.
+    draw(ctx, { map, areas: project.areas, iconArt: new Map() })
+
+    // The glyph, not the plate: every real icon shares the standard plate with
+    // the fallback, so the plate cannot tell the two apart.
+    expect(getIcon('save')).toBeDefined()
+    expect(badges[1].data).toBe(UNKNOWN_ICON_ART.glyph)
+    expect(badges[1].data).not.toBe(getIcon('save')!.glyph)
   })
 })

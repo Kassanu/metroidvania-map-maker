@@ -26,6 +26,7 @@ import { deleteTransition } from '@/core/ops/doors'
 import { cellCentre, teleportScene } from '@/canvas/teleports'
 import { RULER_THICKNESS } from '@/canvas/renderRuler'
 import { brushOffset } from '@/canvas/brush'
+import { iconArtCatalogue } from '@/icons/registry'
 import { beginPaintStroke } from '@/gestures/paintStroke'
 import { beginEraseStroke } from '@/gestures/eraseStroke'
 import { beginRunResize, handleGrabAllowed } from '@/gestures/runResize'
@@ -117,6 +118,10 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       map: tab ? (model.project.mapsById.get(tab.id) ?? null) : null,
       areas: model.project.areas,
       lockTypes: model.project.lockTypes,
+      // The whole catalogue, not just the types in use: resolving per icon here
+      // would put the lookup on the draw path for no gain, and the map is built
+      // once.
+      iconArt: iconArtCatalogue(),
       // Both ends of every teleport touching this tab, including the far end of
       // one stored on another map. Prepared here because it is the only layer
       // that needs the whole project: see `MapScene.teleports`.

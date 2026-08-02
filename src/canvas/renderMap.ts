@@ -3,6 +3,7 @@ import type { Camera } from './camera'
 import type { CanvasPalette } from './palette'
 import { doorOpening, doorRuns, wallGaps, type DoorRun, type OpenSpan } from './doorRuns'
 import { elevatorShafts, type ElevatorShaft } from './elevators'
+import { drawIconBadge, UNKNOWN_ICON_ART, type IconArt } from './iconBadge'
 import { cellCentre, type TeleportEnd, type TeleportScene } from './teleports'
 import { parseCell, segmentFromEdge } from '@/core/cell'
 import type { CellKey, EdgeKey } from '@/core/cell'
@@ -55,6 +56,13 @@ export interface MapScene {
   // as a clean gap. Passed in for the same reason `areas` is: this file sees a
   // scene, never a project.
   lockTypes: ReadonlyMap<LockTypeId, LockType>
+  // Art for every icon type this build knows, keyed by `iconType`. A type with
+  // no entry draws as `UNKNOWN_ICON_ART` rather than vanishing.
+  //
+  // Passed in rather than imported for the same reason `areas` and `lockTypes`
+  // are, and with one more: an icon's art need not come from a static registry,
+  // so resolving it here would tie this file to one source of it.
+  iconArt: ReadonlyMap<string, IconArt>
   // Teleports, both ends of each, already reconciled: see `canvas/teleports.ts`.
   //
   // Prepared by the caller rather than derived here like doors and elevators
@@ -187,6 +195,10 @@ const MAX_WALL_PX = 6
 // filling the opening rather than as a stubbornly unbroken piece of wall.
 const DOOR_MARKER_PX = 5
 const MIN_MARKER_PX = 2
+
+// How much of a cell an icon's badge covers, leaving a margin so adjacent
+// badges stay distinct.
+const ICON_CELL_FRACTION = 0.8
 const MAX_MARKER_PX = 12
 
 // How much of a cell a transition's mark occupies across its own axis: the
@@ -344,6 +356,10 @@ export function renderMap(
   // The one layer the master gates here rather than through an emptied list,
   // because its scene is prepared by the caller: see `MapScene.teleports`.
   if (scene.showTransitions) drawTeleports(ctx, scene, scene.teleports)
+  // Above every map layer, so paint order matches Markup's hit priority: an
+  // icon is what a click in its cell finds, and burying it under a wall or a
+  // teleport line would show the opposite.
+  drawIcons(ctx, scene, map)
   // Directly after the finished teleports, and deliberately: it is the same
   // marker in the same place, drawn hollow because it is not there yet. Sitting
   // it anywhere else in this list would let a wall or a room fill cross the one
@@ -626,6 +642,25 @@ function drawGrid(
     ctx.lineTo(bottomRight.x, y)
   }
   ctx.stroke()
+}
+
+// Icons: one badge per icon, snapped to its cell and centred.
+//
+// The badge is square and inset within the cell, so a run of icons in adjacent
+// cells reads as separate marks rather than as a continuous band.
+//
+// Colours come off the icon itself, not off its registry entry, so an unknown
+// type still draws in the colours the user chose for it.
+function drawIcons(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
+  for (const icon of map.icons.values()) {
+    const [x, y, w, h] = cellRect(icon.cell, scene)
+    const size = w * ICON_CELL_FRACTION
+    drawIconBadge(ctx, scene.iconArt.get(icon.iconType) ?? UNKNOWN_ICON_ART, icon, {
+      x: x + (w - size) / 2,
+      y: y + (h - size) / 2,
+      size,
+    })
+  }
 }
 
 // Rooms grouped by fill colour, so a project with a handful of areas costs a
