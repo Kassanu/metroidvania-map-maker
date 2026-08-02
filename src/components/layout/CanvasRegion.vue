@@ -108,6 +108,9 @@ let hoverScreen: ScreenPoint | null = null
 // Which of the active room's handles the pointer is over. Idle handles are
 // faint hints; this one is drawn at full grab size.
 let hoveredHandle: HoveredHandle | null = null
+// The markup object whose label is showing because the pointer is on it, or
+// null. Another plain `let` gated by its own updater, see `updateHoveredLabel`.
+let hoveredLabel: string | null = null
 // The cell the vertex targets are revealed around. Tracked separately from
 // `hoverWorld` because it is what the repaint is gated on.
 let revealCell: { x: number; y: number } | null = null
@@ -207,12 +210,26 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       // mode, so the sub-toggle for lines stays honoured.
       showTransitions: canvasView.showTransitions || modeStore.active === 'door',
       showTeleportLines: canvasView.showTeleportLines,
+      // The same override for the same reason, but reaching further: Markup
+      // mode forces the master *and* both sub-toggles, because unlike a
+      // teleport line each of these gates something a press lands on.
+      showIcons: markupForced() || (canvasView.showMarkup && canvasView.showIcons),
+      showLines: markupForced() || (canvasView.showMarkup && canvasView.showLines),
+      showAllLabels: canvasView.showAllLabels,
+      hoveredLabel,
       showGrid: canvasView.showGrid,
       showRulers: canvasView.showRulers,
       rulerUnits: canvasView.rulerUnits,
     }
   },
 )
+
+// Whether Markup mode is overriding the markup layer toggles. A function rather
+// than a computed because the scene above is already recomputed per draw, and
+// this is one comparison.
+function markupForced(): boolean {
+  return modeStore.active === 'markup'
+}
 
 // The selected transitions on the tab being drawn, as a set for the renderer.
 //
@@ -998,15 +1015,59 @@ function updateHoveredHandle(point: ScreenPoint | null, world: WorldPoint | null
   const zone = drawing && point ? zoneAt(point) : null
   const nextHandle = drawing ? handleFor(zone) : null
   const nextCell = drawing && world ? { x: Math.floor(world.x), y: Math.floor(world.y) } : null
+  // Resolved once here and handed to both readers below. Markup's row is what
+  // the cursor is drawn from and what a hovered label is looked up from, and
+  // resolving it twice per move would be the same answer computed twice.
+  const markupTarget = modeStore.active === 'markup' && point ? markupTargetAt(point) : null
 
-  zoneCursor.value = cursorAt(point, zone)
+  zoneCursor.value = cursorAt(point, zone, markupTarget)
 
   const handleChanged = !sameHandle(hoveredHandle, nextHandle)
   const cellChanged = !sameCell(revealCell, nextCell)
+  const labelChanged = updateHoveredLabel(markupTarget)
   hoveredHandle = nextHandle
   revealCell = nextCell
   // The reveal window only matters when there is a room showing handles.
-  if (handleChanged || (cellChanged && activeRoom.isArmed)) draw()
+  if (handleChanged || labelChanged || (cellChanged && activeRoom.isArmed)) draw()
+}
+
+// The label the pointer is currently showing, and the second reason hover costs
+// a repaint at all. It stays free unless there is a label to show:
+//
+//   - Markup mode only, like the brush preview is Draw mode only. Reading a map
+//     from another mode is what the show-all toggle is for.
+//   - Nothing while that toggle is on: every label is drawn already, so hover
+//     could only re-draw the same picture.
+//   - Nothing for an object whose label is empty, which is every object until
+//     the Inspector can set one. Without that check, sweeping across a plain
+//     icon would cost a repaint that changes no pixel.
+//   - And the repaint is gated on the answer changing, so crossing one icon
+//     costs one redraw rather than one per pointer sample.
+//
+// Returns whether the answer changed, because the caller owns the repaint.
+function updateHoveredLabel(target: MarkupTarget | null): boolean {
+  const next = canvasView.showAllLabels ? null : labelledIdOf(target)
+  if (next === hoveredLabel) return false
+  hoveredLabel = next
+  return true
+}
+
+function labelledIdOf(target: MarkupTarget | null): string | null {
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (!target || !map) return null
+  switch (target.kind) {
+    case 'icon':
+      return map.icons.get(target.id)?.label ? target.id : null
+    // Either row means the pointer is on the line, and a line carries one label
+    // wherever it is drawn: which end you are near does not change it.
+    case 'line-end':
+    case 'line-body':
+      return map.lines.get(target.id)?.label ? target.id : null
+    case 'room':
+    case 'empty':
+      return null
+  }
 }
 
 function sameCell(a: { x: number; y: number } | null, b: { x: number; y: number } | null): boolean {
@@ -1048,7 +1109,11 @@ function handleFor(zone: DrawZone | null): HoveredHandle | null {
 // mode's zone, Door mode's target), so neither can promise a gesture it does
 // not have. Door mode inherits that discipline from the sub-mode lock without
 // a lock of its own.
-function cursorAt(point: ScreenPoint | null, zone: DrawZone | null): string | null {
+function cursorAt(
+  point: ScreenPoint | null,
+  zone: DrawZone | null,
+  markupTarget: MarkupTarget | null,
+): string | null {
   if (!point) return null
   if (modeStore.active === 'door') {
     const target = doorTargetAt(point)
@@ -1070,7 +1135,7 @@ function cursorAt(point: ScreenPoint | null, zone: DrawZone | null): string | nu
     return doorCursor(target)
   }
   if (modeStore.active === 'markup') {
-    const target = markupTargetAt(point)
+    const target = markupTarget
     if (!target) return null
     // A live icon drag outranks everything: while one is running the only
     // question is whether the cell under the pointer will take it. A refused
@@ -1401,8 +1466,25 @@ watch(
 // The layer toggles are a plain repaint: unlike the rulers above, they change
 // nothing about the viewport's size, only what is painted into it.
 watch(
-  () => [canvasView.showTransitions, canvasView.showTeleportLines],
+  () => [
+    canvasView.showTransitions,
+    canvasView.showTeleportLines,
+    canvasView.showMarkup,
+    canvasView.showIcons,
+    canvasView.showLines,
+  ],
   () => draw(),
+)
+
+// The show-all toggle both repaints and changes what hover means: with it on
+// there is no hovered label, and turning it back off has to re-find the one
+// under a pointer that has not moved.
+watch(
+  () => canvasView.showAllLabels,
+  () => {
+    updateHoveredHandle(hoverScreen, hoverWorld)
+    draw()
+  },
 )
 
 // Explicit theme changes (View ▸ Appearance) and, for a System Default user,

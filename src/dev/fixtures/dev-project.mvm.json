@@ -284,7 +284,7 @@
             "cell": [1, 1],
             "plateColor": "#3b7dd8",
             "glyphColor": "#f5f7fa",
-            "label": "",
+            "label": "Save Point",
             "notes": ""
           }
         ],
@@ -299,7 +299,7 @@
             ],
             "arrowStart": false,
             "arrowEnd": true,
-            "label": "",
+            "label": "Long Way Round",
             "notes": ""
           }
         ]

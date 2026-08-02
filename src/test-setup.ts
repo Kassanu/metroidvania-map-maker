@@ -90,6 +90,10 @@ export interface FakeContext2D {
   translate: Mock<(...args: number[]) => void>
   rotate: Mock<(...args: number[]) => void>
   fillText: Mock<(...args: [string, number, number]) => void>
+  // Width is proportional to the string so a chip sized from it is deterministic
+  // here, without pretending to know anything about a real font.
+  measureText: Mock<(text: string) => { width: number }>
+  roundRect: Mock<(...args: number[]) => void>
   setLineDash: Mock<(segments: number[]) => void>
 }
 
@@ -115,6 +119,8 @@ function createFakeContext2D(): FakeContext2D {
     translate: vi.fn(),
     rotate: vi.fn(),
     fillText: vi.fn(),
+    measureText: vi.fn((text: string) => ({ width: text.length * 6 })),
+    roundRect: vi.fn(),
     setLineDash: vi.fn(),
   }
 }

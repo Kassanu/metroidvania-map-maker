@@ -46,6 +46,11 @@
   --canvas-transition: #5b6472;
   --canvas-teleport-line: rgba(91, 100, 114, 0.4);
   --canvas-marker-text: #f8f8f8;
+  /* A markup label's chip and its text. Near-opaque and inverted against the
+   * page, so a label stays readable wherever it lands: over a room fill, over
+   * a line, or over an icon it partly covers. */
+  --canvas-label-plate: rgba(24, 26, 31, 0.88);
+  --canvas-label-text: #f4f4f4;
   /* Ghost tint for rooms a live gesture is about to absorb, so you see what you
    * are about to eat before releasing. Warm and translucent, so the room's own
    * fill still reads through it. */
@@ -80,6 +85,11 @@
     --canvas-transition: #9aa4b2;
     --canvas-teleport-line: rgba(154, 164, 178, 0.4);
     --canvas-marker-text: #16181d;
+    /* A markup label's chip and its text. Near-opaque and inverted against the
+     * page, so a label stays readable wherever it lands: over a room fill, over
+     * a line, or over an icon it partly covers. */
+    --canvas-label-plate: rgba(236, 238, 242, 0.9);
+    --canvas-label-text: #16181d;
     --canvas-absorb: rgba(255, 138, 106, 0.4);
     --canvas-refuse: #ff7b6b;
     --canvas-brush: rgba(128, 170, 255, 0.9);
@@ -106,6 +116,8 @@
   --canvas-transition: #5b6472;
   --canvas-teleport-line: rgba(91, 100, 114, 0.4);
   --canvas-marker-text: #f8f8f8;
+  --canvas-label-plate: rgba(24, 26, 31, 0.88);
+  --canvas-label-text: #f4f4f4;
   --canvas-absorb: rgba(224, 96, 64, 0.4);
   --canvas-refuse: #d64a3a;
   --canvas-brush: rgba(64, 112, 224, 0.9);
@@ -129,6 +141,8 @@
   --canvas-transition: #9aa4b2;
   --canvas-teleport-line: rgba(154, 164, 178, 0.4);
   --canvas-marker-text: #16181d;
+  --canvas-label-plate: rgba(236, 238, 242, 0.9);
+  --canvas-label-text: #16181d;
   --canvas-absorb: rgba(255, 138, 106, 0.4);
   --canvas-refuse: #ff7b6b;
   --canvas-brush: rgba(128, 170, 255, 0.9);

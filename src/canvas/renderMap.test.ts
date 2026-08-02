@@ -13,11 +13,11 @@ import { createNewArea } from '@/core/ops/project'
 import { Transaction } from '@/core/journal'
 import { edgeKey } from '@/core/cell'
 import { ok, TEST_ICON_COLORS } from '@/core/testUtils'
-import { createLine, placeIcon } from '@/core/ops/markup'
+import { createLine, placeIcon, setIconLabel, setLineStyle } from '@/core/ops/markup'
 import { iconArtCatalogue, getIcon } from '@/icons/registry'
 import { ICON_VIEWBOX, UNKNOWN_ICON_ART } from './iconBadge'
 import { OPEN_LOCK_ID, WORLD_AREA_ID } from '@/core/ids'
-import type { LockTypeId, MapId, TransitionId } from '@/core/ids'
+import type { IconId, LineId, LockTypeId, MapId, TransitionId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 import type { MapModel, ProjectModel } from '@/core/types'
 
@@ -52,6 +52,9 @@ function fakeContext() {
   let cursor: number[] = [0, 0]
   let dash: number[] = []
   const labels: { text: string; style: string; at: number[] }[] = []
+  // The chip behind a label, recorded where it is drawn: the fill style is set
+  // immediately before the path is built, so it is the plate's colour.
+  const chips: { style: string; rect: number[] }[] = []
   // Each fill(path) call with the path data and the transform it was drawn
   // under, so a badge's colour, art and placed rect are all assertable. Only
   // translate and uniform scale are tracked, which is all the badges use.
@@ -108,11 +111,17 @@ function fakeContext() {
     scale: vi.fn((k: number) => {
       transform.scale *= k
     }),
-    fill: vi.fn((path: { data: string }) => {
-      badges.push({ style: ctx.fillStyle, data: path.data, ...transform })
+    // Two callers, told apart by the argument: a badge fills a Path2D, and a
+    // label chip fills the current path built by `roundRect` above.
+    fill: vi.fn((path?: { data: string }) => {
+      if (path) badges.push({ style: ctx.fillStyle, data: path.data, ...transform })
     }),
+    measureText: vi.fn((text: string) => ({ width: text.length * 6 })),
+    roundRect: vi.fn((x: number, y: number, width: number, height: number) =>
+      chips.push({ style: ctx.fillStyle, rect: [x, y, width, height] }),
+    ),
   }
-  return { ctx, fills, strokes, labels, badges }
+  return { ctx, fills, strokes, labels, chips, badges }
 }
 
 // A project with one map, built through the real ops so the model under test
@@ -144,6 +153,8 @@ const palette: CanvasPalette = {
   transition: '#transition',
   teleportLine: '#teleportline',
   markerText: '#markertext',
+  labelPlate: '#labelplate',
+  labelText: '#labeltext',
   absorb: '#absorb',
   refuse: '#refuse',
   brush: '#brush',
@@ -162,6 +173,12 @@ function scene(overrides: Partial<MapScene> = {}): MapScene {
     // is fully visible; the toggles' own tests are what turn them off.
     showTransitions: true,
     showTeleportLines: true,
+    showIcons: true,
+    showLines: true,
+    // Hover-only by default, matching the pref: a scene that says nothing about
+    // labels draws none, so every label assertion has to ask for one.
+    showAllLabels: false,
+    hoveredLabel: null,
     areas: new Map(),
     lockTypes: new Map(),
     iconArt: iconArtCatalogue(),
@@ -2146,5 +2163,133 @@ describe('renderMap drawing lines', () => {
     const line = strokes.findIndex((stroke) => stroke.style === '#line')
     expect(line).toBeGreaterThan(wall)
     expect(badges).toHaveLength(2)
+  })
+})
+
+describe('renderMap markup layers and labels', () => {
+  const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
+    renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
+
+  const STYLE = { color: '#line', arrowStart: false, arrowEnd: false }
+
+  // One icon on (1,0) and one line across (0,2) to (2,2), far enough apart that
+  // a label on either can be identified by its text alone.
+  function markup(iconLabel = '', lineLabel = '') {
+    let iconId!: IconId
+    let lineId!: LineId
+    const built = withMap((tx, project, map) => {
+      paintCells(tx, project, map, ['0,0', '1,0'], { areaId: WORLD_AREA_ID })
+      iconId = ok(placeIcon(tx, map, '1,0', 'save', TEST_ICON_COLORS)).id
+      lineId = ok(createLine(tx, map, ['0,2', '1,2', '2,2'], STYLE)).id
+      if (iconLabel) setIconLabel(tx, map, iconId, iconLabel)
+      if (lineLabel) setLineStyle(tx, map, lineId, 'label', lineLabel)
+    })
+    return { ...built, iconId, lineId }
+  }
+
+  it('hides icons and keeps lines when only the icons layer is off', () => {
+    const { ctx, strokes, badges } = fakeContext()
+    const { project, map } = markup()
+
+    draw(ctx, { map, areas: project.areas, showIcons: false })
+
+    expect(badges).toHaveLength(0)
+    expect(strokes.some((stroke) => stroke.style === '#line')).toBe(true)
+  })
+
+  it('hides lines and keeps icons when only the lines layer is off', () => {
+    const { ctx, strokes, badges } = fakeContext()
+    const { project, map } = markup()
+
+    draw(ctx, { map, areas: project.areas, showLines: false })
+
+    expect(strokes.some((stroke) => stroke.style === '#line')).toBe(false)
+    expect(badges).toHaveLength(2)
+  })
+
+  it('draws no label at all with the toggle off and nothing hovered', () => {
+    const { ctx, labels } = fakeContext()
+    const { project, map } = markup('Save Point', 'The Long Way')
+
+    draw(ctx, { map, areas: project.areas })
+
+    expect(labels).toEqual([])
+  })
+
+  it('draws every non-empty label under the show-all toggle', () => {
+    const { ctx, labels, chips } = fakeContext()
+    const { project, map } = markup('Save Point', 'The Long Way')
+
+    draw(ctx, { map, areas: project.areas, showAllLabels: true })
+
+    expect(labels.map((label) => label.text).sort()).toEqual(['Save Point', 'The Long Way'])
+    // Text on a chip, in the two label colours: a label lands on room fills and
+    // lines alike, so it carries its own background.
+    expect(labels.every((label) => label.style === '#labeltext')).toBe(true)
+    expect(chips.every((chip) => chip.style === '#labelplate')).toBe(true)
+  })
+
+  it('draws only the hovered object’s label while the toggle is off', () => {
+    const { ctx, labels } = fakeContext()
+    const { project, map, iconId } = markup('Save Point', 'The Long Way')
+
+    draw(ctx, { map, areas: project.areas, hoveredLabel: iconId })
+
+    expect(labels.map((label) => label.text)).toEqual(['Save Point'])
+  })
+
+  it('draws nothing for an object whose label is empty', () => {
+    const { ctx, labels } = fakeContext()
+    const { project, map, iconId } = markup('', 'The Long Way')
+
+    // Hovered, and still silent: an empty label is every object's default, so a
+    // chip with nothing in it would mark the whole map.
+    draw(ctx, { map, areas: project.areas, hoveredLabel: iconId })
+
+    expect(labels).toEqual([])
+  })
+
+  it('takes a label away with the layer that owns it', () => {
+    const icons = fakeContext()
+    const lines = fakeContext()
+    const { project, map } = markup('Save Point', 'The Long Way')
+    const shown = { map, areas: project.areas, showAllLabels: true }
+
+    draw(icons.ctx, { ...shown, showIcons: false })
+    draw(lines.ctx, { ...shown, showLines: false })
+
+    expect(icons.labels.map((label) => label.text)).toEqual(['The Long Way'])
+    expect(lines.labels.map((label) => label.text)).toEqual(['Save Point'])
+  })
+
+  it('puts an icon’s label under its badge and a line’s at its middle', () => {
+    const { ctx, labels } = fakeContext()
+    const { project, map } = markup('Save Point', 'The Long Way')
+
+    draw(ctx, { map, areas: project.areas, showAllLabels: true })
+
+    const icon = labels.find((label) => label.text === 'Save Point')!
+    const line = labels.find((label) => label.text === 'The Long Way')!
+    // Centred on the icon's cell horizontally, below the badge vertically.
+    expect(icon.at[0]).toBeCloseTo(TILE * 1.5)
+    expect(icon.at[1]).toBeGreaterThan(TILE)
+    // Horizontally on the centre cell of a three-point line, which is the
+    // middle vertex, and lifted clear of the stroke it names.
+    expect(line.at[0]).toBeCloseTo(TILE * 1.5)
+    expect(line.at[1]).toBeLessThan(TILE * 2.5)
+  })
+
+  it('puts an even-length line’s label between its two central cells', () => {
+    const { ctx, labels } = fakeContext()
+    const { map } = withMap((tx, _project, map) => {
+      const line = ok(createLine(tx, map, ['0,2', '1,2', '2,2', '3,2'], STYLE))
+      setLineStyle(tx, map, line.id, 'label', 'Even')
+    })
+
+    draw(ctx, { map, showAllLabels: true })
+
+    // Between (1,2) and (2,2): the midpoint of the two vertices either side of
+    // centre, so the chip sits over the line rather than over one of its steps.
+    expect(labels[0].at[0]).toBeCloseTo(TILE * 2)
   })
 })

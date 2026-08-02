@@ -42,6 +42,8 @@ const palette: CanvasPalette = {
   transition: '#transition',
   teleportLine: '#teleportline',
   markerText: '#markertext',
+  labelPlate: '#labelplate',
+  labelText: '#labeltext',
   absorb: '#absorb',
   refuse: '#refuse',
   brush: '#brush',

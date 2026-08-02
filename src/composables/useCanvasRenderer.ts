@@ -67,6 +67,12 @@ export interface SceneInput {
   // resolved against the active mode by the caller.
   showTransitions: boolean
   showTeleportLines: boolean
+  // The markup layer's two halves and the label rule, resolved against their
+  // master and the active mode by the caller, like the pair above.
+  showIcons: boolean
+  showLines: boolean
+  showAllLabels: boolean
+  hoveredLabel: string | null
 }
 
 // Backing-store pixels for a CSS-pixel box, so lines land on device pixels
@@ -129,6 +135,10 @@ export function useCanvasRenderer(targets: CanvasTargets, scene: () => SceneInpu
       showGrid: current.showGrid,
       showTransitions: current.showTransitions,
       showTeleportLines: current.showTeleportLines,
+      showIcons: current.showIcons,
+      showLines: current.showLines,
+      showAllLabels: current.showAllLabels,
+      hoveredLabel: current.hoveredLabel,
     }
     renderMap(mainCtx, width, height, mapScene)
 

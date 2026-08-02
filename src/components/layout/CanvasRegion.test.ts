@@ -14,7 +14,7 @@ import { useSelectionStore } from '@/stores/selection'
 import { useArmedIconStore } from '@/stores/armedIcon'
 import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
 import { getIcon } from '@/icons/registry'
-import { createLine, placeIcon } from '@/core/ops/markup'
+import { createLine, placeIcon, setIconLabel, setLineStyle } from '@/core/ops/markup'
 import { dropIconAt } from '@/gestures/iconDropTarget'
 import { pushEscHandler, resolveEscape } from '@/hotkeys/escStack'
 import { PROJECT_SCOPE, mapScope, useModelStore } from '@/stores/model'
@@ -441,6 +441,228 @@ describe('CanvasRegion transition layers', () => {
 // What is proved here is that a real pointer stream reaches it, that the world
 // point it is handed accounts for the camera, and that the modes which have no
 // gesture yet stay inert.
+describe('CanvasRegion markup layers and labels', () => {
+  let mounted: ReturnType<typeof mount> | null = null
+
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  afterEach(() => {
+    mounted?.unmount()
+    mounted = null
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    mounted = wrapper
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 }) as DOMRect
+    const canvasEl = wrapper.get('.canvas').element as HTMLCanvasElement
+    const ctx = canvasEl.getContext('2d') as unknown as FakeContext2D
+    return {
+      wrapper,
+      viewport,
+      // A badge is two `fill(path)` calls; a line is a `stroke`; a label is the
+      // only `fillText` on a map with no cross-tab teleport on it.
+      badgeFills: () => ctx.fill.mock.calls.length,
+      strokes: () => ctx.stroke.mock.calls.length,
+      labels: () => ctx.fillText.mock.calls.map((call) => call[0]),
+      repaints: () => ctx.clearRect.mock.calls.length,
+    }
+  }
+
+  function pointer(type: string, init: PointerEventInit = {}) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, ...init })
+  }
+
+  function at(x: number, y: number) {
+    const tabsStore = useTabsStore()
+    const tile = useModelStore().tileSize
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    return {
+      clientX: (x - camera.pan.x) * tile * camera.zoom,
+      clientY: (y - camera.pan.y) * tile * camera.zoom,
+    }
+  }
+
+  // An icon on (1,0) and a line across row 2, with labels only where asked for.
+  function markup({ iconLabel = '', lineLabel = '' } = {}) {
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    model.run('Setup', mapScope(mapId), (tx) => {
+      const map = model.project.mapsById.get(mapId)!
+      paintCells(tx, model.project, map, ['0,0', '1,0'], { areaId: WORLD_AREA_ID })
+      const icon = placeIcon(tx, map, '1,0', 'save', {
+        plateColor: '#111111',
+        glyphColor: '#222222',
+      }) as { id: string }
+      const line = createLine(tx, map, ['0,2', '1,2', '2,2'], {
+        color: '#ffcc00',
+        arrowStart: false,
+        arrowEnd: false,
+      }) as { id: string }
+      if (iconLabel) setIconLabel(tx, map, icon.id as never, iconLabel)
+      if (lineLabel) setLineStyle(tx, map, line.id as never, 'label', lineLabel)
+    })
+    return mapId
+  }
+
+  it('hides icons and keeps lines when only the icons toggle is off', async () => {
+    markup()
+    const canvas = mountCanvas()
+    const withIcons = canvas.badgeFills()
+    const withLines = canvas.strokes()
+
+    useCanvasViewStore().toggleIcons()
+    await nextTick()
+
+    expect(canvas.badgeFills()).toBe(withIcons)
+    expect(canvas.strokes()).toBeGreaterThan(withLines)
+  })
+
+  it('hides both halves when the master goes off', async () => {
+    markup()
+    const canvas = mountCanvas()
+    const badges = canvas.badgeFills()
+    const repaints = canvas.repaints()
+
+    useCanvasViewStore().toggleMarkup()
+    await nextTick()
+
+    // It repainted, and the repaint drew no badge and no line: the master gates
+    // both halves without either sub-toggle having moved. Checking the repaint
+    // happened is the whole test, since "drew nothing new" is also what a
+    // missing repaint looks like.
+    expect(canvas.repaints()).toBeGreaterThan(repaints)
+    expect(canvas.badgeFills()).toBe(badges)
+    expect(useCanvasViewStore().showIcons).toBe(true)
+  })
+
+  // The override, and the reason for it: hidden icons and lines are still what
+  // a Markup press lands on, so a press on an invisible icon would move
+  // something the user cannot see.
+  it('forces every markup layer back on in Markup mode', async () => {
+    markup()
+    const canvasView = useCanvasViewStore()
+    canvasView.toggleMarkup()
+    useModeStore().setMode('markup')
+    const canvas = mountCanvas()
+    const inMarkup = canvas.badgeFills()
+
+    // Two badge fills for the one icon, exactly as with the layer showing.
+    expect(inMarkup).toBeGreaterThan(0)
+
+    const repaints = canvas.repaints()
+    useModeStore().setMode('draw')
+    await nextTick()
+
+    // Leaving gives the hidden layer its say back, on a repaint that really
+    // ran: without checking that, "no new badges" would pass either way.
+    expect(canvas.repaints()).toBeGreaterThan(repaints)
+    expect(canvas.badgeFills()).toBe(inMarkup)
+  })
+
+  it('shows a hovered icon’s label, and only that one', async () => {
+    markup({ iconLabel: 'Save Point', lineLabel: 'The Long Way' })
+    useModeStore().setMode('markup')
+    await nextTick()
+    const canvas = mountCanvas()
+
+    canvas.viewport.dispatchEvent(pointer('pointermove', at(1.5, 0.5)))
+    await nextTick()
+
+    expect(canvas.labels()).toEqual(['Save Point'])
+  })
+
+  it('drops the label again when the pointer leaves', async () => {
+    markup({ iconLabel: 'Save Point' })
+    useModeStore().setMode('markup')
+    await nextTick()
+    const canvas = mountCanvas()
+
+    canvas.viewport.dispatchEvent(pointer('pointermove', at(1.5, 0.5)))
+    await nextTick()
+    const shown = canvas.labels().length
+
+    const repaints = canvas.repaints()
+    canvas.viewport.dispatchEvent(pointer('pointerleave', at(1.5, 0.5)))
+    await nextTick()
+
+    // A repaint really ran, and it drew no further label.
+    expect(canvas.repaints()).toBeGreaterThan(repaints)
+    expect(canvas.labels()).toHaveLength(shown)
+  })
+
+  // The whole of the "hover does no work when nothing needs it" rule, and the
+  // one that stays true for every object until the Inspector can set a label.
+  it('costs no repaint hovering an icon with no label', async () => {
+    markup()
+    useModeStore().setMode('markup')
+    await nextTick()
+    const canvas = mountCanvas()
+    const before = canvas.repaints()
+
+    canvas.viewport.dispatchEvent(pointer('pointermove', at(1.5, 0.5)))
+    canvas.viewport.dispatchEvent(pointer('pointermove', at(0.5, 0.5)))
+    await nextTick()
+
+    expect(canvas.repaints()).toBe(before)
+  })
+
+  it('costs one repaint crossing a labelled icon, not one per sample', async () => {
+    markup({ iconLabel: 'Save Point' })
+    useModeStore().setMode('markup')
+    await nextTick()
+    const canvas = mountCanvas()
+    const before = canvas.repaints()
+
+    // Three samples inside the same cell: the answer changes once, on arrival.
+    canvas.viewport.dispatchEvent(pointer('pointermove', at(1.2, 0.2)))
+    canvas.viewport.dispatchEvent(pointer('pointermove', at(1.5, 0.5)))
+    canvas.viewport.dispatchEvent(pointer('pointermove', at(1.8, 0.8)))
+    await nextTick()
+
+    expect(canvas.repaints()).toBe(before + 1)
+  })
+
+  it('does no hover label work outside Markup mode', async () => {
+    markup({ iconLabel: 'Save Point' })
+    const canvas = mountCanvas()
+
+    canvas.viewport.dispatchEvent(pointer('pointermove', at(1.5, 0.5)))
+    await nextTick()
+
+    // Draw mode. Reading a map from another mode is the show-all toggle's job.
+    expect(canvas.labels()).toEqual([])
+  })
+
+  it('shows every label under the toggle, with no pointer involved', async () => {
+    markup({ iconLabel: 'Save Point', lineLabel: 'The Long Way' })
+    const canvas = mountCanvas()
+
+    useCanvasViewStore().toggleAllLabels()
+    await nextTick()
+
+    expect(canvas.labels().sort()).toEqual(['Save Point', 'The Long Way'])
+  })
+
+  it('stops answering to hover while the show-all toggle is on', async () => {
+    markup({ iconLabel: 'Save Point' })
+    useModeStore().setMode('markup')
+    useCanvasViewStore().toggleAllLabels()
+    await nextTick()
+    const canvas = mountCanvas()
+    const before = canvas.repaints()
+
+    canvas.viewport.dispatchEvent(pointer('pointermove', at(1.5, 0.5)))
+    await nextTick()
+
+    // Already drawn, so hover has nothing to add and nothing to redraw.
+    expect(canvas.repaints()).toBe(before)
+  })
+})
+
 describe('CanvasRegion painting', () => {
   beforeEach(() => {
     setActivePinia(createTestPinia())

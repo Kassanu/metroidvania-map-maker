@@ -309,6 +309,52 @@ describe('MenuBar', () => {
       await nextTick()
       expect(canvasView.showTeleportLines).toBe(true)
     })
+
+    it('nests both markup halves directly under their master', async () => {
+      await openViewMenu()
+
+      const labels = checkboxes().map((el) => el.textContent?.trim())
+      const master = labels.indexOf('Markup')
+      expect(master).toBeGreaterThanOrEqual(0)
+      expect(labels[master + 1]).toBe('Icons')
+      expect(labels[master + 2]).toBe('Lines')
+    })
+
+    it('disables both markup halves while the layer is hidden', async () => {
+      const canvasView = useCanvasViewStore()
+      canvasView.toggleMarkup()
+      await openViewMenu()
+
+      for (const name of ['Icons', 'Lines']) {
+        const item = itemNamed(name)
+        expect(item.getAttribute('data-disabled')).not.toBeNull()
+        item.click()
+      }
+      await nextTick()
+
+      expect(canvasView.showIcons).toBe(true)
+      expect(canvasView.showLines).toBe(true)
+    })
+
+    // A peer, not a child: it is never indented under markup and never
+    // disabled by it, because it says when labels appear rather than whether a
+    // class of object is drawn.
+    it('offers All Labels unchecked, outside the markup group and never disabled', async () => {
+      const canvasView = useCanvasViewStore()
+      canvasView.toggleMarkup()
+      await openViewMenu()
+
+      const labels = checkboxes().map((el) => el.textContent?.trim())
+      expect(labels.indexOf('All Labels')).toBeGreaterThan(labels.indexOf('Lines'))
+
+      const item = itemNamed('All Labels')
+      expect(item.getAttribute('data-state')).toBe('unchecked')
+      expect(item.getAttribute('data-disabled')).toBeNull()
+
+      item.click()
+      await nextTick()
+      expect(canvasView.showAllLabels).toBe(true)
+    })
   })
 
   describe('Appearance submenu', () => {

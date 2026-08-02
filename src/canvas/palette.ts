@@ -41,6 +41,13 @@ export interface CanvasPalette {
   // Reads as a label on a coloured chip, so it stays light in both themes rather
   // than following the foreground.
   markerText: string
+  // A markup label: text on a chip drawn behind it. The chip is near-opaque and
+  // follows the chrome rather than the map, because a label lands on room
+  // fills, lines and icons in any combination and has to stay readable on all
+  // of them. That is also why it is not `markerText`, which is sized to sit on
+  // a coloured marker it can assume is there.
+  labelPlate: string
+  labelText: string
   // The ghost tint over rooms a live gesture is about to absorb. Translucent,
   // and warm on purpose: it marks the destructive part of the preview.
   absorb: string
@@ -89,6 +96,8 @@ export function readCanvasPalette(): CanvasPalette {
     transition: readVar(styles, '--canvas-transition'),
     teleportLine: readVar(styles, '--canvas-teleport-line'),
     markerText: readVar(styles, '--canvas-marker-text'),
+    labelPlate: readVar(styles, '--canvas-label-plate'),
+    labelText: readVar(styles, '--canvas-label-text'),
     absorb: readVar(styles, '--canvas-absorb'),
     refuse: readVar(styles, '--canvas-refuse'),
     brush: readVar(styles, '--canvas-brush'),

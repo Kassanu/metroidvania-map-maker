@@ -18,6 +18,11 @@ export const useCanvasViewStore = defineStore('canvasView', {
     teleportLinesDisabled(): boolean {
       return !this.showTransitions
     },
+    // Both markup sub-toggles, which are disabled together: the same reasoning
+    // as above, and one getter because they share one master.
+    markupLayersDisabled(): boolean {
+      return !this.showMarkup
+    },
   },
   actions: {
     toggleGrid() {
@@ -41,6 +46,26 @@ export const useCanvasViewStore = defineStore('canvasView', {
     toggleTeleportLines() {
       if (!this.showTransitions) return
       this.showTeleportLines = !this.showTeleportLines
+    },
+    toggleMarkup() {
+      this.showMarkup = !this.showMarkup
+    },
+    // Both refuse while the master is off, for the reason `toggleTeleportLines`
+    // gives: the control is not available, and storing a change nothing can
+    // show is worse than declining it.
+    toggleIcons() {
+      if (!this.showMarkup) return
+      this.showIcons = !this.showIcons
+    },
+    toggleLines() {
+      if (!this.showMarkup) return
+      this.showLines = !this.showLines
+    },
+    // No master to answer to. Labels belong to the objects that carry them, so
+    // hiding the markup layer already hides them, and this stays free to be
+    // toggled from anywhere for the same reason the sub-toggles are not.
+    toggleAllLabels() {
+      this.showAllLabels = !this.showAllLabels
     },
   },
   persist: { key: 'canvasView' },

@@ -263,6 +263,50 @@ const displayTitle = computed(() =>
             >
               {{ t('menu.view.teleportLines') }}
             </DropdownMenuCheckboxItem>
+            <!-- The markup layer, nested the same way and for the same reason.
+                 Two sub-toggles rather than one, because icons and lines are
+                 independent halves of the layer and hiding either on its own is
+                 a thing people want. -->
+            <DropdownMenuCheckboxItem
+              class="popover-item checkable"
+              :model-value="canvasView.showMarkup"
+              @update:model-value="canvasView.toggleMarkup()"
+              @select="keepMenuOpen"
+            >
+              {{ t('menu.view.markup') }}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              class="popover-item checkable nested"
+              :model-value="canvasView.showIcons"
+              :disabled="canvasView.markupLayersDisabled"
+              @update:model-value="canvasView.toggleIcons()"
+              @select="keepMenuOpen"
+            >
+              {{ t('menu.view.icons') }}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              class="popover-item checkable nested"
+              :model-value="canvasView.showLines"
+              :disabled="canvasView.markupLayersDisabled"
+              @update:model-value="canvasView.toggleLines()"
+              @select="keepMenuOpen"
+            >
+              {{ t('menu.view.lines') }}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator class="popover-separator" />
+            <!-- A peer of the layers rather than a child of markup, and never
+                 disabled: it says when labels appear, not whether a class of
+                 object is drawn, and it outlives this layer as soon as anything
+                 else on the map carries a name. Hiding markup already hides its
+                 labels, so there is no state to force here. -->
+            <DropdownMenuCheckboxItem
+              class="popover-item checkable"
+              :model-value="canvasView.showAllLabels"
+              @update:model-value="canvasView.toggleAllLabels()"
+              @select="keepMenuOpen"
+            >
+              {{ t('menu.view.allLabels') }}
+            </DropdownMenuCheckboxItem>
             <DropdownMenuSeparator class="popover-separator" />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger class="popover-item checkable popover-subtrigger">

@@ -129,4 +129,92 @@ describe('useCanvasViewStore', () => {
       expect(store.showTeleportLines).toBe(true)
     })
   })
+
+  // The same nesting one level along, with two children under one master.
+  describe('the markup layer', () => {
+    it('defaults the layer and both sub-toggles on', () => {
+      const store = useCanvasViewStore()
+      expect(store.showMarkup).toBe(true)
+      expect(store.showIcons).toBe(true)
+      expect(store.showLines).toBe(true)
+      expect(store.markupLayersDisabled).toBe(false)
+    })
+
+    it('toggles the layer, and persists it', () => {
+      const store = useCanvasViewStore()
+      store.toggleMarkup()
+      expect(store.showMarkup).toBe(false)
+      store.$flushPersist()
+      expect(savedPref('canvasView')?.showMarkup).toBe(false)
+    })
+
+    it('reports both sub-toggles as disabled while the layer is off', () => {
+      const store = useCanvasViewStore()
+      store.toggleMarkup()
+      expect(store.markupLayersDisabled).toBe(true)
+    })
+
+    it('refuses to toggle either half while the layer is off', () => {
+      const store = useCanvasViewStore()
+      store.toggleMarkup()
+      store.toggleIcons()
+      store.toggleLines()
+      expect(store.showIcons).toBe(true)
+      expect(store.showLines).toBe(true)
+    })
+
+    it('toggles the two halves independently of each other', () => {
+      const store = useCanvasViewStore()
+      store.toggleIcons()
+      expect(store.showIcons).toBe(false)
+      expect(store.showLines).toBe(true)
+    })
+
+    it('remembers a hidden half through the layer going off and on', () => {
+      const store = useCanvasViewStore()
+      store.toggleLines()
+
+      store.toggleMarkup()
+      store.toggleMarkup()
+
+      expect(store.showMarkup).toBe(true)
+      expect(store.showLines).toBe(false)
+    })
+
+    it('defaults every markup field when an older stored pref has none', () => {
+      localStorage.setItem(
+        'mmm:canvasView',
+        JSON.stringify({
+          v: PREFS_VERSION,
+          data: { showGrid: false, showRulers: true, showCoords: true, rulerUnits: 'cells' },
+        }),
+      )
+      const store = useCanvasViewStore()
+      expect(store.showMarkup).toBe(true)
+      expect(store.showIcons).toBe(true)
+      expect(store.showLines).toBe(true)
+      expect(store.showAllLabels).toBe(false)
+    })
+  })
+
+  describe('the show-all-labels toggle', () => {
+    // Off where every layer toggle is on: this one is not a layer. A map with
+    // a label on everything is unreadable, so hover-only is the resting state
+    // and showing them all is the deliberate act.
+    it('defaults off, unlike every layer toggle', () => {
+      expect(useCanvasViewStore().showAllLabels).toBe(false)
+    })
+
+    it('toggles and persists, and answers to no master', () => {
+      const store = useCanvasViewStore()
+      store.toggleMarkup()
+      // Still free with the markup layer hidden: labels are drawn inside their
+      // objects' gates, so the layer already hides them and there is nothing
+      // for this control to claim falsely.
+      store.toggleAllLabels()
+      expect(store.showAllLabels).toBe(true)
+      store.$flushPersist()
+      expect(savedPref('canvasView')?.showAllLabels).toBe(true)
+    })
+  })
 })

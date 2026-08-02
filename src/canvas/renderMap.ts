@@ -47,6 +47,18 @@ export interface MapScene {
   // Hiding the layer also closes the doorway gaps: see `renderMap`.
   showTransitions: boolean
   showTeleportLines: boolean
+  // The markup layer's two halves, already resolved against their master by
+  // the scene builder, exactly like the pair above. There is no `showMarkup`
+  // here: the master has no rendering of its own, so passing it would be a
+  // third flag this file could only get wrong.
+  showIcons: boolean
+  showLines: boolean
+  // When to draw the label an icon or a line carries. `showAllLabels` draws
+  // every non-empty one; otherwise only `hoveredLabel` shows, which is the id
+  // of the object under the pointer or null. Both are gated by the two layer
+  // flags above: a hidden object's label goes with it.
+  showAllLabels: boolean
+  hoveredLabel: string | null
   // Colour lives on the area, never on the room, so the renderer needs the
   // project's areas to resolve a room's fill. Passed in rather than reached
   // for, because this file sees no store and no project.
@@ -233,6 +245,18 @@ const MARKER_TEXT_FRACTION = 0.5
 // does not read as a different application's text.
 const MARKER_FONT = "system-ui, 'Segoe UI', Roboto, sans-serif"
 
+// A markup label: text on a chip. Everything here is in screen pixels and does
+// not scale with the map, unlike the marker letter above, which sizes to the
+// marker it sits inside. A label has nothing to sit inside, and it is read
+// rather than measured, so shrinking it with zoom would make it illegible
+// exactly when the map got dense enough to need it.
+const LABEL_PX = 11
+const LABEL_PAD_X = 4
+const LABEL_PAD_Y = 2
+const LABEL_RADIUS = 3
+// Between an icon's badge and the chip under it.
+const LABEL_GAP = 3
+
 // Idle handle weights, as a fraction of the drawn cell, so they shrink with
 // zoom and fade toward invisible below 100%, where you are reading layout
 // rather than editing geometry. The hovered handle ignores these and uses the
@@ -367,8 +391,13 @@ export function renderMap(
   //
   // Lines are an overlay with no room owner, so they sit above the transitions
   // they are free to cross rather than among them.
-  drawLines(ctx, scene, map)
-  drawIcons(ctx, scene, map)
+  if (scene.showLines) drawLines(ctx, scene, map)
+  if (scene.showIcons) drawIcons(ctx, scene, map)
+  // After both, so a label is never buried under the neighbour it sits beside.
+  // It is text at a fixed size on a chip, which makes it the loudest thing on
+  // the map; drawing it among the objects would let one icon's label read as
+  // belonging to the next one along.
+  drawLabels(ctx, scene, map)
   // Directly after the finished teleports, and deliberately: it is the same
   // marker in the same place, drawn hollow because it is not there yet. Sitting
   // it anywhere else in this list would let a wall or a room fill cross the one
@@ -732,6 +761,87 @@ function drawIcons(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel
       size,
     })
   }
+}
+
+// The labels icons and lines carry, drawn together rather than beside the
+// objects they belong to, so the whole "when is a label visible" rule is in one
+// place and paint order puts every label over every object.
+//
+// Each is gated by its own layer, so hiding icons takes their labels with them.
+// An empty label draws nothing: it is the default for every object, and a chip
+// with nothing in it would mark every icon on the map.
+function drawLabels(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
+  // A fast path, not a rule: `labelShows` below would reject everything anyway.
+  // It is here because this is the common case (no toggle, nothing hovered) and
+  // without it every pan and zoom frame walks both collections to draw nothing.
+  if (!scene.showAllLabels && scene.hoveredLabel === null) return
+
+  ctx.font = `${LABEL_PX}px ${MARKER_FONT}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+
+  if (scene.showLines) {
+    for (const line of map.lines.values()) {
+      if (!labelShows(scene, line.id, line.label)) continue
+      drawLabelChip(ctx, scene, line.label, lineLabelAt(line.points, scene))
+    }
+  }
+  // Icons last, matching the layer order below them: where an icon and a line
+  // would put a chip in the same place, the icon's is the one on top.
+  if (scene.showIcons) {
+    for (const icon of map.icons.values()) {
+      if (!labelShows(scene, icon.id, icon.label)) continue
+      const [x, y, w, h] = cellRect(icon.cell, scene)
+      const badge = w * ICON_CELL_FRACTION
+      drawLabelChip(ctx, scene, icon.label, {
+        // Under the badge rather than over it: an icon's own cell is the one
+        // place a label must not cover, since the badge is what identifies it.
+        x: x + w / 2,
+        y: y + (h + badge) / 2 + LABEL_GAP + (LABEL_PX + LABEL_PAD_Y * 2) / 2,
+      })
+    }
+  }
+}
+
+function labelShows(scene: MapScene, id: string, label: string): boolean {
+  return label !== '' && (scene.showAllLabels || scene.hoveredLabel === id)
+}
+
+// Above the middle of the drawn path. One expression for both parities: an odd
+// count resolves to its centre vertex, an even one to the midpoint of the two
+// either side of centre.
+//
+// Lifted clear rather than centred on the path, for the reason the icon's chip
+// is dropped below its badge: a chip is wider than a stroke, so a label sitting
+// on a short line would hide the whole line it names. Straight up rather than
+// perpendicular to the local heading, which is the honest limit of this: a
+// vertical line's chip slides along the line instead of off it.
+function lineLabelAt(points: readonly CellKey[], scene: MapScene) {
+  const middle = (points.length - 1) / 2
+  const before = worldPointOf(points[Math.floor(middle)], scene)
+  const after = worldPointOf(points[Math.ceil(middle)], scene)
+  return {
+    x: (before.x + after.x) / 2,
+    y: (before.y + after.y) / 2 - LABEL_GAP - (LABEL_PX + LABEL_PAD_Y * 2) / 2,
+  }
+}
+
+function drawLabelChip(
+  ctx: CanvasRenderingContext2D,
+  scene: MapScene,
+  text: string,
+  at: { x: number; y: number },
+) {
+  const width = ctx.measureText(text).width + LABEL_PAD_X * 2
+  const height = LABEL_PX + LABEL_PAD_Y * 2
+
+  ctx.fillStyle = scene.palette.labelPlate
+  ctx.beginPath()
+  ctx.roundRect(at.x - width / 2, at.y - height / 2, width, height, LABEL_RADIUS)
+  ctx.fill()
+
+  ctx.fillStyle = scene.palette.labelText
+  ctx.fillText(text, at.x, at.y)
 }
 
 // Rooms grouped by fill colour, so a project with a handful of areas costs a

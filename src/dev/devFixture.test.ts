@@ -47,4 +47,15 @@ describe('the dev fixture', () => {
     const oneWay = [...surface.transitions.values()].filter((each) => each.oneWay)
     expect(oneWay.map((each) => each.kind).sort()).toEqual(['edge', 'elevator'])
   })
+
+  // The markup layer's half of the census. Both carry a label, because a label
+  // is something the renderer draws and nothing in the app can write one yet:
+  // without them the dev build has no way to see that layer at all.
+  it('carries a labelled icon and a labelled line', () => {
+    const project = openProject(fixture).accept()
+    const surface = project.mapsById.get(project.maps[0])!
+
+    expect([...surface.icons.values()].map((icon) => icon.label)).toEqual(['Save Point'])
+    expect([...surface.lines.values()].map((line) => line.label)).toEqual(['Long Way Round'])
+  })
 })

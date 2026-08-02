@@ -54,6 +54,14 @@ export interface CanvasViewPrefs {
   // chose, not reset it. See stores/canvasView.ts for the nesting rule.
   showTransitions: boolean
   showTeleportLines: boolean
+  // The markup layer and its two sub-toggles, nested the same way.
+  showMarkup: boolean
+  showIcons: boolean
+  showLines: boolean
+  // Not a layer: labels exist on markup objects whether or not this is on, and
+  // it decides when they are drawn rather than whether they are drawn at all.
+  // Off means hover-only.
+  showAllLabels: boolean
 }
 
 export interface PanelsPrefs {
@@ -89,6 +97,14 @@ export const PREF_DEFAULTS: Preferences = {
     // of the way, so the state you have never touched is "everything visible".
     showTransitions: true,
     showTeleportLines: true,
+    showMarkup: true,
+    showIcons: true,
+    showLines: true,
+    // The exception to the line above, because it is not a layer toggle. A map
+    // with labels on everything is unreadable at a glance, so the default is
+    // hover-only and this is the deliberate "show me all of them" state that an
+    // image export wants.
+    showAllLabels: false,
   },
   // Listed for completeness, but empty: a panel's real defaults (side,
   // order) are derived from PANEL_REGISTRY and merged per-entry over what
