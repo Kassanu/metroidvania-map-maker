@@ -15,6 +15,7 @@ import { wallWidth } from './renderMap'
 import type { Camera } from './camera'
 import { cellKey, edgeCells, parseCell, segmentFromEdge } from '@/core/cell'
 import type { CellKey, EdgeKey } from '@/core/cell'
+import type { LineId } from '@/core/ids'
 import type { MapModel, ObjectRef, ProjectModel } from '@/core/types'
 import { farEndsOnMap } from '@/core/farEnds'
 
@@ -48,7 +49,7 @@ export function hitTest(point: ScreenPoint, scene: HitScene): ObjectRef | null {
   const band = grabBand(scene)
 
   // 1-D targets, topmost first.
-  const line = lineAt(point, scene, band)
+  const line = lineHit(point, scene, band)
   if (line) return line
 
   const edge = edgeTransitionAt(point, scene, band)
@@ -93,9 +94,62 @@ export function grabBand(scene: Pick<HitScene, 'camera'>): number {
   return wallWidth(scene.camera.zoom) / 2 + GRAB_MARGIN_PX
 }
 
+// A line endpoint is a point target where the line itself is a line target, and
+// a point is harder to hit, so it earns a larger tolerance. Derived from the
+// band rather than picked, so the two stay in proportion if the band is retuned.
+export const LINE_END_RADIUS_FACTOR = 1.5
+
+// Ceiling on the endpoint radius, as a fraction of the drawn cell. A line's
+// body runs centre to centre, so a quarter-cell radius at each end leaves the
+// middle half of the shortest possible line grabbable as body: body and end are
+// different rows of Markup's table in all three columns.
+export const MAX_LINE_END_FRACTION = 0.25
+
+export function lineEndRadius(scene: Pick<HitScene, 'camera' | 'tileSize'>): number {
+  const cellPx = scene.tileSize * scene.camera.zoom
+  return Math.min(grabBand(scene) * LINE_END_RADIUS_FACTOR, cellPx * MAX_LINE_END_FRACTION)
+}
+
+// The line under a point, ignoring every other kind of object.
+//
+// Markup resolves icons before lines, the opposite of `hitTest`'s 1-D-before-2-D
+// rule, so it cannot ask `hitTest` and filter the answer: it has to ask about
+// lines on their own. Same helpers and same band as `hitTest`'s own line step.
+export function lineAt(point: ScreenPoint, scene: HitScene): ObjectRef | null {
+  return lineHit(point, scene, grabBand(scene))
+}
+
+// Which end of which line is under a point, or null if no end is.
+//
+// `hitTest` answers `{ kind: 'line', id }` with no way to say which end, or
+// whether the hit was in the middle at all. Markup needs that distinction for
+// three rows of its table, so it is answered here rather than inferred from a
+// line id and a cell.
+//
+// Later lines win, matching paint order. Within one line the nearer end wins,
+// which only matters if the radius ever grows past half a segment.
+export function lineEndAt(
+  point: ScreenPoint,
+  scene: HitScene,
+): { id: LineId; atStart: boolean } | null {
+  const radius = lineEndRadius(scene)
+  let found: { id: LineId; atStart: boolean } | null = null
+
+  for (const line of scene.map.lines.values()) {
+    const start = cellCentre(line.points[0], scene)
+    const end = cellCentre(line.points[line.points.length - 1], scene)
+    const toStart = Math.hypot(point.x - start.x, point.y - start.y)
+    const toEnd = Math.hypot(point.x - end.x, point.y - end.y)
+    if (Math.min(toStart, toEnd) > radius) continue
+    found = { id: line.id, atStart: toStart <= toEnd }
+  }
+
+  return found
+}
+
 // Lines are drawn through cell centres, so that is where they are grabbed.
 // Later lines win: they are painted later, so they are on top.
-function lineAt(point: ScreenPoint, scene: HitScene, band: number): ObjectRef | null {
+function lineHit(point: ScreenPoint, scene: HitScene, band: number): ObjectRef | null {
   let found: ObjectRef | null = null
   for (const line of scene.map.lines.values()) {
     for (let i = 1; i < line.points.length; i++) {

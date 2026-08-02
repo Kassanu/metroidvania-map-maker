@@ -21,6 +21,7 @@ import {
   resolveDoorTarget,
   type DoorTarget,
 } from '@/canvas/doorTarget'
+import { markupCursor, resolveMarkupTarget, type MarkupTarget } from '@/canvas/markupTarget'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
 import { deleteTransition } from '@/core/ops/doors'
 import { cellCentre, teleportScene } from '@/canvas/teleports'
@@ -590,6 +591,21 @@ function doorTargetAt(point: ScreenPoint): DoorTarget | null {
   })
 }
 
+// What Markup mode's pointer is over, as a row of its table. The same shape as
+// `doorTargetAt`, against its own resolver: Markup's priority is the reverse of
+// `hitTest`'s, so the two modes cannot share one.
+function markupTargetAt(point: ScreenPoint): MarkupTarget | null {
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (!tab || !map) return null
+  return resolveMarkupTarget(point, {
+    project: model.project,
+    map,
+    camera: { pan: tab.pan, zoom: tab.zoom },
+    tileSize: model.tileSize,
+  })
+}
+
 // The cross-tab teleport's other half: double-clicking it opens that tab
 // centred on the other end. The only place in the app where the canvas changes tabs, and
 // navigation rather than selection: it does not select the teleport.
@@ -716,6 +732,10 @@ function cursorAt(point: ScreenPoint | null, zone: DrawZone | null): string | nu
       return tab && pendingTeleport.canCompleteAt(tab.id, target.cell) ? 'crosshair' : null
     }
     return doorCursor(target)
+  }
+  if (modeStore.active === 'markup') {
+    const target = markupTargetAt(point)
+    return target && markupCursor(target, tools.erase)
   }
   return cursorFor(zone)
 }
