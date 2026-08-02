@@ -13,11 +13,12 @@ import { createNewArea } from '@/core/ops/project'
 import { Transaction } from '@/core/journal'
 import { edgeKey } from '@/core/cell'
 import { ok, TEST_ICON_COLORS } from '@/core/testUtils'
-import { placeIcon } from '@/core/ops/markup'
+import { createLine, placeIcon } from '@/core/ops/markup'
 import { iconArtCatalogue, getIcon } from '@/icons/registry'
 import { ICON_VIEWBOX, UNKNOWN_ICON_ART } from './iconBadge'
 import { OPEN_LOCK_ID, WORLD_AREA_ID } from '@/core/ids'
 import type { LockTypeId, MapId, TransitionId } from '@/core/ids'
+import type { CellKey } from '@/core/cell'
 import type { MapModel, ProjectModel } from '@/core/types'
 
 // The one shipped editable lock type, and the only coloured thing a fresh
@@ -40,7 +41,13 @@ function fakeContext() {
   // Each stroke() call, with the segments queued since the last beginPath()
   // and the state they were drawn under: enough to check how a wall was
   // drawn, not merely that something was stroked.
-  const strokes: { style: string; width: number; dash: number[]; segments: number[][] }[] = []
+  const strokes: {
+    style: string
+    width: number
+    dash: number[]
+    join: string
+    segments: number[][]
+  }[] = []
   let pending: number[][] = []
   let cursor: number[] = [0, 0]
   let dash: number[] = []
@@ -73,8 +80,16 @@ function fakeContext() {
       pending.push([...cursor, x, y])
       cursor = [x, y]
     }),
+    lineJoin: '',
+    lineCap: '',
     stroke: vi.fn(() => {
-      strokes.push({ style: ctx.strokeStyle, width: ctx.lineWidth, dash, segments: pending })
+      strokes.push({
+        style: ctx.strokeStyle,
+        width: ctx.lineWidth,
+        dash,
+        join: ctx.lineJoin,
+        segments: pending,
+      })
       pending = []
     }),
     setLineDash: vi.fn((segments: number[]) => {
@@ -1982,5 +1997,154 @@ describe('renderMap drawing icons', () => {
     expect(getIcon('save')).toBeDefined()
     expect(badges[1].data).toBe(UNKNOWN_ICON_ART.glyph)
     expect(badges[1].data).not.toBe(getIcon('save')!.glyph)
+  })
+})
+
+describe('renderMap drawing lines', () => {
+  const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
+    renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
+
+  const STYLE = { color: '#line', arrowStart: false, arrowEnd: false }
+
+  // Cell centres in screen px at zoom 1: the tile's midpoint, no rooms needed.
+  const centre = (x: number, y: number) => [TILE * (x + 0.5), TILE * (y + 0.5)]
+
+  function mapWithLine(points: CellKey[], style: Partial<typeof STYLE> = {}) {
+    return withMap((tx, _project, map) => {
+      ok(createLine(tx, map, points, { ...STYLE, ...style }))
+    })
+  }
+
+  function lineStroke(strokes: { style: string; join: string; segments: number[][] }[]) {
+    return strokes.find((stroke) => stroke.style === '#line')!
+  }
+
+  it('joins the centres of the cells it was drawn across', () => {
+    const { ctx, strokes } = fakeContext()
+    const { map } = mapWithLine(['0,0', '1,0', '2,0'])
+
+    draw(ctx, { map })
+
+    expect(lineStroke(strokes).segments).toEqual([
+      [...centre(0, 0), ...centre(1, 0)],
+      [...centre(1, 0), ...centre(2, 0)],
+    ])
+  })
+
+  it('draws diagonal steps as diagonals, not as a staircase', () => {
+    const { ctx, strokes } = fakeContext()
+    const { map } = mapWithLine(['0,0', '1,1', '2,2'])
+
+    draw(ctx, { map })
+
+    // Two segments, each crossing both axes at once. A staircase would be four.
+    expect(lineStroke(strokes).segments).toEqual([
+      [...centre(0, 0), ...centre(1, 1)],
+      [...centre(1, 1), ...centre(2, 2)],
+    ])
+  })
+
+  it('rounds its joins, so a doubling-back step cannot throw a mitre spike', () => {
+    const { ctx, strokes } = fakeContext()
+    const { map } = mapWithLine(['0,0', '1,0', '0,0'])
+
+    draw(ctx, { map })
+
+    expect(lineStroke(strokes).join).toBe('round')
+  })
+
+  it('takes its colour and weight from the line, and scales weight with zoom', () => {
+    const { ctx, strokes } = fakeContext()
+    const { map } = mapWithLine(['0,0', '1,0'], { color: '#abcdef' })
+
+    draw(ctx, { map, camera: { pan: { x: 0, y: 0 }, zoom: 2 } })
+
+    const stroke = strokes.find((candidate) => candidate.style === '#abcdef')!
+    expect(stroke).toBeDefined()
+    expect(stroke.width).toBeCloseTo(6)
+  })
+
+  it('gives each line its own colour rather than batching them into one path', () => {
+    const { ctx, strokes } = fakeContext()
+    const { map } = withMap((tx, _project, map) => {
+      ok(createLine(tx, map, ['0,0', '1,0'], { ...STYLE, color: '#first' }))
+      ok(createLine(tx, map, ['0,3', '1,3'], { ...STYLE, color: '#second' }))
+    })
+
+    draw(ctx, { map })
+
+    expect(strokes.some((stroke) => stroke.style === '#first')).toBe(true)
+    expect(strokes.some((stroke) => stroke.style === '#second')).toBe(true)
+  })
+
+  it('draws an arrowhead only at the ends that ask for one', () => {
+    const both = fakeContext()
+    const neither = fakeContext()
+    const { map: withArrows } = mapWithLine(['0,0', '1,0'], {
+      arrowStart: true,
+      arrowEnd: true,
+    })
+    const { map: without } = mapWithLine(['0,0', '1,0'])
+
+    draw(both.ctx, { map: withArrows })
+    draw(neither.ctx, { map: without })
+
+    // One stroke for the line itself, plus one chevron per armed end.
+    expect(both.strokes.filter((stroke) => stroke.style === '#line')).toHaveLength(3)
+    expect(neither.strokes.filter((stroke) => stroke.style === '#line')).toHaveLength(1)
+  })
+
+  it('points the end arrow along the last segment, away from the line', () => {
+    const { ctx, strokes } = fakeContext()
+    const { map } = mapWithLine(['0,0', '1,0', '2,0'], { arrowEnd: true })
+
+    draw(ctx, { map })
+
+    // The chevron is two lines meeting at an apex; the apex sits past the last
+    // cell centre in the direction of travel, which here is due east.
+    const head = strokes.filter((stroke) => stroke.style === '#line').at(-1)!
+    const apex = head.segments[0].slice(2)
+    expect(apex[0]).toBeGreaterThan(centre(2, 0)[0])
+    expect(apex[1]).toBeCloseTo(centre(2, 0)[1])
+  })
+
+  it('points the start arrow the other way', () => {
+    const { ctx, strokes } = fakeContext()
+    const { map } = mapWithLine(['0,0', '1,0', '2,0'], { arrowStart: true })
+
+    draw(ctx, { map })
+
+    const head = strokes.filter((stroke) => stroke.style === '#line').at(-1)!
+    const apex = head.segments[0].slice(2)
+    expect(apex[0]).toBeLessThan(centre(0, 0)[0])
+  })
+
+  it('draws a line that touches no room at all', () => {
+    const { ctx, strokes } = fakeContext()
+    // No rooms exist. Lines are an independent overlay with no room owner, so
+    // there is nothing for this one to be attached to or clipped by.
+    const { map } = mapWithLine(['5,5', '6,6'])
+
+    draw(ctx, { map })
+
+    expect(lineStroke(strokes).segments).toHaveLength(1)
+  })
+
+  it('draws lines over the walls and icons over the lines', () => {
+    const { ctx, strokes, badges } = fakeContext()
+    const { project, map } = withMap((tx, project, map) => {
+      paintCells(tx, project, map, ['0,0', '1,0'], { areaId: WORLD_AREA_ID })
+      ok(createLine(tx, map, ['0,0', '1,0'], STYLE))
+      ok(placeIcon(tx, map, '0,0', 'save', TEST_ICON_COLORS))
+    })
+
+    draw(ctx, { map, areas: project.areas })
+
+    // Paint order is Markup's hit priority read backwards: the icon is on top
+    // because a click in that cell finds the icon, not the line under it.
+    const wall = strokes.findIndex((stroke) => stroke.style === '#roomwall')
+    const line = strokes.findIndex((stroke) => stroke.style === '#line')
+    expect(line).toBeGreaterThan(wall)
+    expect(badges).toHaveLength(2)
   })
 })

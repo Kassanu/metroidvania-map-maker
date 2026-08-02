@@ -199,6 +199,11 @@ const MIN_MARKER_PX = 2
 // How much of a cell an icon's badge covers, leaving a margin so adjacent
 // badges stay distinct.
 const ICON_CELL_FRACTION = 0.8
+
+// A markup line's weight, clamped like the walls so it survives both ends of
+// the zoom range. Heavier than a teleport's hairline: a teleport line is a
+// derived hint between two markers, where this one is the object the user drew.
+const MARKUP_LINE_PX = 3
 const MAX_MARKER_PX = 12
 
 // How much of a cell a transition's mark occupies across its own axis: the
@@ -356,9 +361,13 @@ export function renderMap(
   // The one layer the master gates here rather than through an emptied list,
   // because its scene is prepared by the caller: see `MapScene.teleports`.
   if (scene.showTransitions) drawTeleports(ctx, scene, scene.teleports)
-  // Above every map layer, so paint order matches Markup's hit priority: an
-  // icon is what a click in its cell finds, and burying it under a wall or a
-  // teleport line would show the opposite.
+  // Lines then icons, above every other map layer, so paint order matches
+  // Markup's hit priority: a click finds the icon before the line and the line
+  // before anything under it, and burying either would show the opposite.
+  //
+  // Lines are an overlay with no room owner, so they sit above the transitions
+  // they are free to cross rather than among them.
+  drawLines(ctx, scene, map)
   drawIcons(ctx, scene, map)
   // Directly after the finished teleports, and deliberately: it is the same
   // marker in the same place, drawn hollow because it is not there yet. Sitting
@@ -642,6 +651,68 @@ function drawGrid(
     ctx.lineTo(bottomRight.x, y)
   }
   ctx.stroke()
+}
+
+// Markup lines: a polyline through the centres of the cells it was drawn
+// across, in the line's own colour.
+//
+// One path per line rather than one batched path for all of them, because the
+// colour is per line. Round joins and caps because a step may turn 45 degrees
+// or double back on itself, and a mitred join at those angles throws a spike
+// well outside the line.
+//
+// Nothing here consults rooms. A line has no room owner and may run over rooms,
+// over transitions and across empty grid alike.
+function drawLines(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
+  const width = clamp(MARKUP_LINE_PX * scene.camera.zoom, MIN_WALL_PX, MAX_WALL_PX)
+
+  for (const line of map.lines.values()) {
+    if (line.points.length < 2) continue
+
+    ctx.strokeStyle = line.color
+    ctx.lineWidth = width
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    ctx.setLineDash([])
+    ctx.beginPath()
+    const start = worldPointOf(line.points[0], scene)
+    ctx.moveTo(start.x, start.y)
+    for (const point of line.points.slice(1)) {
+      const at = worldPointOf(point, scene)
+      ctx.lineTo(at.x, at.y)
+    }
+    ctx.stroke()
+
+    // In the line's own colour, unlike a teleport's arrow: that one sits on a
+    // shaft it would vanish into, where this one is part of the line it ends.
+    if (line.arrowStart) {
+      drawArrow(ctx, scene, start, headingOf(line.points[1], line.points[0], scene), line.color)
+    }
+    if (line.arrowEnd) {
+      const last = line.points.length - 1
+      drawArrow(
+        ctx,
+        scene,
+        worldPointOf(line.points[last], scene),
+        headingOf(line.points[last - 1], line.points[last], scene),
+        line.color,
+      )
+    }
+  }
+
+  ctx.lineJoin = 'miter'
+  ctx.lineCap = 'butt'
+  ctx.lineWidth = 1
+}
+
+// The unit vector from one cell centre to another, in screen space. Zero length
+// cannot happen on a normalised path, which never repeats a cell, but a guard
+// costs less than a NaN reaching the canvas.
+function headingOf(from: CellKey, to: CellKey, scene: MapScene): { dx: number; dy: number } {
+  const a = worldPointOf(from, scene)
+  const b = worldPointOf(to, scene)
+  const length = Math.hypot(b.x - a.x, b.y - a.y) || 1
+  return { dx: (b.x - a.x) / length, dy: (b.y - a.y) / length }
 }
 
 // Icons: one badge per icon, snapped to its cell and centred.
@@ -929,9 +1000,8 @@ function drawTeleportEnd(ctx: CanvasRenderingContext2D, scene: MapScene, end: Te
 }
 
 // A chevron pointing along `direction` (a unit vector), centred on `at`. Two
-// lines rather than a filled triangle: `fill` is one more method the three fake
-// canvas contexts in the tests would each have to grow, and a stroked head reads
-// the same at these sizes.
+// lines rather than a filled triangle: a stroked head reads the same at these
+// sizes, and it takes the stroke colour every caller already sets.
 function drawArrow(
   ctx: CanvasRenderingContext2D,
   scene: MapScene,
