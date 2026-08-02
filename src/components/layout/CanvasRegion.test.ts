@@ -15,6 +15,7 @@ import { useArmedIconStore } from '@/stores/armedIcon'
 import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
 import { getIcon } from '@/icons/registry'
 import { placeIcon } from '@/core/ops/markup'
+import { dropIconAt } from '@/gestures/iconDropTarget'
 import { pushEscHandler, resolveEscape } from '@/hotkeys/escStack'
 import { PROJECT_SCOPE, mapScope, useModelStore } from '@/stores/model'
 import { updateSetting } from '@/core/ops/project'
@@ -3935,5 +3936,232 @@ describe('CanvasRegion Markup mode lines', () => {
     ])
 
     expect(linesOn(mapId)).toHaveLength(0)
+  })
+})
+
+describe('CanvasRegion Markup mode icon drag', () => {
+  let mounted: ReturnType<typeof mount> | null = null
+
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  afterEach(() => {
+    mounted?.unmount()
+    mounted = null
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    mounted = wrapper
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 }) as DOMRect
+    viewport.setPointerCapture = () => {}
+    return { wrapper, viewport }
+  }
+
+  function pointer(type: string, init: PointerEventInit = {}) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, ...init })
+  }
+
+  function at(x: number, y: number) {
+    const tabsStore = useTabsStore()
+    const tile = useModelStore().tileSize
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    return {
+      clientX: (x - camera.pan.x) * tile * camera.zoom,
+      clientY: (y - camera.pan.y) * tile * camera.zoom,
+    }
+  }
+
+  async function withIcon() {
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    let icon!: string
+    model.run('Setup', mapScope(mapId), (tx) => {
+      const map = model.project.mapsById.get(mapId)!
+      paintCells(tx, model.project, map, ['0,0', '1,0', '0,1', '1,1'], { areaId: WORLD_AREA_ID })
+      paintCells(tx, model.project, map, ['4,0'], { areaId: WORLD_AREA_ID })
+      const placed = placeIcon(tx, map, '0,0', 'save', {
+        plateColor: '#111111',
+        glyphColor: '#222222',
+      })
+      icon = (placed as { id: string }).id
+    })
+    useModeStore().setMode('markup')
+    await nextTick()
+    return { mapId, icon }
+  }
+
+  function iconCell(mapId: MapId, icon: string) {
+    return useModelStore()
+      .project.mapsById.get(mapId)!
+      .icons.get(icon as never)!.cell
+  }
+
+  async function drag(viewport: HTMLElement, path: [number, number][]) {
+    const [start, ...rest] = path
+    viewport.dispatchEvent(pointer('pointerdown', at(...start)))
+    for (const point of rest) viewport.dispatchEvent(pointer('pointermove', at(...point)))
+    viewport.dispatchEvent(pointer('pointerup', at(...path[path.length - 1])))
+    await nextTick()
+    await nextTick()
+  }
+
+  it('moves an icon within its room', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, icon } = await withIcon()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [1.5, 1.5],
+    ])
+
+    expect(iconCell(mapId, icon)).toBe('1,1')
+  })
+
+  it('moves an icon into another room, ownership following the cell', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, icon } = await withIcon()
+    const model = useModelStore()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [4.5, 0.5],
+    ])
+
+    const map = model.project.mapsById.get(mapId)!
+    expect(iconCell(mapId, icon)).toBe('4,0')
+    expect(map.cellOwner.get('4,0')).not.toBe(map.cellOwner.get('0,0'))
+  })
+
+  it('draws no line when the drag started on an icon', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId } = await withIcon()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [1.5, 1.5],
+    ])
+
+    expect([...useModelStore().project.mapsById.get(mapId)!.lines.values()]).toHaveLength(0)
+  })
+
+  it('refuses a drop outside every room, leaving the icon where it was', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, icon } = await withIcon()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [3.5, 0.5],
+    ])
+
+    expect(iconCell(mapId, icon)).toBe('0,0')
+  })
+
+  it('is one undo step', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, icon } = await withIcon()
+    const model = useModelStore()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [1.5, 0.5],
+      [1.5, 1.5],
+    ])
+    expect(iconCell(mapId, icon)).toBe('1,1')
+
+    model.undo()
+    expect(iconCell(mapId, icon)).toBe('0,0')
+    expect(checkInvariants(model.project)).toEqual([])
+  })
+
+  it('shows a refusal on the cursor while the drag is over a cell that will not take it', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    const model = useModelStore()
+    const { mapId } = await withIcon()
+    model.run('Second', mapScope(mapId), (tx) =>
+      placeIcon(tx, model.project.mapsById.get(mapId)!, '1,1', 'missile', {
+        plateColor: '#333333',
+        glyphColor: '#444444',
+      }),
+    )
+
+    viewport.dispatchEvent(pointer('pointerdown', at(0.5, 0.5)))
+    viewport.dispatchEvent(pointer('pointermove', at(1.5, 1.5)))
+    await nextTick()
+
+    // A refused move applies nothing, so without this "did not move" and
+    // "cannot move here" are the same picture.
+    expect((wrapper.get('.canvas-viewport').element as HTMLElement).style.cursor).toBe(
+      'not-allowed',
+    )
+    viewport.dispatchEvent(pointer('pointerup', at(1.5, 1.5)))
+    await nextTick()
+  })
+
+  it('places from a library drag onto the cell under the release', async () => {
+    mountCanvas()
+    const { mapId } = await withIcon()
+    const model = useModelStore()
+    const before = model.project.mapsById.get(mapId)!.icons.size
+
+    // The seam the sidebar uses: the picker cannot resolve a cell, the canvas
+    // cannot hear the release.
+    const landed = dropIconAt(at(1.5, 0.5), getIcon('missile')!)
+    await nextTick()
+
+    expect(landed).toBe(true)
+    const map = model.project.mapsById.get(mapId)!
+    expect(map.icons.size).toBe(before + 1)
+    expect(map.icons.get(map.iconAtCell.get('1,0')!)!.iconType).toBe('missile')
+  })
+
+  it('places nothing when a library drag is released off the canvas', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId } = await withIcon()
+    const model = useModelStore()
+    const before = model.project.mapsById.get(mapId)!.icons.size
+
+    // A point that resolves to a perfectly good room cell, but lies outside the
+    // viewport's box: the release has to be rejected on where it happened, not
+    // on what the maths says is under it. A point that failed both tests would
+    // pass whether or not the bounds were checked at all.
+    viewport.getBoundingClientRect = () => ({ left: 0, top: 0, width: 40, height: 40 }) as DOMRect
+    const inside = at(1.5, 0.5)
+    expect(inside.clientX).toBeGreaterThan(40)
+
+    expect(dropIconAt(inside, getIcon('missile')!)).toBe(false)
+    expect(model.project.mapsById.get(mapId)!.icons.size).toBe(before)
+  })
+
+  it('places nothing when a library drag lands on an occupied cell', async () => {
+    mountCanvas()
+    const { mapId } = await withIcon()
+    const model = useModelStore()
+
+    // The icon is on (0,0), and replace is off.
+    expect(dropIconAt(at(0.5, 0.5), getIcon('missile')!)).toBe(false)
+    expect(model.project.mapsById.get(mapId)!.icons.size).toBe(1)
+
+    useMarkupDefaultsStore().setReplace(true)
+    expect(dropIconAt(at(0.5, 0.5), getIcon('missile')!)).toBe(true)
+    const map = model.project.mapsById.get(mapId)!
+    expect(map.icons.size).toBe(1)
+    expect(map.icons.get(map.iconAtCell.get('0,0')!)!.iconType).toBe('missile')
+  })
+
+  it('places a library drag in the entry’s own colours', async () => {
+    mountCanvas()
+    const { mapId } = await withIcon()
+    const model = useModelStore()
+    const entry = getIcon('missile')!
+
+    dropIconAt(at(1.5, 0.5), entry)
+
+    const map = model.project.mapsById.get(mapId)!
+    const placed = map.icons.get(map.iconAtCell.get('1,0')!)!
+    expect(placed.plateColor).toBe(entry.defaultColors.plateColor)
+    expect(useMarkupDefaultsStore().colors).toEqual(entry.defaultColors)
   })
 })

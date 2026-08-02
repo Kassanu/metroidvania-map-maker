@@ -228,6 +228,18 @@ describe('armedPlacementAt', () => {
     expect(armedPlacementAt(occupied, true)).toBe('replace')
   })
 
+  it('does not treat the icon being dragged as occupying its own cell', () => {
+    const { scene, icon } = fixture()
+    const occupied = resolveMarkupTarget(centre('1,1'), scene)
+    expect(occupied).toMatchObject({ kind: 'icon', id: icon.id })
+
+    // A drag that goes out and comes back is a no-op, not a collision with
+    // itself, and `repositionIcon` makes the same exception. Without this the
+    // cursor would refuse the cell the icon is already standing on.
+    expect(armedPlacementAt(occupied, false)).toBe('blocked')
+    expect(armedPlacementAt(occupied, false, icon.id)).toBe('place')
+  })
+
   it('refuses outside every room, on a line row as much as bare grid', () => {
     const { scene } = fixture()
 

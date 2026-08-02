@@ -55,6 +55,7 @@ export const en = {
   // armed: they are the same op, and the undo entry should not say which
   // chrome the user reached it through.
   'history.placeIcon': 'Place Icon',
+  'history.moveIcon': 'Move Icon',
   'history.drawLine': 'Draw Line',
   'history.extendLine': 'Extend Line',
 

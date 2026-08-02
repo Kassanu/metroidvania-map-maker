@@ -32,8 +32,10 @@ import {
 import IconPickerPopover from './IconPickerPopover.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
 import { beginLineStroke, type LineStroke } from '@/gestures/lineStroke'
+import { beginIconDrag, type IconDrag } from '@/gestures/iconDrag'
+import { registerIconDropTarget } from '@/gestures/iconDropTarget'
 import { deleteTransition } from '@/core/ops/doors'
-import { createLine, extendLine, placeIcon } from '@/core/ops/markup'
+import { createLine, extendLine, placeIcon, repositionIcon } from '@/core/ops/markup'
 import { cellCentre, teleportScene } from '@/canvas/teleports'
 import { RULER_THICKNESS } from '@/canvas/renderRuler'
 import { brushOffset } from '@/canvas/brush'
@@ -51,7 +53,7 @@ import type { GhostGesture } from '@/gestures/ghostGesture'
 import type { MapModel } from '@/core/types'
 import type { BrushPreview, HoveredHandle } from '@/canvas/renderMap'
 import type { WorldPoint } from '@/canvas/stroke'
-import type { LineId, MapId, TransitionId } from '@/core/ids'
+import type { IconId, LineId, MapId, TransitionId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 import type { IconRegistryEntry } from '@/icons/registry'
 import { useCanvasRenderer } from '@/composables/useCanvasRenderer'
@@ -119,6 +121,10 @@ let gesture: GhostGesture | null = null
 // other gesture's pending result is visible in the speculative model, and this
 // one's rectangle is not.
 let boxDrag: BoxDrag | null = null
+// The icon a drag is currently moving, or null. A ref rather than a plain
+// `let` because the cursor is DOM state: unlike the gestures above, this one
+// has to make Vue re-evaluate the binding while the pointer is down.
+const draggingIconId = ref<IconId | null>(null)
 
 const { draw, resize, repaintForTheme } = useCanvasRenderer(
   { container, main: canvas, topRuler: topRulerCanvas, leftRuler: leftRulerCanvas },
@@ -451,6 +457,30 @@ function handleDoubleClick(event: MouseEvent) {
 // an icon moves it, which is a gesture of its own.
 //
 // Lines have no room owner, so no row is refused for standing on bare grid.
+// The icon row of the drag column: a drag moves the icon, anywhere in a room
+// including into another one. Ownership follows the cell, so there is no
+// cascade and nothing to re-validate.
+//
+// The block/replace rule is the same one placement uses, and `repositionIcon`
+// applies it: the icon's own cell never counts as occupied, so a drag out and
+// back is a no-op rather than a collision with itself.
+function beginMarkupIconDrag(target: MarkupTarget): IconDrag | null {
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (!tab || !map || target.kind !== 'icon') return null
+
+  const iconId = target.id
+  return beginIconDrag({
+    mapId: tab.id,
+    from: target.cell,
+    label: t('history.moveIcon'),
+    onChange: draw,
+    apply: (tx, to) => {
+      repositionIcon(tx, map, iconId, to, { replace: markupDefaults.replace })
+    },
+  })
+}
+
 function beginMarkupLine(target: MarkupTarget): LineStroke | null {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
@@ -514,8 +544,11 @@ function handleMarkupPress(event: PointerEvent) {
   // somewhere to go. Null on the rows that have no drag yet: an armed icon
   // takes the press whatever is under it, and dragging an icon moves it, which
   // is its own gesture.
-  const line = armedIcon.isArmed ? null : beginMarkupLine(target)
-  if (line) gesture = line
+  const iconDrag = armedIcon.isArmed ? null : beginMarkupIconDrag(target)
+  const line = armedIcon.isArmed || iconDrag ? null : beginMarkupLine(target)
+  const dragging = iconDrag ?? line
+  if (dragging) gesture = dragging
+  if (iconDrag && target.kind === 'icon') draggingIconId.value = target.id
 
   startPointerDrag(event, {
     buttons: [event.button],
@@ -524,10 +557,23 @@ function handleMarkupPress(event: PointerEvent) {
     onMove: (context) => {
       const point = worldPoint(context.event)
       if (!point) return
-      if (cellKey(Math.floor(point.x), Math.floor(point.y)) !== target.cell) leftCell = true
+      const cell = cellKey(Math.floor(point.x), Math.floor(point.y))
+      if (cell !== target.cell) leftCell = true
       line?.extendTo(point)
+      iconDrag?.moveTo(cell)
     },
     onEnd: () => {
+      if (iconDrag) {
+        draggingIconId.value = null
+        // Out and back is a no-op rather than an undo step: every re-apply runs
+        // against the pristine model, so returning to the origin cell restores
+        // it rather than reconstructing it, and the empty transaction is
+        // dropped by the seam.
+        if (leftCell) iconDrag.commit()
+        else iconDrag.cancel()
+        if (gesture === iconDrag) gesture = null
+        draw()
+      }
       if (line) {
         // Cancelled rather than committed when it was a click, exactly as the
         // box drag is: a one-cell path makes no line either way, since
@@ -757,6 +803,35 @@ function handleIconPicked(entry: IconRegistryEntry) {
   placeIconAt(entry.id, cell)
 }
 
+// The end of a drag that started in the sidebar. The picker cannot resolve a
+// cell (it knows nothing about cameras) and the canvas cannot hear the release
+// (the pointer is captured by the button the drag began on), so the two meet
+// through the registry: see `gestures/iconDropTarget.ts`.
+//
+// A release outside the viewport, or on a cell that refuses the icon, places
+// nothing and says so, which is what stops the picker treating every drag as a
+// success.
+function dropIconFromLibrary(
+  point: { clientX: number; clientY: number },
+  entry: IconRegistryEntry,
+) {
+  const box = container.value?.getBoundingClientRect()
+  if (!box) return false
+  const local = { x: point.clientX - box.left, y: point.clientY - box.top }
+  if (local.x < 0 || local.y < 0 || local.x > box.width || local.y > box.height) return false
+
+  const target = markupTargetAt(local)
+  if (!target) return false
+  const placement = armedPlacementAt(target, markupDefaults.replace)
+  if (placement === 'blocked' || placement === 'not-in-a-room') return false
+
+  // The entry's own colours, as the grid showed them, and loaded into the
+  // toolbar so the swatches agree with what just landed.
+  markupDefaults.loadColors(entry.defaultColors)
+  placeIconAt(entry.id, target.cell)
+  return true
+}
+
 // Both placement routes end here: the popup's pick and a click while armed.
 // One op, differing only in the chrome that led to it.
 //
@@ -920,6 +995,14 @@ function cursorAt(point: ScreenPoint | null, zone: DrawZone | null): string | nu
   if (modeStore.active === 'markup') {
     const target = markupTargetAt(point)
     if (!target) return null
+    // A live icon drag outranks everything: while one is running the only
+    // question is whether the cell under the pointer will take it. A refused
+    // move applies nothing, so without this "did not move" and "cannot move
+    // here" are the same picture.
+    if (draggingIconId.value) {
+      const placement = armedPlacementAt(target, markupDefaults.replace, draggingIconId.value)
+      return placement === 'blocked' || placement === 'not-in-a-room' ? 'not-allowed' : 'grabbing'
+    }
     // The armed state changes what every row's click does, so it reaches the
     // cursor too: one source, read by dispatch and cursor alike.
     return markupCursor(
@@ -1275,6 +1358,19 @@ useHotkeyAction('deleteSelection', () => {
 useResizeObserver(container, resize)
 
 onMounted(resize)
+
+// The canvas is the one place a library icon can be dropped, and it says so
+// only while it is mounted. Same lifecycle discipline as the Esc handlers
+// above: register on mount, release on unmount, never leave a stale target
+// pointing at a torn-down component.
+let releaseIconDropTarget: (() => void) | null = null
+onMounted(() => {
+  releaseIconDropTarget = registerIconDropTarget(dropIconFromLibrary)
+})
+onUnmounted(() => {
+  releaseIconDropTarget?.()
+  releaseIconDropTarget = null
+})
 </script>
 
 <template>

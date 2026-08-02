@@ -2,6 +2,9 @@
 import { onMounted, ref } from 'vue'
 import IconBadge from './IconBadge.vue'
 import { useIconCatalog } from '@/composables/useIconCatalog'
+import { startPointerDrag } from '@/composables/pointerDrag'
+import { dropIconAt } from '@/gestures/iconDropTarget'
+import { DRAG_DEAD_ZONE } from '@/config/constants'
 import { PLATE_ROUNDED_SQUARE } from '@/canvas/iconBadge'
 import { t } from '@/i18n'
 import type { IconRegistryEntry } from '@/icons/registry'
@@ -30,6 +33,54 @@ const search = ref<HTMLInputElement | null>(null)
 onMounted(() => {
   if (props.autofocus) search.value?.focus()
 })
+
+// Whether the press that is ending became a drag. Read by the click handler,
+// which fires afterwards: a drag onto the canvas must not also arm the icon it
+// was dragged from.
+//
+// Reset on every press rather than after the click, because a drag that ends
+// off the button produces no click at all: the synthetic one is dispatched to
+// the common ancestor of press and release, which by then is not this button.
+let dragged = false
+
+// Pointer events rather than HTML5 drag-and-drop: see `iconDropTarget.ts` for
+// why.
+//
+// Capture is taken at press, not deferred. The drag primitive listens on the
+// element the press began on, and this drag leaves that element immediately by
+// definition: without capture the pointer stops reporting to the button the
+// moment it crosses onto the canvas, so the dead zone is never passed and no
+// drag ever starts. Deferring is right for a drag that stays near its handle,
+// which every other caller is.
+//
+// Capturing does not cost the click, because press and release share this
+// element once it is capturing, so `click` still fires here and the flag above
+// is what keeps a drag from also arming.
+function startDrag(event: PointerEvent, entry: IconRegistryEntry) {
+  if (event.button !== 0) return
+  dragged = false
+  startPointerDrag(event, {
+    deadZone: DRAG_DEAD_ZONE,
+    onStart: () => {
+      dragged = true
+    },
+    onEnd: (context) => {
+      if (!context.dragged) return
+      dropIconAt({ clientX: context.event.clientX, clientY: context.event.clientY }, entry)
+    },
+  })
+}
+
+// Still the pick route for a plain click, and the only route the keyboard has:
+// `Enter` and `Space` on a focused option raise `click` with no pointer events
+// at all.
+function handleClick(entry: IconRegistryEntry) {
+  if (dragged) {
+    dragged = false
+    return
+  }
+  emit('pick', entry)
+}
 </script>
 
 <template>
@@ -50,7 +101,8 @@ onMounted(() => {
           :class="{ armed: entry.id === props.armedId }"
           :aria-pressed="props.armedId === null ? undefined : entry.id === props.armedId"
           :title="entry.name"
-          @click="emit('pick', entry)"
+          @pointerdown="startDrag($event, entry)"
+          @click="handleClick(entry)"
         >
           <IconBadge
             :art="{ plate: entry.plate ?? PLATE_ROUNDED_SQUARE, glyph: entry.glyph }"

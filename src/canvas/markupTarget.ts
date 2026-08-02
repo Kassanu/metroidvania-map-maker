@@ -67,13 +67,20 @@ export function resolveMarkupTarget(point: ScreenPoint, scene: HitScene): Markup
 // off, which the toolbar's checkbox is what resolves.
 export type ArmedPlacement = 'place' | 'replace' | 'blocked' | 'not-in-a-room'
 
-export function armedPlacementAt(target: MarkupTarget, replace: boolean): ArmedPlacement {
+// `ignoring` is the icon being dragged, which does not count as occupying the
+// cell it is currently on: a drag that goes out and comes back is a no-op, not
+// a collision with itself. `repositionIcon` makes the same exception.
+export function armedPlacementAt(
+  target: MarkupTarget,
+  replace: boolean,
+  ignoring?: IconId,
+): ArmedPlacement {
   // Icons must be placed inside a room; lines are the thing with no room owner,
   // so a line row on bare grid is still nowhere to put an icon.
   if (target.kind === 'empty' || target.roomId === null) return 'not-in-a-room'
   // The cell holds one already. Any other row means the cell is free, since an
   // icon outranks both line rows in the same cell.
-  if (target.kind !== 'icon') return 'place'
+  if (target.kind !== 'icon' || target.id === ignoring) return 'place'
   return replace ? 'replace' : 'blocked'
 }
 

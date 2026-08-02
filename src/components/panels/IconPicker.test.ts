@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia } from 'pinia'
 import { createTestPinia } from '@/test-setup'
 import { mount } from '@vue/test-utils'
@@ -8,6 +8,7 @@ import { PLATE_ROUNDED_SQUARE } from '@/canvas/iconBadge'
 import { ICONS, getIcon } from '@/icons/registry'
 import { useArmedIconStore } from '@/stores/armedIcon'
 import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
+import { registerIconDropTarget } from '@/gestures/iconDropTarget'
 
 describe('IconPicker', () => {
   it('shows every icon in the catalogue, derived rather than listed', () => {
@@ -105,6 +106,31 @@ describe('IconLibraryPanel', () => {
     // And the swatches load the icon's own pair, so what the grid shows is what
     // lands on the map until a swatch is overridden.
     expect(useMarkupDefaultsStore().colors).toEqual(entry.defaultColors)
+  })
+
+  it('drags to the canvas without also arming what it dragged', async () => {
+    const panel = mount(IconLibraryPanel, { attachTo: document.body })
+    const option = panel.findAll('.icon-option')[0]
+    const element = option.element as HTMLElement
+    element.setPointerCapture = () => {}
+    const dropped = vi.fn(() => true)
+    const release = registerIconDropTarget(dropped)
+
+    element.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 }),
+    )
+    element.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, clientX: 120, clientY: 90 }),
+    )
+    element.dispatchEvent(
+      new PointerEvent('pointerup', { bubbles: true, clientX: 120, clientY: 90 }),
+    )
+    // The browser raises a click after the release; the drag has to swallow it.
+    await option.trigger('click')
+
+    expect(dropped).toHaveBeenCalled()
+    expect(useArmedIconStore().isArmed).toBe(false)
+    release()
   })
 
   it('marks the armed icon, since nothing else shows it once the popup closes', async () => {
