@@ -217,6 +217,10 @@ export function peelLine(
   count = 1,
 ): void {
   const line = mustGet(map.lines, lineId, 'line')
+  // Peeling nothing writes nothing. `setLinePoints` records whatever it is
+  // handed without comparing, so an unguarded zero would leave an undo step for
+  // a line that never changed.
+  if (count <= 0) return
 
   const remaining = line.points.length - count
   // Peeling below one segment leaves nothing meaningful, so the line goes.

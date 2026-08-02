@@ -58,6 +58,8 @@ export const en = {
   'history.moveIcon': 'Move Icon',
   'history.drawLine': 'Draw Line',
   'history.extendLine': 'Extend Line',
+  'history.deleteIcon': 'Delete Icon',
+  'history.peelLine': 'Erase Line',
 
   'common.close': 'Close',
   'common.cancel': 'Cancel',

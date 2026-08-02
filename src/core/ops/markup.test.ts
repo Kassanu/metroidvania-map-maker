@@ -157,6 +157,20 @@ describe('lines', () => {
     expect(map.lines.has(line.id)).toBe(false)
   })
 
+  it('records nothing when asked to peel nothing', () => {
+    const { map } = setup()
+    const seed = tx(map)
+    const line = ok(createLine(seed, map, ['0,0', '1,0', '2,0'], LINE_DEFAULTS))
+    seed.commit()
+
+    const transaction = tx(map)
+    peelLine(transaction, map, line.id, false, 0)
+    // A gesture that ends where it started must leave an empty transaction, and
+    // `setLinePoints` writes whatever it is handed without comparing.
+    expect(transaction.isEmpty).toBe(true)
+    expect(line.points).toEqual(['0,0', '1,0', '2,0'])
+  })
+
   it('is untouched by room edits: it has no room owner', () => {
     const { project, map } = setup()
     const room = makeRoom(project, map, rect(0, 0, 3, 1))

@@ -14,7 +14,7 @@ import { useSelectionStore } from '@/stores/selection'
 import { useArmedIconStore } from '@/stores/armedIcon'
 import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
 import { getIcon } from '@/icons/registry'
-import { placeIcon } from '@/core/ops/markup'
+import { createLine, placeIcon } from '@/core/ops/markup'
 import { dropIconAt } from '@/gestures/iconDropTarget'
 import { pushEscHandler, resolveEscape } from '@/hotkeys/escStack'
 import { PROJECT_SCOPE, mapScope, useModelStore } from '@/stores/model'
@@ -4163,5 +4163,254 @@ describe('CanvasRegion Markup mode icon drag', () => {
     const placed = map.icons.get(map.iconAtCell.get('1,0')!)!
     expect(placed.plateColor).toBe(entry.defaultColors.plateColor)
     expect(useMarkupDefaultsStore().colors).toEqual(entry.defaultColors)
+  })
+})
+
+describe('CanvasRegion Markup mode erase', () => {
+  let mounted: ReturnType<typeof mount> | null = null
+
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  afterEach(() => {
+    mounted?.unmount()
+    mounted = null
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    mounted = wrapper
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 }) as DOMRect
+    viewport.setPointerCapture = () => {}
+    return { wrapper, viewport }
+  }
+
+  function pointer(type: string, init: PointerEventInit = {}) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, ...init })
+  }
+
+  function at(x: number, y: number) {
+    const tabsStore = useTabsStore()
+    const tile = useModelStore().tileSize
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    return {
+      clientX: (x - camera.pan.x) * tile * camera.zoom,
+      clientY: (y - camera.pan.y) * tile * camera.zoom,
+    }
+  }
+
+  // A room along the top row with an icon on (0,0), and a four-segment line
+  // running (1,2) to (5,2) well clear of it.
+  async function withMarkup() {
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    let icon!: string
+    let line!: string
+    model.run('Setup', mapScope(mapId), (tx) => {
+      const map = model.project.mapsById.get(mapId)!
+      paintCells(tx, model.project, map, ['0,0', '1,0', '2,0'], { areaId: WORLD_AREA_ID })
+      icon = (
+        placeIcon(tx, map, '0,0', 'save', {
+          plateColor: '#111111',
+          glyphColor: '#222222',
+        }) as { id: string }
+      ).id
+      line = (
+        createLine(tx, map, ['1,2', '2,2', '3,2', '4,2', '5,2'], {
+          color: '#ffcc00',
+          arrowStart: false,
+          arrowEnd: false,
+        }) as { id: string }
+      ).id
+    })
+    useModeStore().setMode('markup')
+    await nextTick()
+    return { mapId, icon, line }
+  }
+
+  function mapOf(mapId: MapId) {
+    return useModelStore().project.mapsById.get(mapId)!
+  }
+
+  function pointsOf(mapId: MapId, line: string) {
+    return mapOf(mapId).lines.get(line as never)?.points
+  }
+
+  // Right-drag, which is the erase route that needs no toggle.
+  async function eraseDrag(viewport: HTMLElement, path: [number, number][], button = 2) {
+    const [start, ...rest] = path
+    viewport.dispatchEvent(pointer('pointerdown', { ...at(...start), button }))
+    for (const point of rest) {
+      viewport.dispatchEvent(pointer('pointermove', { ...at(...point), button }))
+    }
+    viewport.dispatchEvent(pointer('pointerup', { ...at(...path[path.length - 1]), button }))
+    await nextTick()
+    await nextTick()
+  }
+
+  it('deletes an icon on a right-click', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId } = await withMarkup()
+
+    await eraseDrag(viewport, [[0.5, 0.5]])
+
+    expect(mapOf(mapId).icons.size).toBe(0)
+    expect(mapOf(mapId).iconAtCell.get('0,0')).toBeUndefined()
+  })
+
+  it('deletes an icon through the erase toggle, on the primary button', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId } = await withMarkup()
+    useToolsStore().erase = true
+
+    await eraseDrag(viewport, [[0.5, 0.5]], 0)
+
+    expect(mapOf(mapId).icons.size).toBe(0)
+  })
+
+  it('deletes an icon through the pen’s eraser end', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId } = await withMarkup()
+
+    const init = { ...at(0.5, 0.5), button: 5, pointerType: 'pen' }
+    viewport.dispatchEvent(pointer('pointerdown', init))
+    viewport.dispatchEvent(pointer('pointerup', init))
+    await nextTick()
+
+    expect(mapOf(mapId).icons.size).toBe(0)
+  })
+
+  it('deletes an icon while another is armed, since erase outranks arming', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId } = await withMarkup()
+    useArmedIconStore().arm('missile')
+    await nextTick()
+
+    await eraseDrag(viewport, [[0.5, 0.5]])
+
+    // The armed icon replaces the click column, but not the erase column: the
+    // press must delete rather than place on top.
+    expect(mapOf(mapId).icons.size).toBe(0)
+  })
+
+  it('peels segments off the end the drag started from', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, line } = await withMarkup()
+
+    await eraseDrag(viewport, [
+      [5.5, 2.5],
+      [3.5, 2.5],
+    ])
+
+    expect(pointsOf(mapId, line)).toEqual(['1,2', '2,2', '3,2'])
+  })
+
+  it('puts peeled segments back when the drag goes back outward', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, line } = await withMarkup()
+
+    await eraseDrag(viewport, [
+      [5.5, 2.5],
+      [2.5, 2.5],
+      [4.5, 2.5],
+    ])
+
+    expect(pointsOf(mapId, line)).toEqual(['1,2', '2,2', '3,2', '4,2'])
+  })
+
+  it('deletes the whole line when the peel passes the minimum', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, line } = await withMarkup()
+
+    await eraseDrag(viewport, [
+      [5.5, 2.5],
+      [1.5, 2.5],
+    ])
+
+    expect(mapOf(mapId).lines.has(line as never)).toBe(false)
+  })
+
+  it('leaves the line alone when the press on an end never moves', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, line } = await withMarkup()
+    const model = useModelStore()
+    const before = model.status.undoLabel
+
+    await eraseDrag(viewport, [[5.5, 2.5]])
+
+    expect(pointsOf(mapId, line)).toEqual(['1,2', '2,2', '3,2', '4,2', '5,2'])
+    expect(model.status.undoLabel).toBe(before)
+  })
+
+  it('does nothing at all on a line’s body', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, line } = await withMarkup()
+
+    // Dragged, not clicked: a click peels nothing wherever it lands, so only a
+    // drag can tell "the body row does nothing" from "the drag went nowhere".
+    // Nothing falls through to peeling from the nearer end or deleting the
+    // line, which is what would make a misaimed right-click destructive.
+    await eraseDrag(viewport, [
+      [3.5, 2.5],
+      [1.5, 2.5],
+    ])
+
+    expect(pointsOf(mapId, line)).toEqual(['1,2', '2,2', '3,2', '4,2', '5,2'])
+  })
+
+  it('draws no line when a right-drag starts on bare grid', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId } = await withMarkup()
+
+    await eraseDrag(viewport, [
+      [20.5, 20.5],
+      [23.5, 20.5],
+    ])
+
+    expect(mapOf(mapId).lines.size).toBe(1)
+  })
+
+  it('places nothing when a right-click lands on an empty cell while armed', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId } = await withMarkup()
+    useArmedIconStore().arm('missile')
+    await nextTick()
+
+    await eraseDrag(viewport, [[1.5, 0.5]])
+
+    expect(mapOf(mapId).icons.size).toBe(1)
+  })
+
+  it('is one undo step for a peel and one for a delete', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, line } = await withMarkup()
+    const model = useModelStore()
+
+    await eraseDrag(viewport, [
+      [5.5, 2.5],
+      [4.5, 2.5],
+      [3.5, 2.5],
+    ])
+    await eraseDrag(viewport, [[0.5, 0.5]])
+
+    model.undo()
+    expect(mapOf(mapId).icons.size).toBe(1)
+    model.undo()
+    expect(pointsOf(mapId, line)).toEqual(['1,2', '2,2', '3,2', '4,2', '5,2'])
+    expect(checkInvariants(model.project)).toEqual([])
+  })
+
+  it('abandons a live peel on Esc', async () => {
+    const { viewport } = mountCanvas()
+    const { mapId, line } = await withMarkup()
+
+    viewport.dispatchEvent(pointer('pointerdown', { ...at(5.5, 2.5), button: 2 }))
+    viewport.dispatchEvent(pointer('pointermove', { ...at(3.5, 2.5), button: 2 }))
+    expect(pointsOf(mapId, line)).toEqual(['1,2', '2,2', '3,2'])
+
+    resolveEscape()
+    expect(pointsOf(mapId, line)).toEqual(['1,2', '2,2', '3,2', '4,2', '5,2'])
   })
 })

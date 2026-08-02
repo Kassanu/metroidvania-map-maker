@@ -33,9 +33,17 @@ import IconPickerPopover from './IconPickerPopover.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
 import { beginLineStroke, type LineStroke } from '@/gestures/lineStroke'
 import { beginIconDrag, type IconDrag } from '@/gestures/iconDrag'
+import { beginLinePeel } from '@/gestures/linePeel'
 import { registerIconDropTarget } from '@/gestures/iconDropTarget'
 import { deleteTransition } from '@/core/ops/doors'
-import { createLine, extendLine, placeIcon, repositionIcon } from '@/core/ops/markup'
+import {
+  createLine,
+  deleteIcon,
+  extendLine,
+  peelLine,
+  placeIcon,
+  repositionIcon,
+} from '@/core/ops/markup'
 import { cellCentre, teleportScene } from '@/canvas/teleports'
 import { RULER_THICKNESS } from '@/canvas/renderRuler'
 import { brushOffset } from '@/canvas/brush'
@@ -520,21 +528,90 @@ function endpointCellOf(map: MapModel, id: LineId, atStart: boolean): CellKey {
   return atStart ? points[0] : points[points.length - 1]
 }
 
-// Markup's click column, for the one row that has somewhere to go yet: a click
-// on a room cell with nothing on it opens the picker there.
+// Markup's erase column. All three erase routes reach it, because they all
+// resolve through `strokeActionFor` first: right-click, the pen's eraser end,
+// and the primary button while the toggle is on.
 //
-// Click and drag are told apart the way Door mode tells them apart: the drag
-// primitive's dead zone, plus a latch for having left the origin cell. A press
-// that wandered is not a click, even if it came back, and a drag that never
-// left the cell draws no line and must not open the picker on the way out.
+// Two rows act. An icon deletes on the press, with no drag to wait for. A
+// line's end starts a peel. A line's body erases nothing at all: peeling
+// works from an end and a line cannot be split, so the only thing left to fall
+// through to would be deleting the whole line, and a right-click aimed a cell
+// wide of an end would then destroy it. Room cells and bare grid hold nothing.
+function beginMarkupErase(event: PointerEvent, target: MarkupTarget) {
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (!tab || !map) return
+
+  if (target.kind === 'icon') {
+    const iconId = target.id
+    model.run(t('history.deleteIcon'), mapScope(tab.id), (tx) => deleteIcon(tx, map, iconId))
+    return
+  }
+  if (target.kind !== 'line-end') return
+
+  const { id, atStart } = target
+  const line = map.lines.get(id)
+  if (!line) return
+
+  const peel = beginLinePeel({
+    mapId: tab.id,
+    points: line.points,
+    atStart,
+    label: t('history.peelLine'),
+    onChange: draw,
+    apply: (tx, count) => {
+      peelLine(tx, map, id, atStart, count)
+    },
+  })
+  gesture = peel
+
+  // No dead zone and no click/drag latch, unlike the paint column above. A
+  // press that never moves peels nothing, so there is no click hiding here that
+  // has to be told apart from a drag that did nothing.
+  const accepted = startPointerDrag(event, {
+    buttons: [event.button],
+    resolveTarget: () => container.value,
+    onMove: (context) => {
+      const point = worldPoint(context.event)
+      if (point) peel.moveTo(point)
+    },
+    onEnd: () => {
+      peel.commit()
+      if (gesture === peel) gesture = null
+      draw()
+    },
+  })
+
+  if (!accepted) {
+    peel.cancel()
+    gesture = null
+  }
+}
+
+// Markup's press dispatch: the erase column above, or the click and drag
+// columns below.
+//
+// Erase is decided first and takes the press outright, so an armed icon does
+// not place while the toggle is on and a right-click never draws.
+//
+// On the paint side, click and drag are told apart the way Door mode tells them
+// apart: the drag primitive's dead zone, plus a latch for having left the origin
+// cell. A press that wandered is not a click, even if it came back, and a drag
+// that never left the cell draws no line and must not open the picker on the
+// way out.
 function handleMarkupPress(event: PointerEvent) {
   const action = strokeActionFor(event, tools.erase)
-  if (action !== 'paint') return
+  if (!action) return
 
   const local = localPoint(event)
   const target = local && markupTargetAt(local)
   if (!target) return
   event.preventDefault()
+
+  if (action === 'erase') {
+    beginMarkupErase(event, target)
+    return
+  }
 
   // Resolved at press time and reused on release, so a click means the cell it
   // started in rather than wherever the pointer drifted inside the dead zone.
