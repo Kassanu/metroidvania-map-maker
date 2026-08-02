@@ -282,6 +282,8 @@
             "id": "ic_01",
             "iconType": "save",
             "cell": [1, 1],
+            "plateColor": "#3b7dd8",
+            "glyphColor": "#f5f7fa",
             "label": "",
             "notes": ""
           }

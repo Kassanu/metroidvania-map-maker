@@ -3,7 +3,7 @@ import { WORLD_AREA_ID, newAreaId } from '../ids'
 import { createArea } from '../factory'
 import { putArea } from '../primitives'
 import { farEndCount } from '../farEnds'
-import { makeRoom, ok, refusal, rect, setup, sorted, tx } from '../testUtils'
+import { makeRoom, ok, refusal, rect, setup, sorted, TEST_ICON_COLORS, tx } from '../testUtils'
 import {
   addMap,
   deleteMap,
@@ -101,7 +101,7 @@ describe('maps', () => {
 
     const paint = tx(second)
     paintCells(paint, project, second, rect(0, 0, 3, 3), { areaId: WORLD_AREA_ID })
-    ok(placeIcon(paint, second, '1,1', 'save'))
+    ok(placeIcon(paint, second, '1,1', 'save', TEST_ICON_COLORS))
     paint.commit()
 
     const transaction = tx()
@@ -132,7 +132,7 @@ describe('deletion impact', () => {
     paintCells(paint, project, target, ['0,2'], { areaId: WORLD_AREA_ID })
     paintCells(paint, project, originA, rect(0, 0, 2, 1), { areaId: WORLD_AREA_ID })
     paintCells(paint, project, originB, ['0,0'], { areaId: WORLD_AREA_ID })
-    ok(placeIcon(paint, target, '0,0', 'save'))
+    ok(placeIcon(paint, target, '0,0', 'save', TEST_ICON_COLORS))
     paint.commit()
 
     const link = tx()
@@ -234,7 +234,7 @@ describe('duplicate', () => {
     const { project, map } = setup()
     const room = makeRoom(project, map, rect(0, 0, 2, 2))
     const seed = tx(map)
-    ok(placeIcon(seed, map, '0,0', 'save'))
+    ok(placeIcon(seed, map, '0,0', 'save', TEST_ICON_COLORS))
     seed.commit()
 
     const transaction = tx()

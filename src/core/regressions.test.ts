@@ -63,6 +63,7 @@ import {
   sorted,
   tx,
   TEST_NAV_LABEL,
+  TEST_ICON_COLORS,
 } from './testUtils'
 
 // Filter to one repair type so a test about one discard is not disturbed by
@@ -1123,7 +1124,7 @@ describe('move, merge and resize now agree on destination icons', () => {
     const left = makeRoom(project, map, rect(0, 0, 1, 2))
     const right = makeRoom(project, map, rect(1, 0, 1, 2))
     const place = tx(map)
-    const icon = ok(placeIcon(place, map, '1,0', 'save'))
+    const icon = ok(placeIcon(place, map, '1,0', 'save', TEST_ICON_COLORS))
     place.commit()
     return { project, map, left, right, icon }
   }
@@ -1173,7 +1174,7 @@ describe('move, merge and resize now agree on destination icons', () => {
     const room = makeRoom(project, map, rect(0, 0, 3, 1))
     const bystander = makeRoom(project, map, ['1,1'])
     const place = tx(map)
-    const icon = ok(placeIcon(place, map, '1,1', 'save'))
+    const icon = ok(placeIcon(place, map, '1,1', 'save', TEST_ICON_COLORS))
     place.commit()
 
     const drag = tx(map)
@@ -1192,7 +1193,7 @@ describe('move, merge and resize now agree on destination icons', () => {
     // The destruction B8.2 does authorise, and the reason one-per-cell holds.
     const { project, map, left, right, icon } = neighbours()
     const place = tx(map)
-    const carried = ok(placeIcon(place, map, '0,0', 'star'))
+    const carried = ok(placeIcon(place, map, '0,0', 'star', TEST_ICON_COLORS))
     place.commit()
 
     const drag = tx(map)
@@ -1209,7 +1210,7 @@ describe('move, merge and resize now agree on destination icons', () => {
   it('undo puts a replaced icon back', () => {
     const { project, map, left, icon } = neighbours()
     const place = tx(map)
-    ok(placeIcon(place, map, '0,0', 'star'))
+    ok(placeIcon(place, map, '0,0', 'star', TEST_ICON_COLORS))
     place.commit()
     const before = snapshot(project)
 

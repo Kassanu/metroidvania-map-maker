@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { makeRoom, ok, refusal, rect, setup, tx } from '../testUtils'
+import {
+  checkInvariants,
+  makeRoom,
+  ok,
+  refusal,
+  rect,
+  setup,
+  TEST_ICON_COLORS,
+  tx,
+} from '../testUtils'
 import {
   createLine,
   deleteLine,
@@ -8,6 +17,7 @@ import {
   peelLine,
   placeIcon,
   repositionIcon,
+  setIconColors,
   translateLine,
 } from './markup'
 import { moveRooms } from './rooms'
@@ -19,7 +29,7 @@ describe('icons', () => {
     const { project, map } = setup()
     makeRoom(project, map, rect(0, 0, 2, 1))
     const transaction = tx(map)
-    const icon = ok(placeIcon(transaction, map, '0,0', 'save'))
+    const icon = ok(placeIcon(transaction, map, '0,0', 'save', TEST_ICON_COLORS))
     expect(icon.cell).toBe('0,0')
     expect(map.iconAtCell.get('0,0')).toBe(icon.id)
   })
@@ -27,22 +37,66 @@ describe('icons', () => {
   it('refuses a cell outside every room, saying why', () => {
     const { map } = setup()
     const transaction = tx(map)
-    expect(refusal(placeIcon(transaction, map, '0,0', 'save'))).toBe('not-in-a-room')
+    expect(refusal(placeIcon(transaction, map, '0,0', 'save', TEST_ICON_COLORS))).toBe(
+      'not-in-a-room',
+    )
   })
 
   it('blocks an occupied cell unless replace is on', () => {
     const { project, map } = setup()
     makeRoom(project, map, rect(0, 0, 2, 1))
     const transaction = tx(map)
-    const first = ok(placeIcon(transaction, map, '0,0', 'save'))
+    const first = ok(placeIcon(transaction, map, '0,0', 'save', TEST_ICON_COLORS))
 
     // The reason is the one the "replace" checkbox exists to resolve, so the
     // toolbar can act on it rather than just seeing "no".
-    expect(refusal(placeIcon(transaction, map, '0,0', 'boss'))).toBe('cell-occupied')
+    expect(refusal(placeIcon(transaction, map, '0,0', 'boss', TEST_ICON_COLORS))).toBe(
+      'cell-occupied',
+    )
 
-    ok(placeIcon(transaction, map, '0,0', 'boss', { replace: true }))
+    ok(placeIcon(transaction, map, '0,0', 'boss', TEST_ICON_COLORS, { replace: true }))
     expect(map.icons.has(first.id)).toBe(false)
     expect(map.icons.size).toBe(1)
+  })
+
+  it('carries the badge colours it was given, not the icon type', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, rect(0, 0, 2, 1))
+    const transaction = tx(map)
+
+    // Two icons of one type differing in colour is the case that decides the
+    // colours live on the object rather than on the registry entry.
+    const a = ok(
+      placeIcon(transaction, map, '0,0', 'save', { plateColor: '#3b7dd8', glyphColor: '#f5f7fa' }),
+    )
+    const b = ok(
+      placeIcon(transaction, map, '1,0', 'save', { plateColor: '#c94f4f', glyphColor: '#1a1a1a' }),
+    )
+
+    expect(a.iconType).toBe(b.iconType)
+    expect(a.plateColor).toBe('#3b7dd8')
+    expect(b.plateColor).toBe('#c94f4f')
+  })
+
+  it('recolours both fills as one undo step', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, rect(0, 0, 2, 1))
+    const place = tx(map)
+    const icon = ok(placeIcon(place, map, '0,0', 'save', TEST_ICON_COLORS))
+    place.commit()
+
+    const recolour = tx(map)
+    setIconColors(recolour, map, icon.id, { plateColor: '#3b7dd8', glyphColor: '#f5f7fa' })
+    recolour.commit()
+    expect(icon.plateColor).toBe('#3b7dd8')
+    expect(icon.glyphColor).toBe('#f5f7fa')
+
+    // Both writes share the transaction, so one undo takes both. Two steps
+    // would leave the icon in a pair of colours it was never placed in.
+    recolour.replayUndo()
+    expect(icon.plateColor).toBe(TEST_ICON_COLORS.plateColor)
+    expect(icon.glyphColor).toBe(TEST_ICON_COLORS.glyphColor)
+    expect(checkInvariants(project)).toEqual([])
   })
 
   it('repositions into another room: ownership just follows the cell', () => {
@@ -50,7 +104,7 @@ describe('icons', () => {
     const a = makeRoom(project, map, rect(0, 0, 1, 1))
     const b = makeRoom(project, map, rect(3, 0, 1, 1))
     const transaction = tx(map)
-    const icon = ok(placeIcon(transaction, map, '0,0', 'save'))
+    const icon = ok(placeIcon(transaction, map, '0,0', 'save', TEST_ICON_COLORS))
 
     ok(repositionIcon(transaction, map, icon.id, '3,0'))
     expect(map.cellOwner.get(icon.cell)).toBe(b.id)

@@ -525,13 +525,9 @@ export function relocateIcons(
   tx.touched.maps.add(map.id)
 }
 
-export function setIconField<K extends 'iconType' | 'label' | 'notes'>(
-  tx: Transaction,
-  map: MapModel,
-  icon: IconObject,
-  key: K,
-  value: IconObject[K],
-): void {
+export function setIconField<
+  K extends 'iconType' | 'plateColor' | 'glyphColor' | 'label' | 'notes',
+>(tx: Transaction, map: MapModel, icon: IconObject, key: K, value: IconObject[K]): void {
   const before = icon[key]
   if (before === value) return
   tx.record({

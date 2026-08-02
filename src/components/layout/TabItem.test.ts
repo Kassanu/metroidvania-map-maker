@@ -11,6 +11,7 @@ import { paintCells } from '@/core/ops/rooms'
 import { placeIcon } from '@/core/ops/markup'
 import { createTeleport } from '@/core/ops/doors'
 import { WORLD_AREA_ID } from '@/core/ids'
+import { TEST_ICON_COLORS } from '@/core/testUtils'
 
 describe('TabItem', () => {
   let wrapper: VueWrapper
@@ -142,7 +143,7 @@ describe('TabItem', () => {
         }),
       )
       model.run('Icon', mapScope(tab.id), (tx) =>
-        placeIcon(tx, model.project.mapsById.get(tab.id)!, '0,0', 'save'),
+        placeIcon(tx, model.project.mapsById.get(tab.id)!, '0,0', 'save', TEST_ICON_COLORS),
       )
       tabsStore.addTab()
 

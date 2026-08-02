@@ -16,7 +16,17 @@ import { drawInnerWall, eraseCells, moveCellFragment, paintCells } from './ops/r
 import { fromJSON, toJSON } from './serialize'
 import type { LoadEvent, LoadEventKind, LoadReport } from './serialize'
 import type { MapModel, Room } from './types'
-import { checkInvariants, makeRoom, ok, refusal, rect, setup, sorted, tx } from './testUtils'
+import {
+  checkInvariants,
+  makeRoom,
+  ok,
+  refusal,
+  rect,
+  setup,
+  sorted,
+  TEST_ICON_COLORS,
+  tx,
+} from './testUtils'
 
 function eventsOf<K extends LoadEventKind>(
   report: LoadReport,
@@ -330,8 +340,8 @@ describe('dragging an icon refuses before it destroys anything', () => {
     const { project, map } = setup()
     makeRoom(project, map, rect(0, 0, 3, 1))
     const place = tx(map)
-    const dragged = ok(placeIcon(place, map, '0,0', 'save'))
-    const sitting = ok(placeIcon(place, map, '2,0', 'boss'))
+    const dragged = ok(placeIcon(place, map, '0,0', 'save', TEST_ICON_COLORS))
+    const sitting = ok(placeIcon(place, map, '2,0', 'boss', TEST_ICON_COLORS))
     place.commit()
     return { project, map, dragged, sitting }
   }

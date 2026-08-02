@@ -15,7 +15,7 @@ describe('copy and paste: whole rooms', () => {
     const room = makeRoom(project, map, rect(0, 0, 2, 2))
     const seed = tx(map)
     drawInnerWall(seed, map, room.id, edgeOfCell('0,0', 'S'), 'dotted')
-    ok(placeIcon(seed, map, '1,1', 'save'))
+    ok(placeIcon(seed, map, '1,1', 'save', { plateColor: '#3b7dd8', glyphColor: '#f5f7fa' }))
     seed.commit()
 
     const payload = copyRooms(map, [room.id])
@@ -26,7 +26,12 @@ describe('copy and paste: whole rooms', () => {
     expect(rooms[0].id).not.toBe(room.id)
     expect(cellsOf(rooms[0])).toEqual(sorted(rect(10, 10, 2, 2)))
     expect(rooms[0].innerWalls.get(edgeOfCell('10,10', 'S'))).toBe('dotted')
-    expect(map.iconAtCell.get('11,11')).toBeDefined()
+
+    // The copy keeps the original's badge colours: paste rebuilds the icon
+    // from the payload, so anything the payload drops is lost silently.
+    const pasted = map.icons.get(map.iconAtCell.get('11,11')!)!
+    expect(pasted.plateColor).toBe('#3b7dd8')
+    expect(pasted.glyphColor).toBe('#f5f7fa')
     // The original is untouched.
     expect(cellsOf(room)).toEqual(sorted(rect(0, 0, 2, 2)))
     expect(checkInvariants(project)).toEqual([])

@@ -20,6 +20,7 @@ import {
   sorted,
   tx,
   TEST_NAV_LABEL as NAVIGATION_LABEL,
+  TEST_ICON_COLORS,
 } from './testUtils'
 
 describe('duplicateMap: cloneTransition', () => {
@@ -373,8 +374,8 @@ describe('icons across a cross-map boundary', () => {
     makeRoom(project, second, ['0,0'])
 
     const transaction = tx(map)
-    ok(placeIcon(transaction, map, '0,0', 'save'))
-    ok(placeIcon(transaction, second, '0,0', 'boss'))
+    ok(placeIcon(transaction, map, '0,0', 'save', TEST_ICON_COLORS))
+    ok(placeIcon(transaction, second, '0,0', 'boss', TEST_ICON_COLORS))
 
     expect(map.icons.size).toBe(1)
     expect(second.icons.size).toBe(1)

@@ -59,6 +59,12 @@ import type {
 
 const WALL_STYLES: WallStyle[] = ['solid', 'dotted', 'doorway']
 
+// A load-time fallback only, for icons written before they carried their own
+// badge colours. Anything placed through the app is coloured from the icon
+// registry, which core cannot see.
+const DEFAULT_ICON_PLATE = '#e0e0e0'
+const DEFAULT_ICON_GLYPH = '#202020'
+
 // ---------------------------------------------------------------------------
 // Write
 // ---------------------------------------------------------------------------
@@ -146,6 +152,8 @@ function serializeMap(map: MapModel): JsonMap {
       id: icon.id,
       iconType: icon.iconType,
       cell: toJsonCell(icon.cell),
+      plateColor: icon.plateColor,
+      glyphColor: icon.glyphColor,
       label: icon.label,
       notes: icon.notes,
     })),
@@ -670,6 +678,8 @@ function loadIcons(map: MapModel, jsonMap: JsonMap, log: LoadLog, seenIds: Set<s
       id: claimId(jsonIcon.id, 'ic', `icon at ${cell}`, seenIds, log) as IconId,
       iconType: stringOr(jsonIcon.iconType, 'unknown'),
       cell,
+      plateColor: stringOr(jsonIcon.plateColor, DEFAULT_ICON_PLATE),
+      glyphColor: stringOr(jsonIcon.glyphColor, DEFAULT_ICON_GLYPH),
       label: stringOr(jsonIcon.label, ''),
       notes: stringOr(jsonIcon.notes, ''),
     }

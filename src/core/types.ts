@@ -226,6 +226,11 @@ export interface IconObject {
   // Must be inside a room. Ownership is derived: erase the cell and the icon
   // goes with it; move the room and it rides along.
   cell: CellKey
+  // An icon draws as a badge: a solid plate with a glyph on top. Both colours
+  // belong to the icon, not to its type, so two icons sharing an `iconType`
+  // can differ.
+  plateColor: string
+  glyphColor: string
   label: string
   notes: string
 }

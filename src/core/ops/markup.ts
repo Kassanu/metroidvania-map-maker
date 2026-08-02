@@ -34,6 +34,14 @@ export interface PlaceIconOptions {
   replace?: boolean
 }
 
+// The two fills of an icon's badge. Callers pass them in rather than the model
+// looking them up: `iconType` is an opaque string here, so nothing in core can
+// resolve one to its colours.
+export interface IconColors {
+  plateColor: string
+  glyphColor: string
+}
+
 // Refuses with a reason the Markup toolbar can act on: `not-in-a-room` is a
 // misplaced click, `cell-occupied` is resolved by the "replace" checkbox. A
 // bare null could not tell them apart.
@@ -42,6 +50,7 @@ export function placeIcon(
   map: MapModel,
   cell: CellKey,
   iconType: string,
+  colors: IconColors,
   options: PlaceIconOptions = {},
 ): Outcome<IconObject> {
   // Icons must be placed inside a room. Lines have no such rule.
@@ -57,6 +66,8 @@ export function placeIcon(
     id: tx.ids.mint('ic'),
     iconType,
     cell,
+    plateColor: colors.plateColor,
+    glyphColor: colors.glyphColor,
     label: '',
     notes: '',
   }
@@ -95,6 +106,19 @@ export function setIconLabel(tx: Transaction, map: MapModel, iconId: IconId, lab
 
 export function setIconNotes(tx: Transaction, map: MapModel, iconId: IconId, notes: string): void {
   setIconField(tx, map, mustGet(map.icons, iconId, 'icon'), 'notes', notes)
+}
+
+// Sets both fills together. The two writes share the caller's transaction, so
+// a recolour undoes in one step rather than two.
+export function setIconColors(
+  tx: Transaction,
+  map: MapModel,
+  iconId: IconId,
+  colors: IconColors,
+): void {
+  const icon = mustGet(map.icons, iconId, 'icon')
+  setIconField(tx, map, icon, 'plateColor', colors.plateColor)
+  setIconField(tx, map, icon, 'glyphColor', colors.glyphColor)
 }
 
 export function changeIconType(

@@ -15,6 +15,7 @@ import {
   setup,
   sorted,
   tx,
+  TEST_ICON_COLORS,
 } from '../testUtils'
 import { placeIcon } from './markup'
 import {
@@ -141,7 +142,7 @@ describe('erase and split', () => {
     makeRoom(project, map, rect(0, 0, 2, 1))
 
     const place = tx(map)
-    const icon = ok(placeIcon(place, map, '1,0', 'save'))
+    const icon = ok(placeIcon(place, map, '1,0', 'save', TEST_ICON_COLORS))
     place.commit()
     expect(map.icons.size).toBe(1)
 
@@ -182,7 +183,7 @@ describe('delete rooms', () => {
     const { project, map } = setup()
     const room = makeRoom(project, map, rect(0, 0, 2, 1))
     const place = tx(map)
-    ok(placeIcon(place, map, '0,0', 'boss'))
+    ok(placeIcon(place, map, '0,0', 'boss', TEST_ICON_COLORS))
     place.commit()
 
     const transaction = tx(map)
@@ -342,7 +343,7 @@ describe('move', () => {
 
     const seed = tx(map)
     drawInnerWall(seed, map, room.id, edge, 'dotted')
-    const icon = ok(placeIcon(seed, map, '1,1', 'save'))
+    const icon = ok(placeIcon(seed, map, '1,1', 'save', TEST_ICON_COLORS))
     seed.commit()
 
     const transaction = tx(map)
@@ -371,9 +372,9 @@ describe('move', () => {
     const { project, map } = setup()
     const room = makeRoom(project, map, rect(0, 0, 3, 1))
     const seed = tx(map)
-    ok(placeIcon(seed, map, '0,0', 'a'))
-    ok(placeIcon(seed, map, '1,0', 'b'))
-    ok(placeIcon(seed, map, '2,0', 'c'))
+    ok(placeIcon(seed, map, '0,0', 'a', TEST_ICON_COLORS))
+    ok(placeIcon(seed, map, '1,0', 'b', TEST_ICON_COLORS))
+    ok(placeIcon(seed, map, '2,0', 'c', TEST_ICON_COLORS))
     seed.commit()
 
     const transaction = tx(map)
@@ -408,7 +409,7 @@ describe('rotate and flip', () => {
     const { project, map } = setup()
     const room = makeRoom(project, map, rect(0, 0, 2, 2))
     const seed = tx(map)
-    const icon = ok(placeIcon(seed, map, '0,0', 'save'))
+    const icon = ok(placeIcon(seed, map, '0,0', 'save', TEST_ICON_COLORS))
     seed.commit()
 
     const transaction = tx(map)

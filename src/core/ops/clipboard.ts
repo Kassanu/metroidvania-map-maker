@@ -41,7 +41,14 @@ export interface ClipboardPayload {
   // Cells, offset from the payload origin.
   cells: CellKey[]
   // Per-cell content, same offset space.
-  icons: { cell: CellKey; iconType: string; label: string; notes: string }[]
+  icons: {
+    cell: CellKey
+    iconType: string
+    plateColor: string
+    glyphColor: string
+    label: string
+    notes: string
+  }[]
   innerWalls: { edge: EdgeKey; style: WallStyle }[]
   // Whole-room copies carry identity so a paste can name the result
   // "<name> copy"; a cell-fragment copy carries none and pastes get fresh
@@ -193,6 +200,8 @@ function collectIcons(
     payload.icons.push({
       cell: offset(cell, -origin.x, -origin.y),
       iconType: icon.iconType,
+      plateColor: icon.plateColor,
+      glyphColor: icon.glyphColor,
       label: icon.label,
       notes: icon.notes,
     })
@@ -324,6 +333,8 @@ export function paste(
       id: tx.ids.mint('ic'),
       iconType: icon.iconType,
       cell,
+      plateColor: icon.plateColor,
+      glyphColor: icon.glyphColor,
       label: icon.label,
       notes: icon.notes,
     })

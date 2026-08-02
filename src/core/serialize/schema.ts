@@ -78,6 +78,8 @@ export interface JsonIcon {
   id: string
   iconType: string
   cell: JsonCell
+  plateColor?: string
+  glyphColor?: string
   label?: string
   notes?: string
 }

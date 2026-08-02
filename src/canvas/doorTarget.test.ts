@@ -8,7 +8,7 @@ import { createFromBox, createTeleport } from '@/core/ops/doors'
 import { addMap } from '@/core/ops/maps'
 import { createLine, placeIcon } from '@/core/ops/markup'
 import { paintCells } from '@/core/ops/rooms'
-import { ok } from '@/core/testUtils'
+import { ok, TEST_ICON_COLORS } from '@/core/testUtils'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { MapId, RoomId, TransitionId } from '@/core/ids'
 import type { ProjectModel } from '@/core/types'
@@ -63,7 +63,7 @@ function fixture() {
     ),
   )
 
-  ok(placeIcon(tx, map, '0,0', 'save'))
+  ok(placeIcon(tx, map, '0,0', 'save', TEST_ICON_COLORS))
   // Through the centres of the two cells the door's edge separates, so the line
   // passes exactly over that edge, which is what makes it shadow the door.
   ok(createLine(tx, map, ['1,0', '2,0'], { color: '#d9a441', arrowStart: false, arrowEnd: false }))

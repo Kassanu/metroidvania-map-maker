@@ -7,7 +7,7 @@ import { placeIcon, createLine } from '@/core/ops/markup'
 import { createFromBox, createTeleport } from '@/core/ops/doors'
 import { addMap } from '@/core/ops/maps'
 import { WORLD_AREA_ID } from '@/core/ids'
-import { ok } from '@/core/testUtils'
+import { ok, TEST_ICON_COLORS } from '@/core/testUtils'
 import type { MapModel, ProjectModel } from '@/core/types'
 
 const TILE = 32
@@ -80,7 +80,7 @@ describe('hitTest', () => {
     it('an icon beats the room under it', () => {
       const { scene } = build((tx, project, map) => {
         paintCells(tx, project, map, ['0,0'], { areaId: WORLD_AREA_ID })
-        ok(placeIcon(tx, map, '0,0', 'save'))
+        ok(placeIcon(tx, map, '0,0', 'save', TEST_ICON_COLORS))
       })
       expect(hitTest(at(0.5, 0.5), scene)?.kind).toBe('icon')
     })
@@ -88,7 +88,7 @@ describe('hitTest', () => {
     it('a line beats an icon it crosses', () => {
       const { scene } = build((tx, project, map) => {
         paintCells(tx, project, map, ['0,0', '1,0', '2,0'], { areaId: WORLD_AREA_ID })
-        ok(placeIcon(tx, map, '1,0', 'save'))
+        ok(placeIcon(tx, map, '1,0', 'save', TEST_ICON_COLORS))
         ok(
           createLine(tx, map, ['0,0', '1,0', '2,0'], {
             color: '#fff',
@@ -144,7 +144,7 @@ describe('hitTest', () => {
             { mapId: map.id, cell: '5,5' },
           ),
         )
-        ok(placeIcon(tx, map, '0,0', 'save'))
+        ok(placeIcon(tx, map, '0,0', 'save', TEST_ICON_COLORS))
       })
       expect(hitTest(at(0.5, 0.5), withIcon.scene)?.kind).toBe('icon')
     })

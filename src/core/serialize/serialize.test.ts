@@ -41,7 +41,9 @@ function populated() {
   a.name = 'Landing Site'
   a.notes = 'ship'
   drawInnerWall(content, map, a.id, edgeOfCell('0,0', 'S'), 'dotted')
-  ok(placeIcon(content, map, '1,1', 'save'))
+  // Deliberately not the loader's fallback pair: colours that survive the
+  // round trip only because they were written and read back.
+  ok(placeIcon(content, map, '1,1', 'save', { plateColor: '#3b7dd8', glyphColor: '#f5f7fa' }))
   ok(
     createLine(content, map, ['0,0', '1,1', '2,1'], {
       color: '#ffcc00',
@@ -321,6 +323,21 @@ describe('repair on load', () => {
       'not-in-a-room',
     ])
     expect(project.mapsById.get(project.maps[0])!.icons.size).toBe(1)
+  })
+
+  it('gives an icon written without badge colours the documented defaults', () => {
+    const file = fileWith((f) => {
+      f.project.maps[0].icons.push({ id: 'ic_1', iconType: 'save', cell: [0, 0] })
+    })
+    const { project, report } = fromJSON(file)
+
+    // Absent optional fields are not a repair: the icon is intact, so nothing
+    // is reported and the user sees no dialog.
+    expect(eventsOf(report, 'icon-dropped')).toEqual([])
+
+    const icon = [...project.mapsById.get(project.maps[0])!.icons.values()][0]
+    expect(icon.plateColor).toBe('#e0e0e0')
+    expect(icon.glyphColor).toBe('#202020')
   })
 
   it('never lets a file redefine World’s colours or Open’s', () => {

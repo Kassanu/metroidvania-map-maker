@@ -9,6 +9,7 @@ import { History } from './history'
 import { WORLD_AREA_ID } from './ids'
 import type { RoomId } from './ids'
 import { Transaction } from './journal'
+import type { IconColors } from './ops/markup'
 import { paintCells } from './ops/rooms'
 import { isTransitionValid } from './ops/transitions'
 import { wasRefused } from './outcome'
@@ -31,6 +32,13 @@ export const TEST_SEED = {
 // holds no user-visible strings of its own. The app passes a translated string;
 // tests pass this.
 export const TEST_NAV_LABEL = 'Switch tab'
+
+// Badge colours for tests that place an icon and do not care what it looks
+// like. The app takes these from the icon registry, which core cannot see.
+export const TEST_ICON_COLORS: IconColors = {
+  plateColor: '#e0e0e0',
+  glyphColor: '#202020',
+}
 
 export function setup() {
   const project = createProject(TEST_SEED)
