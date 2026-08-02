@@ -14,6 +14,7 @@ import { useSelectionStore } from '@/stores/selection'
 import { useArmedIconStore } from '@/stores/armedIcon'
 import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
 import { getIcon } from '@/icons/registry'
+import { placeIcon } from '@/core/ops/markup'
 import { pushEscHandler, resolveEscape } from '@/hotkeys/escStack'
 import { PROJECT_SCOPE, mapScope, useModelStore } from '@/stores/model'
 import { updateSetting } from '@/core/ops/project'
@@ -3716,5 +3717,223 @@ describe('CanvasRegion Markup mode placement', () => {
     // First match wins: the selection tier below must not also fire.
     expect(below).not.toHaveBeenCalled()
     pop()
+  })
+})
+
+describe('CanvasRegion Markup mode lines', () => {
+  let mounted: ReturnType<typeof mount> | null = null
+
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  afterEach(() => {
+    mounted?.unmount()
+    mounted = null
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    mounted = wrapper
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 }) as DOMRect
+    viewport.setPointerCapture = () => {}
+    return { wrapper, viewport }
+  }
+
+  function pointer(type: string, init: PointerEventInit = {}) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, ...init })
+  }
+
+  function at(x: number, y: number) {
+    const tabsStore = useTabsStore()
+    const tile = useModelStore().tileSize
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    return {
+      clientX: (x - camera.pan.x) * tile * camera.zoom,
+      clientY: (y - camera.pan.y) * tile * camera.zoom,
+    }
+  }
+
+  async function inMarkupMode() {
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    model.run('Setup', mapScope(mapId), (tx) => {
+      const map = model.project.mapsById.get(mapId)!
+      paintCells(tx, model.project, map, ['0,0', '1,0', '2,0', '0,1', '1,1', '2,1'], {
+        areaId: WORLD_AREA_ID,
+      })
+    })
+    useModeStore().setMode('markup')
+    await nextTick()
+    return mapId
+  }
+
+  function linesOn(mapId: MapId) {
+    return [...useModelStore().project.mapsById.get(mapId)!.lines.values()]
+  }
+
+  // A drag through a list of world points, each dispatched as one move: the
+  // gesture interpolates between them, exactly as it must for a real pointer.
+  async function drag(viewport: HTMLElement, path: [number, number][]) {
+    const [start, ...rest] = path
+    viewport.dispatchEvent(pointer('pointerdown', at(...start)))
+    for (const point of rest) {
+      viewport.dispatchEvent(pointer('pointermove', at(...point)))
+    }
+    viewport.dispatchEvent(pointer('pointerup', at(...path[path.length - 1])))
+    await nextTick()
+    await nextTick()
+  }
+
+  it('draws a new line from a room cell', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [2.5, 0.5],
+    ])
+
+    expect(linesOn(mapId)).toHaveLength(1)
+    expect(linesOn(mapId)[0].points).toEqual(['0,0', '1,0', '2,0'])
+  })
+
+  it('draws from bare grid, since lines have no room owner', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+
+    await drag(viewport, [
+      [20.5, 20.5],
+      [23.5, 20.5],
+    ])
+
+    expect(linesOn(mapId)[0].points).toEqual(['20,20', '21,20', '22,20', '23,20'])
+  })
+
+  it('makes no line and opens the picker when the press never leaves its cell', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+
+    viewport.dispatchEvent(pointer('pointerdown', at(1.5, 0.5)))
+    viewport.dispatchEvent(pointer('pointerup', at(1.5, 0.5)))
+    await nextTick()
+    await nextTick()
+
+    // Click and drag are the two columns of the table, and a drag that drew
+    // nothing must not fall through into the click.
+    expect(linesOn(mapId)).toHaveLength(0)
+    expect(document.querySelector('.icon-picker-popover')?.getAttribute('data-state')).toBe('open')
+  })
+
+  it('takes its style from the toolbar', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    const defaults = useMarkupDefaultsStore()
+    defaults.setLineColor('#abcdef')
+    defaults.setArrowEnd(true)
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [2.5, 0.5],
+    ])
+
+    expect(linesOn(mapId)[0].color).toBe('#abcdef')
+    expect(linesOn(mapId)[0].arrowEnd).toBe(true)
+    expect(linesOn(mapId)[0].arrowStart).toBe(false)
+  })
+
+  it('extends an existing line from the end that was grabbed', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [1.5, 0.5],
+    ])
+    expect(linesOn(mapId)[0].points).toEqual(['0,0', '1,0'])
+
+    // From the line's own end, outward.
+    await drag(viewport, [
+      [1.5, 0.5],
+      [3.5, 0.5],
+    ])
+
+    expect(linesOn(mapId)).toHaveLength(1)
+    expect(linesOn(mapId)[0].points).toEqual(['0,0', '1,0', '2,0', '3,0'])
+  })
+
+  it('draws a new line from a line’s body rather than moving it', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [4.5, 0.5],
+    ])
+    const first = linesOn(mapId)[0].id
+
+    // The middle of that line, dragged away from it. Lines may overlap freely,
+    // and the body row is what makes a second one drawable across the first.
+    await drag(viewport, [
+      [2.5, 0.5],
+      [2.5, 3.5],
+    ])
+
+    expect(linesOn(mapId)).toHaveLength(2)
+    expect(linesOn(mapId)[0].id).toBe(first)
+    expect(linesOn(mapId)[1].points).toEqual(['2,0', '2,1', '2,2', '2,3'])
+  })
+
+  it('is one undo step per drag', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    const model = useModelStore()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [2.5, 2.5],
+      [4.5, 2.5],
+    ])
+    expect(linesOn(mapId)).toHaveLength(1)
+
+    model.undo()
+    expect(linesOn(mapId)).toHaveLength(0)
+    expect(checkInvariants(model.project)).toEqual([])
+  })
+
+  it('draws no line from a cell holding an icon', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    const model = useModelStore()
+    model.run('Icon', mapScope(mapId), (tx) =>
+      placeIcon(tx, model.project.mapsById.get(mapId)!, '1,0', 'save', {
+        plateColor: '#111111',
+        glyphColor: '#222222',
+      }),
+    )
+
+    // The icon row's drag column is "move the icon", so a line must not be
+    // what a drag from there produces.
+    await drag(viewport, [
+      [1.5, 0.5],
+      [1.5, 3.5],
+    ])
+
+    expect(linesOn(mapId)).toHaveLength(0)
+  })
+
+  it('draws nothing while an icon is armed: the press places instead', async () => {
+    const { viewport } = mountCanvas()
+    const mapId = await inMarkupMode()
+    useArmedIconStore().arm('save')
+    await nextTick()
+
+    await drag(viewport, [
+      [0.5, 0.5],
+      [2.5, 0.5],
+    ])
+
+    expect(linesOn(mapId)).toHaveLength(0)
   })
 })

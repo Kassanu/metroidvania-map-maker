@@ -31,8 +31,9 @@ import {
 } from '@/canvas/markupTarget'
 import IconPickerPopover from './IconPickerPopover.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
+import { beginLineStroke, type LineStroke } from '@/gestures/lineStroke'
 import { deleteTransition } from '@/core/ops/doors'
-import { placeIcon } from '@/core/ops/markup'
+import { createLine, extendLine, placeIcon } from '@/core/ops/markup'
 import { cellCentre, teleportScene } from '@/canvas/teleports'
 import { RULER_THICKNESS } from '@/canvas/renderRuler'
 import { brushOffset } from '@/canvas/brush'
@@ -47,9 +48,10 @@ import { startPointerDrag } from '@/composables/pointerDrag'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
 import { cellKey } from '@/core/cell'
 import type { GhostGesture } from '@/gestures/ghostGesture'
+import type { MapModel } from '@/core/types'
 import type { BrushPreview, HoveredHandle } from '@/canvas/renderMap'
 import type { WorldPoint } from '@/canvas/stroke'
-import type { MapId, TransitionId } from '@/core/ids'
+import type { LineId, MapId, TransitionId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 import type { IconRegistryEntry } from '@/icons/registry'
 import { useCanvasRenderer } from '@/composables/useCanvasRenderer'
@@ -441,6 +443,53 @@ function handleDoubleClick(event: MouseEvent) {
   openTeleportEnd(target.leadsTo)
 }
 
+// Markup's drag column, as one row-to-gesture decision.
+//
+// A drag from a line's end extends that line; a drag from anywhere else draws a
+// new one, including from the body of an existing line, which is what makes
+// overlapping lines drawable at all. An icon cell starts nothing here: dragging
+// an icon moves it, which is a gesture of its own.
+//
+// Lines have no room owner, so no row is refused for standing on bare grid.
+function beginMarkupLine(target: MarkupTarget): LineStroke | null {
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (!tab || !map) return null
+  if (target.kind === 'icon') return null
+
+  if (target.kind === 'line-end') {
+    const { id, atStart } = target
+    return beginLineStroke({
+      mapId: tab.id,
+      // The line's own endpoint, not the pressed cell: the grab radius reaches
+      // beyond the cell the endpoint sits in, so a press near it must extend
+      // from the end rather than from wherever the pointer landed.
+      origin: endpointCellOf(map, id, atStart),
+      label: t('history.extendLine'),
+      onChange: draw,
+      apply: (tx, points) => {
+        extendLine(tx, map, id, atStart, [...points].slice(1))
+      },
+    })
+  }
+
+  const defaults = markupDefaults.lineDefaults
+  return beginLineStroke({
+    mapId: tab.id,
+    origin: target.cell,
+    label: t('history.drawLine'),
+    onChange: draw,
+    apply: (tx, points) => {
+      createLine(tx, map, [...points], defaults)
+    },
+  })
+}
+
+function endpointCellOf(map: MapModel, id: LineId, atStart: boolean): CellKey {
+  const points = map.lines.get(id)!.points
+  return atStart ? points[0] : points[points.length - 1]
+}
+
 // Markup's click column, for the one row that has somewhere to go yet: a click
 // on a room cell with nothing on it opens the picker there.
 //
@@ -461,6 +510,13 @@ function handleMarkupPress(event: PointerEvent) {
   // started in rather than wherever the pointer drifted inside the dead zone.
   let leftCell = false
 
+  // The drag column, opened at press time so the first move already has
+  // somewhere to go. Null on the rows that have no drag yet: an armed icon
+  // takes the press whatever is under it, and dragging an icon moves it, which
+  // is its own gesture.
+  const line = armedIcon.isArmed ? null : beginMarkupLine(target)
+  if (line) gesture = line
+
   startPointerDrag(event, {
     buttons: [event.button],
     deadZone: DRAG_DEAD_ZONE,
@@ -469,8 +525,20 @@ function handleMarkupPress(event: PointerEvent) {
       const point = worldPoint(context.event)
       if (!point) return
       if (cellKey(Math.floor(point.x), Math.floor(point.y)) !== target.cell) leftCell = true
+      line?.extendTo(point)
     },
     onEnd: () => {
+      if (line) {
+        // Cancelled rather than committed when it was a click, exactly as the
+        // box drag is: a one-cell path makes no line either way, since
+        // `createLine` refuses anything under two cells and the seam drops the
+        // empty transaction. Saying so here keeps the two columns of the table
+        // distinguishable in this file.
+        if (leftCell) line.commit()
+        else line.cancel()
+        if (gesture === line) gesture = null
+        draw()
+      }
       if (leftCell) return
       // An armed icon replaces the click column for every row: it places here
       // rather than selecting, and the picker does not open. Selecting or

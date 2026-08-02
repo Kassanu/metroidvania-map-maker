@@ -73,3 +73,54 @@ export function cellsAlong(from: WorldPoint, to: WorldPoint): CellKey[] {
 
   return cells
 }
+
+// Every cell of an 8-connected walk from `from` to `to`, in order, starting
+// with the cell containing `from` and ending with the cell containing `to`.
+// Consecutive entries differ by at most one on each axis, so a diagonal run
+// comes back as diagonal steps rather than as an orthogonal staircase.
+//
+// Bresenham, deliberately, and the counterpart to `cellsAlong` above: what
+// makes Bresenham wrong for painting cells is exactly what makes it right here.
+// It emits one cell per major-axis step, which leaves a diagonal 8-connected
+// rather than 4-connected, and a markup line's segments may go to any of the
+// eight neighbours. A supercover would insert an orthogonal corner cell into
+// every diagonal the user drew.
+//
+// The reason a line needs interpolating at all is `normalizePath`, which stops
+// at the first step that is not 8-adjacent and discards the rest of the path.
+// A pointer sampled a few dozen times a second jumps several cells at speed, so
+// without this a fast drag would produce a line quietly shorter than the one
+// drawn.
+export function stepsAlong(from: WorldPoint, to: WorldPoint): CellKey[] {
+  let x = Math.floor(from.x)
+  let y = Math.floor(from.y)
+  const endX = Math.floor(to.x)
+  const endY = Math.floor(to.y)
+
+  const cells: CellKey[] = [cellKey(x, y)]
+  if (x === endX && y === endY) return cells
+
+  const dx = Math.abs(endX - x)
+  const dy = Math.abs(endY - y)
+  const stepX = x < endX ? 1 : -1
+  const stepY = y < endY ? 1 : -1
+  // The error term, compared doubled so it stays integral throughout.
+  let error = dx - dy
+
+  while (x !== endX || y !== endY) {
+    const doubled = error * 2
+    // Both arms firing in one pass is a diagonal step, which is the case this
+    // walk exists to produce.
+    if (doubled > -dy) {
+      error -= dy
+      x += stepX
+    }
+    if (doubled < dx) {
+      error += dx
+      y += stepY
+    }
+    cells.push(cellKey(x, y))
+  }
+
+  return cells
+}

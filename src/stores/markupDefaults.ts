@@ -13,12 +13,16 @@
 
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { IconColors } from '@/core/ops/markup'
+import type { IconColors, LineDefaults } from '@/core/ops/markup'
 
 // The pair a placement gets before any icon has been picked. Neutral rather
 // than borrowed from an icon: no icon is armed yet, so nothing has a claim.
 const INITIAL_PLATE = '#e0e0e0'
 const INITIAL_GLYPH = '#202020'
+
+// A line's first colour. Warm enough to read over both area fills and the
+// neutral page, since a line may run anywhere including off every room.
+const INITIAL_LINE = '#d9a441'
 
 export const useMarkupDefaultsStore = defineStore('markupDefaults', () => {
   const plateColor = ref(INITIAL_PLATE)
@@ -32,6 +36,25 @@ export const useMarkupDefaultsStore = defineStore('markupDefaults', () => {
   // unconditionally destructive through the ghosting model, so there is no
   // app-wide collision toggle for this to mirror.
   const replace = ref(false)
+
+  // Line style, the other half of what Markup creates. Separate from the badge
+  // colours above because a line is not a badge: it has one colour, and the
+  // arrowheads are per end.
+  const lineColor = ref(INITIAL_LINE)
+  const arrowStart = ref(false)
+  const arrowEnd = ref(false)
+
+  function setLineColor(value: string): void {
+    lineColor.value = value
+  }
+
+  function setArrowStart(value: boolean): void {
+    arrowStart.value = value
+  }
+
+  function setArrowEnd(value: boolean): void {
+    arrowEnd.value = value
+  }
 
   function setPlateColor(value: string): void {
     plateColor.value = value
@@ -60,11 +83,24 @@ export const useMarkupDefaultsStore = defineStore('markupDefaults', () => {
     setGlyphColor,
     setReplace,
     loadColors,
+    lineColor: computed(() => lineColor.value),
+    arrowStart: computed(() => arrowStart.value),
+    arrowEnd: computed(() => arrowEnd.value),
+    setLineColor,
+    setArrowStart,
+    setArrowEnd,
 
     // What a placement should be handed.
     colors: computed<IconColors>(() => ({
       plateColor: plateColor.value,
       glyphColor: glyphColor.value,
+    })),
+
+    // What a new line should be handed.
+    lineDefaults: computed<LineDefaults>(() => ({
+      color: lineColor.value,
+      arrowStart: arrowStart.value,
+      arrowEnd: arrowEnd.value,
     })),
   }
 })

@@ -42,6 +42,41 @@ const armedIcon = useArmedIconStore()
 
     <span class="toolbar-divider" aria-hidden="true" />
 
+    <!-- Line style. One colour, because a line is not a badge, and an arrowhead
+         per end, because either end may carry one. All three say what the next
+         line gets and none of them restyles the selected one. -->
+    <label class="swatch-label" for="markup-line">{{ t('toolbar.markup.line') }}</label>
+    <input
+      id="markup-line"
+      class="color-input"
+      type="color"
+      :title="t('toolbar.markup.line')"
+      :value="markupDefaults.lineColor"
+      @input="markupDefaults.setLineColor(($event.target as HTMLInputElement).value)"
+    />
+    <button
+      type="button"
+      class="toolbar-button arrow-button"
+      :title="t('toolbar.markup.arrowStartTitle')"
+      :aria-pressed="markupDefaults.arrowStart"
+      :class="{ active: markupDefaults.arrowStart }"
+      @click="markupDefaults.setArrowStart(!markupDefaults.arrowStart)"
+    >
+      {{ t('toolbar.markup.arrowStart') }}
+    </button>
+    <button
+      type="button"
+      class="toolbar-button arrow-button"
+      :title="t('toolbar.markup.arrowEndTitle')"
+      :aria-pressed="markupDefaults.arrowEnd"
+      :class="{ active: markupDefaults.arrowEnd }"
+      @click="markupDefaults.setArrowEnd(!markupDefaults.arrowEnd)"
+    >
+      {{ t('toolbar.markup.arrowEnd') }}
+    </button>
+
+    <span class="toolbar-divider" aria-hidden="true" />
+
     <!-- Markup's own collision option, and the only one in the app: room edits
          are unconditionally destructive through the ghosting model, so there is
          no shared toggle for this to mirror. -->
@@ -88,10 +123,12 @@ const armedIcon = useArmedIconStore()
  * away from Draw and Door mode's. */
 .erase-toggle-button,
 .replace-button,
-.disarm-button {
+.disarm-button,
+.arrow-button {
   font-size: 0.8125rem;
 }
-.replace-button.active {
+.replace-button.active,
+.arrow-button.active {
   background: var(--accent-soft, var(--surface-raised));
   font-weight: 600;
 }

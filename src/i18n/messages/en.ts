@@ -55,6 +55,8 @@ export const en = {
   // armed: they are the same op, and the undo entry should not say which
   // chrome the user reached it through.
   'history.placeIcon': 'Place Icon',
+  'history.drawLine': 'Draw Line',
+  'history.extendLine': 'Extend Line',
 
   'common.close': 'Close',
   'common.cancel': 'Cancel',
@@ -208,6 +210,11 @@ export const en = {
   'toolbar.markup.label': 'Markup options',
   'toolbar.markup.plate': 'Plate',
   'toolbar.markup.glyph': 'Glyph',
+  'toolbar.markup.line': 'Line',
+  'toolbar.markup.arrowStart': '←',
+  'toolbar.markup.arrowStartTitle': 'Arrowhead at the start of new lines',
+  'toolbar.markup.arrowEnd': '→',
+  'toolbar.markup.arrowEndTitle': 'Arrowhead at the end of new lines',
   'toolbar.markup.replace': 'Replace',
   'toolbar.markup.replaceTitle': 'Replace an icon already on the cell',
   'toolbar.markup.disarm': 'Disarm',

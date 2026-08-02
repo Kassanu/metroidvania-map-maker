@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { cellsAlong, type WorldPoint } from './stroke'
-import { isAdjacent8, parseCell } from '@/core/cell'
+import { cellsAlong, stepsAlong, type WorldPoint } from './stroke'
+import { cellKey, isAdjacent8, parseCell } from '@/core/cell'
+import { normalizePath } from '@/core/ops/markup'
 import type { CellKey } from '@/core/cell'
 
 function orthogonallyAdjacent(a: CellKey, b: CellKey): boolean {
@@ -105,5 +106,62 @@ describe('cellsAlong', () => {
   it('has a connectivity check that rejects a staircase', () => {
     expect(isConnectedChain(['0,0', '1,1'])).toBe(false)
     expect(isAdjacent8('0,0', '1,1')).toBe(true)
+  })
+})
+
+describe('stepsAlong', () => {
+  // Every consecutive pair differs by at most one on each axis, which is what
+  // `normalizePath` requires and what makes a diagonal a diagonal.
+  function isEightConnected(cells: CellKey[]) {
+    return cells.every((cell, i) => i === 0 || isAdjacent8(cells[i - 1], cell))
+  }
+
+  it('returns the one cell when both points are in it', () => {
+    expect(stepsAlong({ x: 1.2, y: 1.8 }, { x: 1.9, y: 1.1 })).toEqual(['1,1'])
+  })
+
+  it('walks a diagonal as diagonal steps, not as a staircase', () => {
+    // The whole reason this is not `cellsAlong`: a supercover would insert an
+    // orthogonal corner cell into every diagonal the user drew.
+    expect(stepsAlong({ x: 0.5, y: 0.5 }, { x: 3.5, y: 3.5 })).toEqual(['0,0', '1,1', '2,2', '3,3'])
+  })
+
+  it('walks an axis-aligned run without wandering off it', () => {
+    expect(stepsAlong({ x: 0.5, y: 2.5 }, { x: 3.5, y: 2.5 })).toEqual(['0,2', '1,2', '2,2', '3,2'])
+    expect(stepsAlong({ x: 2.5, y: 0.5 }, { x: 2.5, y: 3.5 })).toEqual(['2,0', '2,1', '2,2', '2,3'])
+  })
+
+  it('emits one cell per major-axis step on a shallow slope', () => {
+    const cells = stepsAlong({ x: 0.5, y: 0.5 }, { x: 4.5, y: 2.5 })
+    expect(cells[0]).toBe('0,0')
+    expect(cells.at(-1)).toBe('4,2')
+    // Four steps on the major axis, so five cells: a supercover would return
+    // more, having crossed cells the line only clips.
+    expect(cells).toHaveLength(5)
+    expect(isEightConnected(cells)).toBe(true)
+  })
+
+  it('is 8-connected in every direction, including backwards', () => {
+    const targets: [number, number][] = [
+      [7.5, 2.5],
+      [-6.5, 3.5],
+      [2.5, -5.5],
+      [-4.5, -9.5],
+      [0.5, 6.5],
+    ]
+    for (const [x, y] of targets) {
+      const cells = stepsAlong({ x: 0.5, y: 0.5 }, { x, y })
+      expect(cells[0]).toBe('0,0')
+      expect(cells.at(-1)).toBe(cellKey(Math.floor(x), Math.floor(y)))
+      expect(isEightConnected(cells)).toBe(true)
+    }
+  })
+
+  it('survives normalizePath without losing a cell', () => {
+    // The trap this exists for: `normalizePath` breaks at the first step that
+    // is not 8-adjacent and drops the whole rest of the path. A jump of several
+    // cells between pointer samples is the ordinary case at speed.
+    const jumped = stepsAlong({ x: 0.5, y: 0.5 }, { x: 9.5, y: 5.5 })
+    expect(normalizePath(jumped)).toEqual(jumped)
   })
 })
