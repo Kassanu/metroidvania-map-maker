@@ -7,7 +7,7 @@ import { useTabsStore } from './tabs'
 import { paintCells, deleteRooms } from '@/core/ops/rooms'
 import { addMap } from '@/core/ops/maps'
 import { WORLD_AREA_ID } from '@/core/ids'
-import type { RoomId } from '@/core/ids'
+import type { RoomId, TransitionId } from '@/core/ids'
 
 describe('useSelectionStore', () => {
   beforeEach(() => {
@@ -109,6 +109,39 @@ describe('useSelectionStore', () => {
       selection.clickSelect({ kind: 'room', id: room.id }, mapId, false)
       selection.clickSelect(null, mapId, true)
       expect(selection.selected).toEqual([{ kind: 'room', id: room.id }])
+    })
+  })
+
+  // What Draw mode draws its resize handles on.
+  describe('soleRoomOn', () => {
+    it('answers only for exactly one room, on the map asked about', () => {
+      const selection = useSelectionStore()
+      const model = useModelStore()
+      const { mapId, room } = paintRoom(['0,0'])
+      const second = paintRoom(['5,5']).room
+
+      selection.set([{ kind: 'room', id: room.id }], mapId)
+      expect(selection.soleRoomOn(mapId)).toBe(room.id)
+
+      // Two rooms: resizing three at once is not a thing, so this is null
+      // rather than the first of the list.
+      selection.set(
+        [
+          { kind: 'room', id: room.id },
+          { kind: 'room', id: second.id },
+        ],
+        mapId,
+      )
+      expect(selection.soleRoomOn(mapId)).toBeNull()
+
+      // One object, wrong kind.
+      selection.set([{ kind: 'transition', id: 'tr_x' as TransitionId }], mapId)
+      expect(selection.soleRoomOn(mapId)).toBeNull()
+
+      // One room, wrong map: a selection on another tab draws no handles here.
+      const other = model.run('Add map', PROJECT_SCOPE, (tx) => addMap(tx, model.project, 'Caves'))
+      selection.set([{ kind: 'room', id: room.id }], mapId)
+      expect(selection.soleRoomOn(other.id)).toBeNull()
     })
   })
 

@@ -2,7 +2,7 @@ import { ref, type Ref } from 'vue'
 import { readCanvasPalette, type CanvasPalette } from '@/canvas/palette'
 import {
   renderMap,
-  type ActiveRoomScene,
+  type HandleRoomScene,
   type BrushPreview,
   type GhostScene,
   type MapScene,
@@ -59,7 +59,7 @@ export interface SceneInput {
   // Transitions selected on this map, drawn as a halo behind each.
   selected: ReadonlySet<TransitionId>
   // Draw/Edit's active room and its handles, or null when nothing is armed.
-  activeRoom: ActiveRoomScene | null
+  handleRoom: HandleRoomScene | null
   showGrid: boolean
   showRulers: boolean
   rulerUnits: RulerUnits
@@ -131,7 +131,7 @@ export function useCanvasRenderer(targets: CanvasTargets, scene: () => SceneInpu
       boxPreview: current.boxPreview,
       pendingTeleport: current.pendingTeleport,
       selected: current.selected,
-      activeRoom: current.activeRoom,
+      handleRoom: current.handleRoom,
       palette: palette.value!,
       showGrid: current.showGrid,
       showTransitions: current.showTransitions,

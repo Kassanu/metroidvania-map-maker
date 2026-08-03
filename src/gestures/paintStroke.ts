@@ -11,7 +11,7 @@
 
 import { beginCellStroke, type CellStroke } from './cellStroke'
 import { useModelStore } from '@/stores/model'
-import { useActiveRoomStore } from '@/stores/activeRoom'
+import { useSelectionStore } from '@/stores/selection'
 import { useDrawAreaStore } from '@/stores/drawArea'
 import { paintCells, roomsTouchedBy } from '@/core/ops/rooms'
 import { cellKey } from '@/core/cell'
@@ -62,12 +62,12 @@ export function beginPaintStroke(
         areaId: drawArea.areaId,
       }).id
     },
-    // Painting a new room, growing or merging one makes the affected room
-    // active. Done on commit rather than on apply: mid-drag the room is
-    // speculative, and arming it there would leave handles behind on a room
-    // that `Esc` un-made.
+    // Painting a new room, growing or merging one selects the affected room,
+    // which is what shows its handles. Done on commit rather than on apply:
+    // mid-drag the room is speculative, and selecting it there would leave
+    // handles behind on a room that `Esc` un-made.
     onCommit: () => {
-      if (paintedRoomId) useActiveRoomStore().arm(mapId, paintedRoomId)
+      if (paintedRoomId) useSelectionStore().set([{ kind: 'room', id: paintedRoomId }], mapId)
     },
   })
 }

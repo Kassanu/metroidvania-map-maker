@@ -8,7 +8,6 @@ import { useTabsStore } from '@/stores/tabs'
 import { useCanvasViewStore } from '@/stores/canvasView'
 import { useModeStore } from '@/stores/mode'
 import { useToolsStore } from '@/stores/tools'
-import { useActiveRoomStore } from '@/stores/activeRoom'
 import { usePendingTeleportStore } from '@/stores/pendingTeleport'
 import { useSelectionStore } from '@/stores/selection'
 import { useArmedIconStore } from '@/stores/armedIcon'
@@ -27,8 +26,14 @@ import { runAction } from '@/hotkeys/actions'
 import { checkInvariants } from '@/core/testUtils'
 import { DEFAULT_PAN, screenToWorld } from '@/canvas/viewport'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
-import type { MapId } from '@/core/ids'
+import type { IconId, MapId } from '@/core/ids'
 import type { FakeContext2D } from '@/test-setup'
+
+// The room showing resize handles: a selection of exactly one room, on the tab
+// being looked at.
+function armedRoom() {
+  return useSelectionStore().soleRoomOn(useTabsStore().activeTabId)
+}
 
 function wheel(init: Partial<WheelEventInit>) {
   return new WheelEvent('wheel', { bubbles: true, cancelable: true, ...init })
@@ -1036,10 +1041,10 @@ describe('CanvasRegion brush preview', () => {
   })
 })
 
-// Draw/Edit's active room. The store's own rules are `stores/activeRoom.test.ts`;
-// what is proved here is the arming that only the component can do: the press
-// rule and the Esc tier.
-describe('CanvasRegion active room', () => {
+// The room that shows resize handles. The selection store's own rules are
+// `stores/selection.test.ts`; what is proved here is the selecting that only the
+// component can do: the press rule and the Esc tier.
+describe('CanvasRegion handle room', () => {
   beforeEach(() => {
     setActivePinia(createTestPinia())
   })
@@ -1087,13 +1092,12 @@ describe('CanvasRegion active room', () => {
   // press that goes on to become a paint stroke has still armed it.
   it('arms the room under a press, before the pointer moves', () => {
     const { wrapper, viewport } = mountCanvas()
-    const active = useActiveRoomStore()
     const mapId = useTabsStore().activeTabId
     const roomId = strip(mapId, ['3,2', '4,2'])
 
     viewport.dispatchEvent(pointer('pointerdown', screenOf(3, 2)))
 
-    expect(active.roomIdOn(mapId)).toBe(roomId)
+    expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
 
     // Released before unmounting: the gesture tier is module-global, so a
     // stroke left open outlives this test.
@@ -1103,13 +1107,12 @@ describe('CanvasRegion active room', () => {
 
   it('arms on a right-press too: the rule is about the press, not the tool', () => {
     const { wrapper, viewport } = mountCanvas()
-    const active = useActiveRoomStore()
     const mapId = useTabsStore().activeTabId
     const roomId = strip(mapId, ['3,2', '4,2'])
 
     viewport.dispatchEvent(pointer('pointerdown', { ...screenOf(4, 2), button: 2 }))
 
-    expect(active.roomIdOn(mapId)).toBe(roomId)
+    expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
 
     viewport.dispatchEvent(pointer('pointerup', { ...screenOf(4, 2), button: 2 }))
     wrapper.unmount()
@@ -1120,16 +1123,15 @@ describe('CanvasRegion active room', () => {
   // active; it never clears to nothing.
   it('arms the room a paint stroke created, on release', () => {
     const { wrapper, viewport } = mountCanvas()
-    const active = useActiveRoomStore()
     const mapId = useTabsStore().activeTabId
 
     viewport.dispatchEvent(pointer('pointerdown', screenOf(6, 6)))
-    expect(active.isArmed).toBe(false)
+    expect(armedRoom()).toBeNull()
 
     viewport.dispatchEvent(pointer('pointerup', screenOf(6, 6)))
 
     const roomId = useModelStore().project.mapsById.get(mapId)!.cellOwner.get('6,6')
-    expect(active.roomIdOn(mapId)).toBe(roomId)
+    expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
     wrapper.unmount()
   })
 
@@ -1137,15 +1139,121 @@ describe('CanvasRegion active room', () => {
   // pointing at a room that never existed.
   it('does not arm a room an aborted stroke un-made', () => {
     const { wrapper, viewport } = mountCanvas()
-    const active = useActiveRoomStore()
 
     viewport.dispatchEvent(pointer('pointerdown', screenOf(6, 6)))
     viewport.dispatchEvent(pointer('pointermove', screenOf(8, 6)))
     expect(resolveEscape()).toBe(true)
     viewport.dispatchEvent(pointer('pointerup', screenOf(8, 6)))
 
-    expect(active.isArmed).toBe(false)
+    expect(armedRoom()).toBeNull()
     wrapper.unmount()
+  })
+
+  // Resizing three rooms at once is not a thing, so a multi-room selection is
+  // asked the question in the form that already answers null rather than
+  // reaching for the first room in the list.
+  it('shows no handles while more than one room is selected', () => {
+    const { wrapper, viewport, ctx } = mountCanvasWithCtx()
+    const mapId = useTabsStore().activeTabId
+    const one = strip(mapId, ['3,2', '4,2'])
+    const two = strip(mapId, ['3,6', '4,6'])
+    const selection = useSelectionStore()
+
+    // Selected singly, and hovered, so the handles have something to draw.
+    viewport.dispatchEvent(pointer('pointerdown', screenOf(3, 2)))
+    viewport.dispatchEvent(pointer('pointerup', screenOf(3, 2)))
+    ctx.stroke.mockClear()
+    viewport.dispatchEvent(new PointerEvent('pointermove', { ...screenOf(3, 2), bubbles: true }))
+    const alone = ctx.stroke.mock.calls.length
+    expect(armedRoom()).toBe(one)
+
+    selection.set(
+      [
+        { kind: 'room', id: one },
+        { kind: 'room', id: two },
+      ],
+      mapId,
+    )
+    ctx.stroke.mockClear()
+    viewport.dispatchEvent(new PointerEvent('pointermove', { ...screenOf(3, 2), bubbles: true }))
+
+    expect(armedRoom()).toBeNull()
+    expect(ctx.stroke.mock.calls.length).toBeLessThan(alone)
+    wrapper.unmount()
+  })
+
+  // One key, one meaning: Draw's erase removes cells, this removes the room.
+  describe('Delete', () => {
+    it('deletes the selected room', () => {
+      const { wrapper, viewport } = mountCanvas()
+      const mapId = useTabsStore().activeTabId
+      const roomId = strip(mapId, ['3,2', '4,2'])
+
+      viewport.dispatchEvent(pointer('pointerdown', screenOf(3, 2)))
+      viewport.dispatchEvent(pointer('pointerup', screenOf(3, 2)))
+      runAction('deleteSelection')
+
+      expect(useModelStore().project.mapsById.get(mapId)!.rooms.has(roomId)).toBe(false)
+      expect(useModelStore().status.undoLabel).toBe('Delete Room')
+      expect(armedRoom()).toBeNull()
+      wrapper.unmount()
+    })
+
+    // Switching modes is not a deselect, so the room selected in Draw is still
+    // what the key acts on: one key, one meaning, in every mode.
+    it('deletes the selected room from Door mode and from Markup mode', () => {
+      for (const mode of ['door', 'markup'] as const) {
+        setActivePinia(createTestPinia())
+        const { wrapper, viewport } = mountCanvas()
+        const mapId = useTabsStore().activeTabId
+        const roomId = strip(mapId, ['3,2', '4,2'])
+
+        viewport.dispatchEvent(pointer('pointerdown', screenOf(3, 2)))
+        viewport.dispatchEvent(pointer('pointerup', screenOf(3, 2)))
+        useModeStore().setMode(mode)
+        runAction('deleteSelection')
+
+        expect(useModelStore().project.mapsById.get(mapId)!.rooms.has(roomId)).toBe(false)
+        wrapper.unmount()
+      }
+    })
+
+    // Deleting a room cascades to the transitions on its edges and the icons in
+    // its cells, so a mixed selection has to survive its own cascade: each
+    // named id is still there when its own op runs.
+    it('empties a mixed room-and-object selection in one step', () => {
+      const { wrapper } = mountCanvas()
+      const mapId = useTabsStore().activeTabId
+      const model = useModelStore()
+      const roomId = strip(mapId, ['3,2', '4,2'])
+      const iconId = (
+        model.run('Icon', mapScope(mapId), (tx) =>
+          placeIcon(tx, model.project.mapsById.get(mapId)!, '3,2', 'save', {
+            plateColor: '#111111',
+            glyphColor: '#222222',
+          }),
+        ) as { id: IconId }
+      ).id
+
+      useSelectionStore().set(
+        [
+          { kind: 'room', id: roomId },
+          { kind: 'icon', id: iconId },
+        ],
+        mapId,
+      )
+      runAction('deleteSelection')
+
+      const map = () => useModelStore().project.mapsById.get(mapId)!
+      expect(map().rooms.has(roomId)).toBe(false)
+      expect(map().icons.has(iconId)).toBe(false)
+      expect(model.status.undoLabel).toBe('Delete Selection')
+
+      model.undo()
+      expect(map().rooms.has(roomId)).toBe(true)
+      expect(map().icons.has(iconId)).toBe(true)
+      wrapper.unmount()
+    })
   })
 
   describe('Esc', () => {
@@ -1153,22 +1261,21 @@ describe('CanvasRegion active room', () => {
     // second press deselects.
     it('aborts a live stroke first, and clears the room only on a second press', () => {
       const { wrapper, viewport } = mountCanvas()
-      const active = useActiveRoomStore()
       const mapId = useTabsStore().activeTabId
       strip(mapId, ['3,2', '4,2'])
 
       viewport.dispatchEvent(pointer('pointerdown', screenOf(3, 2)))
       viewport.dispatchEvent(pointer('pointermove', screenOf(6, 2)))
-      expect(active.isArmed).toBe(true)
+      expect(armedRoom()).not.toBeNull()
 
       // First press: the gesture tier takes it.
       resolveEscape()
-      expect(active.isArmed).toBe(true)
+      expect(armedRoom()).not.toBeNull()
       viewport.dispatchEvent(pointer('pointerup', screenOf(6, 2)))
 
       // Second press: now it reaches the active room.
       resolveEscape()
-      expect(active.isArmed).toBe(false)
+      expect(armedRoom()).toBeNull()
       wrapper.unmount()
     })
 
@@ -1196,17 +1303,16 @@ describe('CanvasRegion active room', () => {
       const sentinel = vi.fn<() => void>()
       const pop = pushEscHandler('selection', sentinel)
       const { wrapper, viewport } = mountCanvas()
-      const active = useActiveRoomStore()
       const mapId = useTabsStore().activeTabId
       strip(mapId, ['3,2'])
 
       viewport.dispatchEvent(pointer('pointerdown', screenOf(3, 2)))
       viewport.dispatchEvent(pointer('pointerup', screenOf(3, 2)))
-      expect(active.isArmed).toBe(true)
+      expect(armedRoom()).not.toBeNull()
 
       // Armed, so the component's handler is above the sentinel and takes this.
       resolveEscape()
-      expect(active.isArmed).toBe(false)
+      expect(armedRoom()).toBeNull()
       expect(sentinel).not.toHaveBeenCalled()
 
       // Having cleared, it has unregistered: the next press falls through.
@@ -1425,7 +1531,7 @@ describe('CanvasRegion edge-run resize', () => {
 
     expect(cellsOf(mapId, roomId)).toEqual(ROOM.slice().sort())
     expect(model.status.undoLabel).toBe('Setup')
-    expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+    expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
     wrapper.unmount()
   })
 
@@ -1488,7 +1594,7 @@ describe('CanvasRegion edge-run resize', () => {
 
       // Grown by the one cell the stroke crossed, not extruded by a whole run.
       expect(cellsOf(mapId, roomId)).toEqual(['2,2', '2,3', '3,2', '3,3', '4,2'])
-      expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+      expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
       wrapper.unmount()
     })
 
@@ -1500,7 +1606,7 @@ describe('CanvasRegion edge-run resize', () => {
       // Step one: tap to arm, without moving, so the room keeps its shape.
       viewport.dispatchEvent(pointer('pointerdown', { ...at(2.5, 2.5), pointerType: 'touch' }))
       viewport.dispatchEvent(pointer('pointerup', { ...at(2.5, 2.5), pointerType: 'touch' }))
-      expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+      expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
 
       // Step two: drag the now-visible handle.
       viewport.dispatchEvent(pointer('pointerdown', { ...at(3.97, 2.5), pointerType: 'touch' }))
@@ -1519,7 +1625,7 @@ describe('CanvasRegion edge-run resize', () => {
 
       viewport.dispatchEvent(pointer('pointerdown', { ...at(8.5, 8.5), pointerType: 'touch' }))
       viewport.dispatchEvent(pointer('pointerup', { ...at(8.5, 8.5), pointerType: 'touch' }))
-      expect(useActiveRoomStore().roomIdOn(mapId)).toBe(other)
+      expect(useSelectionStore().soleRoomOn(mapId)).toBe(other)
 
       viewport.dispatchEvent(pointer('pointerdown', { ...at(3.97, 2.5), pointerType: 'touch' }))
       viewport.dispatchEvent(pointer('pointermove', { ...at(4.5, 2.5), pointerType: 'touch' }))
@@ -1557,7 +1663,7 @@ describe('CanvasRegion edge-run resize', () => {
     it('needs no armed room', async () => {
       const { wrapper, viewport } = mountCanvas()
       strip(useTabsStore().activeTabId, ROOM)
-      expect(useActiveRoomStore().isArmed).toBe(false)
+      expect(armedRoom()).toBeNull()
 
       viewport.dispatchEvent(new PointerEvent('pointermove', { ...at(3.97, 2.5), bubbles: true }))
       await nextTick()
@@ -1744,7 +1850,7 @@ describe('CanvasRegion inner walls', () => {
     viewport.dispatchEvent(pointer('pointerup', { ...at(4, 3), pointerType: 'touch' }))
 
     expect(walls(mapId, roomId).size).toBe(0)
-    expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+    expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
     wrapper.unmount()
   })
 
@@ -1756,7 +1862,7 @@ describe('CanvasRegion inner walls', () => {
     // Step one: tap the middle of the room to arm it.
     viewport.dispatchEvent(pointer('pointerdown', { ...at(3.5, 3.5), pointerType: 'touch' }))
     viewport.dispatchEvent(pointer('pointerup', { ...at(3.5, 3.5), pointerType: 'touch' }))
-    expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+    expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
 
     // Step two: drag between two now-visible vertex targets.
     viewport.dispatchEvent(pointer('pointerdown', { ...at(3, 3), pointerType: 'touch' }))
@@ -1952,7 +2058,7 @@ describe('CanvasRegion sub-mode lock', () => {
       viewport.dispatchEvent(pointer('pointermove', at(8.5, 8.5)))
       viewport.dispatchEvent(pointer('pointerup', at(8.5, 8.5)))
 
-      expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+      expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
       expect(room(mapId, roomId).cells.size).toBe(9)
       expect(useModelStore().status.undoLabel).toBe('Setup')
       wrapper.unmount()
@@ -2497,13 +2603,12 @@ describe('CanvasRegion Door mode shell', () => {
   it('does not arm a room, and draws no handles', () => {
     const { wrapper, viewport } = mountCanvas()
     twoRoomsAndADoor()
-    const activeRoom = useActiveRoomStore()
     useModeStore().setMode('door')
 
     viewport.dispatchEvent(pointer('pointerdown', at(2.5, 1.5)))
     viewport.dispatchEvent(pointer('pointerup', at(2.5, 1.5)))
 
-    expect(activeRoom.isArmed).toBe(false)
+    expect(armedRoom()).toBeNull()
     wrapper.unmount()
   })
 
@@ -2513,7 +2618,6 @@ describe('CanvasRegion Door mode shell', () => {
   it('takes the armed room’s handles off the canvas in Door mode', async () => {
     const { wrapper, viewport } = mountCanvas()
     twoRoomsAndADoor()
-    const activeRoom = useActiveRoomStore()
     const ctx = (wrapper.get('.canvas').element as HTMLCanvasElement).getContext(
       '2d',
     ) as unknown as FakeContext2D
@@ -2536,7 +2640,7 @@ describe('CanvasRegion Door mode shell', () => {
     const door = await strokesAfterModeChange('door')
     const drawing = await strokesAfterModeChange('draw')
 
-    expect(activeRoom.isArmed).toBe(true)
+    expect(armedRoom()).not.toBeNull()
     expect(door).toBeLessThan(drawing)
     wrapper.unmount()
   })

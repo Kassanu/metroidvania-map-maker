@@ -125,18 +125,18 @@ export interface MapScene {
   // (half a teleport is not a smaller teleport), and it arrives as its own
   // scene input for the same reason `boxPreview` does.
   pendingTeleport: CellKey | null
-  // Draw/Edit's active room and its handles, or null when nothing is armed.
-  activeRoom: ActiveRoomScene | null
+  // The room drawn with resize handles, or null when none is.
+  handleRoom: HandleRoomScene | null
 }
 
-// The handles on the active room: one per resizable edge run, plus a target per
+// The handles on one room: one per resizable edge run, plus a target per
 // interior vertex.
 //
 // The tolerances arrive from `canvas/drawZone.ts` rather than being chosen
 // here, so the handle and the thing it grabs cannot disagree. They apply to
 // the hovered handle, which is drawn as exactly the region that will catch
 // the pointer; idle handles are deliberately smaller hints. See `drawHandles`.
-export interface ActiveRoomScene {
+export interface HandleRoomScene {
   room: Room
   band: number
   vertexRadius: number
@@ -421,7 +421,7 @@ export function renderMap(
   // state.
   if (scene.pendingTeleport) drawPendingTeleport(ctx, scene, scene.pendingTeleport)
   // Over the walls, because a run handle sits exactly on the wall it resizes.
-  if (scene.activeRoom) drawHandles(ctx, scene, scene.activeRoom)
+  if (scene.handleRoom) drawHandles(ctx, scene, scene.handleRoom)
   // Last, so the aiming aid is never hidden under a wall it is about to paint
   // over. It is a cursor, not part of the map.
   if (scene.brushPreview) drawBrushPreview(ctx, scene, scene.brushPreview)
@@ -431,8 +431,8 @@ export function renderMap(
   if (scene.boxPreview) drawBoxPreview(ctx, scene, scene.boxPreview)
 }
 
-// Draws the active room's resize handles: the grab zones from `drawZone.ts`,
-// made visible.
+// Draws one room's resize handles: the grab zones from `drawZone.ts`, made
+// visible.
 //
 // Idle handles scale with the cell, so they shrink out of the way as you zoom
 // out. The hovered handle inflates to its full grab region in screen pixels, so
@@ -440,7 +440,7 @@ export function renderMap(
 //
 // Vertex targets draw square where the grab region is a disc: the fake canvas
 // contexts in the tests have no `arc()`.
-function drawHandles(ctx: CanvasRenderingContext2D, scene: MapScene, active: ActiveRoomScene) {
+function drawHandles(ctx: CanvasRenderingContext2D, scene: MapScene, active: HandleRoomScene) {
   const { room, band, vertexRadius, hovered, pointerCell, handles } = active
   const cellPx = scene.tileSize * scene.camera.zoom
 

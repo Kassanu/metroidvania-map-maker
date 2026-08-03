@@ -12,14 +12,14 @@
 // to apply: half a teleport is not a smaller teleport, it is nothing at all.
 // It outlives the pointer that started it, because "you may switch and
 // create tabs freely while pending". A gesture that survives a tab switch and
-// applies nothing is not a gesture; it is a slot, and the app already has two
-// slots of exactly this shape (`activeRoom`, `drawArea`), both of which prune.
+// applies nothing is not a gesture; it is a slot of the same shape as
+// `drawArea`, and like it, it prunes.
 //
 // Why it prunes. The origin names a map and a cell that can both go away
 // under it: the tab is closed, the room is erased, an undo removes it, a file
 // is opened over the top. Losing either cancels the pending teleport. The
-// argument against doing that at each of those call sites is the one the other
-// two slots already made: it is the version that eventually misses one.
+// argument against doing that at each of those call sites is the one the
+// selection store already makes: it is the version that eventually misses one.
 //
 // Why the mode watch is here rather than in the canvas. Cancellation happens
 // only via `Esc`, switching modes (leaving Door mode), or deleting the origin's
@@ -97,8 +97,8 @@ export const usePendingTeleportStore = defineStore('pendingTeleport', () => {
   }
 
   // The pending origin on `mapId`, or null when the pending origin belongs to
-  // another map or when nothing is pending. Same shape as the active room's
-  // `roomIdOn`, and for the same reason: the canvas asks "is anything pending
+  // another map or when nothing is pending. Same shape as the selection's
+  // `soleRoomOn`, and for the same reason: the canvas asks "is anything pending
   // here" without this store knowing which tab is on screen.
   function originOn(mapId: MapId): CellKey | null {
     const current = origin.value

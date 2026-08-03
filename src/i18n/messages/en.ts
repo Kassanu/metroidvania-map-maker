@@ -60,6 +60,7 @@ export const en = {
   'history.extendLine': 'Extend Line',
   'history.deleteIcon': 'Delete Icon',
   'history.deleteLine': 'Delete Line',
+  'history.deleteRoom': 'Delete Room',
   'history.deleteSelection': 'Delete Selection',
   'history.peelLine': 'Erase Line',
 

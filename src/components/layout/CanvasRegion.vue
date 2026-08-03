@@ -6,7 +6,6 @@ import { useThemeStore } from '@/stores/theme'
 import { useCanvasViewStore } from '@/stores/canvasView'
 import { useModeStore } from '@/stores/mode'
 import { useToolsStore } from '@/stores/tools'
-import { useActiveRoomStore } from '@/stores/activeRoom'
 import { usePendingTeleportStore } from '@/stores/pendingTeleport'
 import { useArmedIconStore } from '@/stores/armedIcon'
 import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
@@ -38,6 +37,7 @@ import { beginIconDrag, type IconDrag } from '@/gestures/iconDrag'
 import { beginLinePeel } from '@/gestures/linePeel'
 import { registerIconDropTarget } from '@/gestures/iconDropTarget'
 import { deleteTransition } from '@/core/ops/doors'
+import { deleteRooms } from '@/core/ops/rooms'
 import {
   createLine,
   deleteIcon,
@@ -64,7 +64,7 @@ import type { GhostGesture } from '@/gestures/ghostGesture'
 import type { MapModel } from '@/core/types'
 import type { BrushPreview, HoveredHandle } from '@/canvas/renderMap'
 import type { WorldPoint } from '@/canvas/stroke'
-import type { IconId, LineId, MapId, TransitionId } from '@/core/ids'
+import type { IconId, LineId, MapId, RoomId, TransitionId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 import type { IconRegistryEntry } from '@/icons/registry'
 import { useCanvasRenderer } from '@/composables/useCanvasRenderer'
@@ -83,7 +83,6 @@ const themeStore = useThemeStore()
 const canvasView = useCanvasViewStore()
 const modeStore = useModeStore()
 const tools = useToolsStore()
-const activeRoom = useActiveRoomStore()
 const pendingTeleport = usePendingTeleportStore()
 const armedIcon = useArmedIconStore()
 const markupDefaults = useMarkupDefaultsStore()
@@ -180,12 +179,12 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       // Handles are drawn at the size `drawZone` grabs them at: the tolerances
       // come from there rather than being chosen here, so the handle and the
       // thing it grabs cannot disagree.
-      activeRoom: (() => {
+      handleRoom: (() => {
         // A handle is drawn exactly when a press on it would do something,
         // applied to the mode rather than the sub-mode lock: in Door mode a
         // press on a resize handle resizes nothing.
         if (!tab || modeStore.active !== 'draw') return null
-        const roomId = activeRoom.roomIdOn(tab.id)
+        const roomId = handleRoomId()
         const room = roomId ? model.project.mapsById.get(tab.id)?.rooms.get(roomId) : null
         if (!room) return null
         const camera = { pan: tab.pan, zoom: tab.zoom }
@@ -227,6 +226,15 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
     }
   },
 )
+
+// The room whose handles are drawn, hovered and grabbed: exactly one room
+// selected on the tab being looked at. Every reader goes through here, so the
+// renderer, the hit-test and the touch two-step cannot disagree about which
+// room that is, and a multi-room selection answers null for all three.
+function handleRoomId(): RoomId | null {
+  const tab = tabsStore.activeTab
+  return tab ? selection.soleRoomOn(tab.id) : null
+}
 
 // Whether Markup mode is overriding the markup layer toggles. A function rather
 // than a computed because the scene above is already recomputed per draw, and
@@ -745,20 +753,28 @@ function handlePointerDown(event: PointerEvent) {
   if (!tab || !world || !local || !map) return
   event.preventDefault()
 
-  // Pressing any room cell makes it active, a rule that cuts across every
-  // gesture, so it happens before the paint/erase/resize split regardless of
-  // which one this press turns into. On press rather than on click, because a
-  // press that becomes a paint stroke still armed the room it started on.
+  // Pressing any room cell selects it, a rule that cuts across every gesture,
+  // so it happens before the paint/erase/resize split regardless of which one
+  // this press turns into. On press rather than on click, which is where Draw
+  // differs from every other mode: a press that becomes a paint stroke still
+  // selected the room it started on, and the touch two-step below depends on
+  // that having happened by the time the finger moves.
   const zone = resolveZone(local, {
     map,
     camera: { pan: tab.pan, zoom: tab.zoom },
     tileSize: model.tileSize,
   })
-  // Read before arming. The touch two-step asks whether the room was already
-  // active when the press landed, and arming first would make every press look
-  // like the second one.
-  const wasArmed = zone.kind !== 'empty' && activeRoom.roomIdOn(tab.id) === zone.roomId
-  if (zone.kind !== 'empty') activeRoom.arm(tab.id, zone.roomId)
+  // Read before selecting. The touch two-step asks whether this room was
+  // already the one showing handles when the press landed, and selecting first
+  // would make every press look like the second one.
+  const wasArmed = zone.kind !== 'empty' && handleRoomId() === zone.roomId
+  // No shift-click here: a press in Draw is a paint stroke, so a room cell
+  // replaces the selection rather than adding to it. Re-pressing the room that
+  // already holds the selection alone leaves it untouched, which keeps a paint
+  // press off the selection watch that repaints the canvas.
+  if (zone.kind !== 'empty' && !wasArmed) {
+    selection.set([{ kind: 'room', id: zone.roomId }], tab.id)
+  }
 
   const started = beginGestureFor(tab.id, action, zone, world, event, wasArmed)
   if (!started) return
@@ -1054,7 +1070,7 @@ function updateHoveredHandle(point: ScreenPoint | null, world: WorldPoint | null
   hoveredHandle = nextHandle
   revealCell = nextCell
   // The reveal window only matters when there is a room showing handles.
-  if (handleChanged || labelChanged || (cellChanged && activeRoom.isArmed)) draw()
+  if (handleChanged || labelChanged || (cellChanged && handleRoomId() !== null)) draw()
 }
 
 // The label the pointer is currently showing, and the second reason hover costs
@@ -1113,12 +1129,11 @@ function zoneAt(point: ScreenPoint): DrawZone | null {
 }
 
 function handleFor(zone: DrawZone | null): HoveredHandle | null {
-  const tab = tabsStore.activeTab
-  const armed = tab ? activeRoom.roomIdOn(tab.id) : null
+  const armed = handleRoomId()
   if (!zone || !armed) return null
-  // Only the active room's handles are drawn, so only its handles can be
-  // hovered: pointing at a run of some other room highlights nothing, even
-  // though pressing it would still resize.
+  // Only that room's handles are drawn, so only its handles can be hovered:
+  // pointing at a run of some other room highlights nothing, even though
+  // pressing it would still resize.
   if (zone.kind === 'empty' || zone.roomId !== armed) return null
 
   // A handle the lock has hidden cannot be hovered either. Reading the same
@@ -1307,7 +1322,7 @@ watch(
   () => closeIconPicker(),
 )
 
-watch([() => activeRoom.isArmed, () => model.rev, () => model.structureRev], () => draw())
+watch([() => model.rev, () => model.structureRev], () => draw())
 watch(
   () => pendingTeleport.isPending,
   () => {
@@ -1316,41 +1331,12 @@ watch(
   },
 )
 
-// The halo is drawn from the selection, and selecting changes no model
-// revision, so like the pending marker it needs a watch of its own or it would
-// appear only on the next unrelated edit. Watching the store's own array rather
-// than a count, because swapping one transition for another leaves the length
-// alone.
+// The halo and the resize handles are both drawn from the selection, and
+// selecting changes no model revision, so like the pending marker it needs a
+// watch of its own or it would appear only on the next unrelated edit. Watching
+// the store's own array rather than a count, because swapping one object for
+// another leaves the length alone.
 watch(() => selection.selected, draw, { deep: true })
-
-// `Esc` clears the active room, one tier below the gesture tier: an
-// in-progress drag aborts on the first press, and only a second press
-// deselects. Tier 3 is an in-progress gesture; tier 5 is the selection.
-//
-// Registered only while something is armed, and popped the moment it is not. A
-// permanently registered handler would sit at the top of the selection tier,
-// swallowing every `Esc` that should have fallen through to the no-op tier and,
-// later, to Select/Move's real deselect.
-//
-// `flush: 'sync'` because this is input precedence, not rendering: the handler
-// has to be on the stack the instant the room is armed, or a press followed
-// immediately by `Esc` would find an empty tier. The selection store's prune
-// makes the same call for the same reason.
-let popActiveRoomEsc: (() => void) | null = null
-watch(
-  () => activeRoom.isArmed,
-  (armed) => {
-    if (armed && !popActiveRoomEsc) {
-      popActiveRoomEsc = pushEscHandler('selection', () => activeRoom.clear())
-      return
-    }
-    if (!armed && popActiveRoomEsc) {
-      popActiveRoomEsc()
-      popActiveRoomEsc = null
-    }
-  },
-  { flush: 'sync' },
-)
 
 // `Esc` cancels a pending teleport, in the gesture tier: tier 3 aborts an
 // in-progress gesture, which is a ghosted drag (paint, resize, move, door box),
@@ -1413,11 +1399,13 @@ watch(
 // gesture is more urgent than a selection, which is exactly the peeling order
 // tier 3 above tier 5 encodes.
 //
-// The active room registers in this same tier, and the two never collide in
-// practice because they belong to different modes: Door mode arms no room, and
-// Draw mode selects no transition. LIFO settles it if that ever stops being
-// true, and the more recently established state winning is the right answer
-// anyway.
+// One handler for the whole tier, in every mode, because there is one
+// selection: clearing it is also what puts Draw mode's resize handles away.
+//
+// `flush: 'sync'` because this is input precedence, not rendering: the handler
+// has to be on the stack the instant something is selected, or a press followed
+// immediately by `Esc` would find an empty tier. The store's prune makes the
+// same call for the same reason.
 let popSelectionEsc: (() => void) | null = null
 watch(
   () => selection.isEmpty,
@@ -1435,7 +1423,6 @@ watch(
 )
 
 onUnmounted(() => {
-  popActiveRoomEsc?.()
   popPendingTeleportEsc?.()
   popArmedIconEsc?.()
   popSelectionEsc?.()
@@ -1519,37 +1506,43 @@ watch(
 const { prefersDark } = useSystemColorScheme()
 watch([() => themeStore.mode, prefersDark], () => repaintForTheme())
 
-// `Delete`/`Backspace` on the selection: transitions, icons and lines, whichever
-// the selection holds.
+// `Delete`/`Backspace` on the selection: rooms, transitions, icons and lines,
+// whichever the selection holds, in every mode.
 //
 // Goes through the same ops the right-click routes do, so no two delete routes
-// can disagree about what deleting means. Rooms are absent because Draw mode's
-// active room is not a selection; it has no canvas deselect and this key must
-// not destroy it.
+// can disagree about what deleting means.
 //
-// It is also the *only* way to delete a whole line in one step. Erase on a
-// line's body does nothing by design, so without this a line could only be
-// peeled away segment by segment.
+// Draw mode then has two destructive granularities: erase removes cells, this
+// removes the whole room. It is also the *only* way to delete a whole line in
+// one step, since erase on a line's body does nothing by design and a line
+// could otherwise only be peeled away segment by segment.
 useHotkeyAction('deleteSelection', () => {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
   if (!tab || !map || selection.mapId !== tab.id) return
 
   const transitions = [...selectedTransitions()]
+  const rooms: RoomId[] = []
   const icons: IconId[] = []
   const lines: LineId[] = []
   for (const item of selection.selected) {
+    if (item.kind === 'room') rooms.push(item.id)
     if (item.kind === 'icon') icons.push(item.id)
     if (item.kind === 'line') lines.push(item.id)
   }
-  if (transitions.length + icons.length + lines.length === 0) return
+  if (rooms.length + transitions.length + icons.length + lines.length === 0) return
 
-  // One transaction for the whole selection, not one each: multi-select is in
-  // for v1, and deleting three doors with one keypress must undo as one step.
+  // One transaction for the whole selection, not one each: deleting three doors
+  // with one keypress must undo as one step.
+  //
+  // Rooms go last. Deleting a room cascades to the transitions on its edges and
+  // the icons in its cells, so taking the named ones first means each id is
+  // still there when its own op runs rather than having been swept up already.
   model.run(deleteSelectionLabel(), mapScope(tab.id), (tx) => {
     for (const id of transitions) deleteTransition(tx, model.project, map, id)
     for (const id of icons) deleteIcon(tx, map, id)
     for (const id of lines) deleteLine(tx, map, id)
+    if (rooms.length > 0) deleteRooms(tx, model.project, map, rooms)
   })
 })
 
@@ -1560,6 +1553,7 @@ function deleteSelectionLabel(): string {
   const kinds = new Set(selection.selected.map((item) => item.kind))
   if (kinds.size > 1) return t('history.deleteSelection')
   const [kind] = kinds
+  if (kind === 'room') return t('history.deleteRoom')
   if (kind === 'icon') return t('history.deleteIcon')
   if (kind === 'line') return t('history.deleteLine')
   return t('history.deleteTransition')

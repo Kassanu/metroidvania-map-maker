@@ -189,7 +189,7 @@ function scene(overrides: Partial<MapScene> = {}): MapScene {
     boxPreview: null,
     pendingTeleport: null,
     selected: new Set(),
-    activeRoom: null,
+    handleRoom: null,
     palette,
     showGrid: true,
     ...overrides,
@@ -1638,7 +1638,7 @@ describe('renderMap active room handles', () => {
     const { ctx, fills, strokes } = fakeContext()
     const { project, map } = room3x3()
 
-    draw(ctx, { map, areas: project.areas, activeRoom: null })
+    draw(ctx, { map, areas: project.areas, handleRoom: null })
 
     expect(strokes.some((stroke) => stroke.style === '#handle')).toBe(false)
     expect(fills.some((fill) => fill.style === '#handle')).toBe(false)
@@ -1649,7 +1649,7 @@ describe('renderMap active room handles', () => {
     const { project, map } = room3x3()
     const roomId = [...map.rooms.keys()][0]
 
-    draw(ctx, { map, areas: project.areas, activeRoom: activeScene(map, roomId) })
+    draw(ctx, { map, areas: project.areas, handleRoom: activeScene(map, roomId) })
 
     // One stroke per run, because each can be at a different weight: the
     // hovered one is inflated and the rest stay faint.
@@ -1672,7 +1672,7 @@ describe('renderMap active room handles', () => {
       const { project, map } = room3x3()
       const roomId = [...map.rooms.keys()][0]
 
-      draw(ctx, { map, areas: project.areas, activeRoom: activeScene(map, roomId) })
+      draw(ctx, { map, areas: project.areas, handleRoom: activeScene(map, roomId) })
 
       const width = strokes.find((stroke) => stroke.style === '#handle')!.width
       expect(width).toBeLessThan(5 * 2)
@@ -1684,7 +1684,7 @@ describe('renderMap active room handles', () => {
       const { project, map } = room3x3()
       const roomId = [...map.rooms.keys()][0]
 
-      draw(ctx, { map, areas: project.areas, activeRoom: activeScene(map, roomId) })
+      draw(ctx, { map, areas: project.areas, handleRoom: activeScene(map, roomId) })
 
       const targets = fills.filter((fill) => fill.style === '#handle')
       // A 3x3 room's interior vertices are (1,1), (2,1), (1,2), (2,2).
@@ -1705,7 +1705,7 @@ describe('renderMap active room handles', () => {
         map,
         areas: project.areas,
         camera: { pan: { x: 0, y: 0 }, zoom: 0.5 },
-        activeRoom: activeScene(map, roomId),
+        handleRoom: activeScene(map, roomId),
       })
 
       const target = fills.find((fill) => fill.style === '#handle')!
@@ -1735,7 +1735,7 @@ describe('renderMap active room handles', () => {
       draw(ctx, {
         map,
         areas: project.areas,
-        activeRoom: {
+        handleRoom: {
           room,
           band: 5,
           vertexRadius: 7,
@@ -1781,7 +1781,7 @@ describe('renderMap active room handles', () => {
       draw(ctx, {
         map,
         areas: project.areas,
-        activeRoom: {
+        handleRoom: {
           room,
           band: 5,
           vertexRadius: 7,
@@ -1807,7 +1807,7 @@ describe('renderMap active room handles', () => {
       draw(ctx, {
         map,
         areas: project.areas,
-        activeRoom: {
+        handleRoom: {
           room,
           band: 5,
           vertexRadius: 7,
@@ -1832,7 +1832,7 @@ describe('renderMap active room handles', () => {
       draw(ctx, {
         map,
         areas: project.areas,
-        activeRoom: {
+        handleRoom: {
           room,
           band: 5,
           vertexRadius: 7,
@@ -1860,7 +1860,7 @@ describe('renderMap active room handles', () => {
       draw(ctx, {
         map,
         areas: project.areas,
-        activeRoom: {
+        handleRoom: {
           room,
           band: 5,
           vertexRadius: 7,
@@ -1885,7 +1885,7 @@ describe('renderMap active room handles', () => {
     draw(ctx, {
       map,
       areas: project.areas,
-      activeRoom: {
+      handleRoom: {
         room: map.rooms.get(roomId)!,
         band: 5,
         vertexRadius: 7,
@@ -1904,7 +1904,7 @@ describe('renderMap active room handles', () => {
     const { project, map } = room3x3()
     const roomId = [...map.rooms.keys()][0]
 
-    draw(ctx, { map, areas: project.areas, activeRoom: activeScene(map, roomId) })
+    draw(ctx, { map, areas: project.areas, handleRoom: activeScene(map, roomId) })
 
     const wall = strokes.findIndex((stroke) => stroke.style === '#roomwall')
     const handle = strokes.findIndex((stroke) => stroke.style === '#handle')

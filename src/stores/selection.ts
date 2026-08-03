@@ -8,15 +8,16 @@
 // interchangeable: a RoomId and an IconId are both short strings, and "what is
 // selected" has to survive being handed to an op that only accepts one kind.
 //
-// A list rather than a single slot because multi-select is planned for v1, even
-// though only click-select exists today.
+// A list rather than a single slot: shift-click builds a multi-selection, and
+// a selection of exactly one room is also what Draw mode draws its resize
+// handles on.
 
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useModelStore } from './model'
 import { farEndsOnMap } from '@/core/farEnds'
 import type { MapModel, ObjectRef } from '@/core/types'
-import type { MapId, TransitionId } from '@/core/ids'
+import type { MapId, RoomId, TransitionId } from '@/core/ids'
 
 function sameRef(a: ObjectRef, b: ObjectRef): boolean {
   return a.kind === b.kind && a.id === b.id
@@ -75,6 +76,20 @@ export const useSelectionStore = defineStore('selection', () => {
     else set([ref], mapId)
   }
 
+  // The room Draw mode draws handles on: exactly one room selected, on this
+  // map. Null for a selection that holds anything else, holds more than one
+  // room, or belongs to another tab.
+  //
+  // Answering null for a multi-room selection is the point rather than a
+  // limitation. Resizing three rooms at once is not a thing, so every consumer
+  // asks the question in the form that already has the right answer instead of
+  // reaching for the first item of a list.
+  function soleRoomOn(mapId: MapId): RoomId | null {
+    if (selectionMapId.value !== mapId || items.value.length !== 1) return null
+    const [only] = items.value
+    return only.kind === 'room' ? only.id : null
+  }
+
   // A selection can outlive the thing it points at: undo removes a room, a
   // delete cascades, a file is opened. Having every op that can destroy an
   // object also prune the selection is the version that eventually misses one.
@@ -103,6 +118,7 @@ export const useSelectionStore = defineStore('selection', () => {
     toggle,
     clear,
     clickSelect,
+    soleRoomOn: computed(() => soleRoomOn),
     // The tab the current selection belongs to, so the canvas can tell whether
     // what it is drawing is the selected map's.
     mapId: computed(() => selectionMapId.value),

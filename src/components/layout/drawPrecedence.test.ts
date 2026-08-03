@@ -4,8 +4,8 @@ import { createTestPinia } from '@/test-setup'
 import { mount } from '@vue/test-utils'
 import CanvasRegion from './CanvasRegion.vue'
 import { useTabsStore } from '@/stores/tabs'
+import { useSelectionStore } from '@/stores/selection'
 import { useToolsStore } from '@/stores/tools'
-import { useActiveRoomStore } from '@/stores/activeRoom'
 import { mapScope, useModelStore } from '@/stores/model'
 import { paintCells } from '@/core/ops/rooms'
 import { edgeOfCell } from '@/core/cell'
@@ -22,6 +22,12 @@ import type { MapId, RoomId } from '@/core/ids'
 //
 // Everything here is Auto. The four sub-mode locks are filters over this
 // table and are swept in `CanvasRegion.test.ts`.
+
+// The room showing resize handles: a selection of exactly one room, on the tab
+// being looked at.
+function armedRoom() {
+  return useSelectionStore().soleRoomOn(useTabsStore().activeTabId)
+}
 
 describe('Draw/Edit precedence table (Auto)', () => {
   beforeEach(() => {
@@ -147,7 +153,7 @@ describe('Draw/Edit precedence table (Auto)', () => {
 
       click(viewport, at(3.5, 3.5))
 
-      expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+      expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
       expect(room(roomId).cells.size).toBe(9)
       expect(undoLabel()).toBe('Setup')
       wrapper.unmount()
@@ -224,7 +230,7 @@ describe('Draw/Edit precedence table (Auto)', () => {
 
       click(viewport, onRun())
 
-      expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+      expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
       expect(room(roomId).cells.size).toBe(9)
       expect(undoLabel()).toBe('Setup')
       wrapper.unmount()
@@ -271,7 +277,7 @@ describe('Draw/Edit precedence table (Auto)', () => {
 
       click(viewport, onFace())
 
-      expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+      expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
       expect(room(roomId).cells.size).toBe(1)
       wrapper.unmount()
     })
@@ -311,7 +317,7 @@ describe('Draw/Edit precedence table (Auto)', () => {
 
       click(viewport, at(3, 3))
 
-      expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+      expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
       // A wall needs two vertices, so a click that never moved draws nothing.
       expect(room(roomId).innerWalls.size).toBe(0)
       expect(undoLabel()).toBe('Setup')
@@ -367,7 +373,7 @@ describe('Draw/Edit precedence table (Auto)', () => {
 
       click(viewport, onWall())
 
-      expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+      expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
       expect(room(roomId).innerWalls.get(edgeOfCell('3,2', 'S'))).toBe('solid')
       // Drawing the same style over itself is an empty transaction.
       expect(undoLabel()).toBe(label)
@@ -440,12 +446,11 @@ describe('Draw/Edit precedence table (Auto)', () => {
       const { wrapper, viewport } = mountCanvas()
       const mapId = useTabsStore().activeTabId
       const roomId = square3(mapId)
-      const active = useActiveRoomStore()
 
       for (const point of [at(3.5, 3.5), at(4.97, 3.5), at(3, 3)]) {
-        active.clear()
+        useSelectionStore().clear()
         viewport.dispatchEvent(press('pointerdown', point))
-        expect(useActiveRoomStore().roomIdOn(mapId)).toBe(roomId)
+        expect(useSelectionStore().soleRoomOn(mapId)).toBe(roomId)
         viewport.dispatchEvent(press('pointerup', point))
       }
       wrapper.unmount()
@@ -457,7 +462,7 @@ describe('Draw/Edit precedence table (Auto)', () => {
       square3(mapId)
 
       viewport.dispatchEvent(press('pointerdown', at(9.5, 9.5)))
-      expect(useActiveRoomStore().isArmed).toBe(false)
+      expect(armedRoom()).toBeNull()
       viewport.dispatchEvent(press('pointerup', at(9.5, 9.5)))
       wrapper.unmount()
     })
