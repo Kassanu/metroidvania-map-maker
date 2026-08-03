@@ -50,6 +50,8 @@ const palette: CanvasPalette = {
   handle: '#handle',
   handleHover: '#handlehover',
   selection: '#selection',
+  marquee: '#marquee',
+  marqueeFill: '#marqueefill',
 }
 
 function scene(overrides: Partial<RulerScene> = {}): RulerScene {

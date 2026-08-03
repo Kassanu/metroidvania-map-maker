@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderMap, type HoveredHandle, type MapScene } from './renderMap'
 import { DOOR_JAMB } from './doorRuns'
 import { pageBounds } from './page'
-import { interiorVertices, resizableRuns } from '@/core/derive/walls'
+import { interiorVertices, outerWalls, resizableRuns } from '@/core/derive/walls'
 import type { CanvasPalette } from './palette'
 import { createProject } from '@/core/factory'
 import { paintCells, drawInnerWall } from '@/core/ops/rooms'
@@ -17,7 +17,7 @@ import { createLine, placeIcon, setIconLabel, setLineStyle } from '@/core/ops/ma
 import { iconArtCatalogue, getIcon } from '@/icons/registry'
 import { ICON_VIEWBOX, UNKNOWN_ICON_ART } from './iconBadge'
 import { OPEN_LOCK_ID, WORLD_AREA_ID } from '@/core/ids'
-import type { IconId, LineId, LockTypeId, MapId, TransitionId } from '@/core/ids'
+import type { IconId, LineId, LockTypeId, MapId, RoomId, TransitionId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 import type { MapModel, ProjectModel } from '@/core/types'
 
@@ -161,6 +161,8 @@ const palette: CanvasPalette = {
   handle: '#handle',
   handleHover: '#handlehover',
   selection: '#selection',
+  marquee: '#marquee',
+  marqueeFill: '#marqueefill',
 }
 
 function scene(overrides: Partial<MapScene> = {}): MapScene {
@@ -189,7 +191,9 @@ function scene(overrides: Partial<MapScene> = {}): MapScene {
     boxPreview: null,
     pendingTeleport: null,
     selected: new Set(),
+    selectedRooms: new Set(),
     handleRoom: null,
+    marquee: null,
     palette,
     showGrid: true,
     ...overrides,
@@ -1280,6 +1284,231 @@ describe('renderMap drawing the selection', () => {
     })
 
     expect(halos(strokes)).toEqual([])
+  })
+})
+
+// A selected room's halo. Every fixture here is rooms only, so a `#selection`
+// stroke can only be a room's: the transition halo above shares the colour, and
+// telling them apart by line width would pin two constants together that have
+// no reason to agree.
+describe('renderMap drawing selected rooms', () => {
+  const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
+    renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
+
+  // Generic, so the filtered strokes keep their widths and segments: this
+  // describe asserts on both.
+  const halos = <T extends { style: string }>(strokes: T[]) =>
+    strokes.filter((stroke) => stroke.style === '#selection')
+
+  // Two 1x2 rooms sharing the boundary at x=1.
+  function twoRooms() {
+    const built = withMap((tx, project, map) => {
+      paintCells(tx, project, map, ['0,0', '0,1'], { areaId: WORLD_AREA_ID })
+      paintCells(tx, project, map, ['1,0', '1,1'], { areaId: WORLD_AREA_ID })
+    })
+    const [left, right] = [...built.map.rooms.values()]
+    return { ...built, left, right }
+  }
+
+  function onMap({ project, map }: { project: ProjectModel; map: MapModel }) {
+    return { map, areas: project.areas, lockTypes: project.lockTypes }
+  }
+
+  it('draws nothing around a room that is not selected', () => {
+    const { ctx, strokes } = fakeContext()
+    const fixture = twoRooms()
+
+    draw(ctx, onMap(fixture))
+
+    expect(halos(strokes)).toEqual([])
+  })
+
+  it('traces the whole outline of a selected room, and only that room', () => {
+    const { ctx, strokes } = fakeContext()
+    const fixture = twoRooms()
+
+    draw(ctx, { ...onMap(fixture), selectedRooms: new Set([fixture.left.id]) })
+
+    const drawn = halos(strokes)
+    expect(drawn).toHaveLength(1)
+    // Six edges: a 1x2 room has two long sides and two ends, as four cell
+    // edges plus two.
+    expect(drawn[0].segments).toHaveLength(outerWalls(fixture.left).size)
+  })
+
+  // Under the wall, so the wall paints back over the middle of it and leaves a
+  // ring rather than a slab. Over the fills, or they would eat it.
+  it('draws the halo under the walls and over the fills', () => {
+    const { ctx, strokes, fills } = fakeContext()
+    const fixture = twoRooms()
+
+    draw(ctx, { ...onMap(fixture), selectedRooms: new Set([fixture.left.id]) })
+
+    const halo = strokes.findIndex((stroke) => stroke.style === '#selection')
+    const wall = strokes.findIndex((stroke) => stroke.style === '#roomwall')
+    expect(halo).toBeLessThan(wall)
+    expect(fills.at(-1)!.style).toBe('#roomfill')
+  })
+
+  // A screen measure, not a world one: the halo has to stay visible at the zoom
+  // where the map is too small to read any other way.
+  it('stands the same distance proud of the wall at every zoom', () => {
+    for (const zoom of [0.4, 1, 3]) {
+      const { ctx, strokes } = fakeContext()
+      const fixture = twoRooms()
+
+      draw(ctx, {
+        ...onMap(fixture),
+        camera: { pan: { x: 0, y: 0 }, zoom },
+        selectedRooms: new Set([fixture.left.id]),
+      })
+
+      const halo = halos(strokes)[0]
+      const wall = strokes.find((stroke) => stroke.style === '#roomwall')!
+      expect(halo.width - wall.width).toBeCloseTo(6)
+    }
+  })
+
+  // The reason each room gets its own path. A shared boundary is an outer wall
+  // of both rooms, so tracing them separately draws it twice and the line
+  // between the pair survives; one path over the union would drop exactly that
+  // edge and merge two selected neighbours into a single blob.
+  it('keeps two adjacent selected rooms reading as two', () => {
+    const { ctx, strokes } = fakeContext()
+    const fixture = twoRooms()
+
+    draw(ctx, {
+      ...onMap(fixture),
+      selectedRooms: new Set([fixture.left.id, fixture.right.id]),
+    })
+
+    const drawn = halos(strokes)
+    expect(drawn).toHaveLength(2)
+    // Both of them trace the seam at x=1. Asked as "some segment lies on that
+    // line" rather than as an exact segment, because the boundary is an edge per
+    // cell and which way each is traced is the wall derivation's business.
+    for (const halo of drawn) {
+      expect(halo.segments.some(([x1, , x2]) => x1 === TILE && x2 === TILE)).toBe(true)
+    }
+  })
+
+  // The two treatments land on the same room the moment one room is selected in
+  // Draw mode, so they have to compose: different colours, and on either side of
+  // the walls rather than both in the same place.
+  it('coexists with the resize handles on one room', () => {
+    const { ctx, strokes } = fakeContext()
+    const fixture = twoRooms()
+
+    draw(ctx, {
+      ...onMap(fixture),
+      selectedRooms: new Set([fixture.left.id]),
+      handleRoom: {
+        room: fixture.left,
+        band: 6,
+        vertexRadius: 5,
+        hovered: null,
+        pointerCell: null,
+        handles: ALL_HANDLES,
+      },
+    })
+
+    const halo = strokes.findIndex((stroke) => stroke.style === '#selection')
+    const wall = strokes.findIndex((stroke) => stroke.style === '#roomwall')
+    const handle = strokes.findIndex((stroke) => stroke.style === '#handle')
+    expect(halo).toBeLessThan(wall)
+    expect(wall).toBeLessThan(handle)
+  })
+
+  // A selection belonging to another tab reaches this far only if something
+  // upstream is wrong, but the lookup has to miss quietly rather than throw.
+  it('ignores an id no room on this map answers to', () => {
+    const { ctx, strokes } = fakeContext()
+    const fixture = twoRooms()
+
+    draw(ctx, { ...onMap(fixture), selectedRooms: new Set(['room_elsewhere' as RoomId]) })
+
+    expect(halos(strokes)).toEqual([])
+  })
+})
+
+// The marquee: the only rectangle here whose interior is the meaning, which is
+// why it is the only filled one.
+describe('renderMap drawing the marquee', () => {
+  const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
+    renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
+
+  const sheets = <T extends { style: string }>(fills: T[]) =>
+    fills.filter((fill) => fill.style === '#marqueefill')
+
+  // Every scene below is on a map: with none there is no page to sweep, and the
+  // renderer stops before any of the overlays.
+  function onAnEmptyMap(): Partial<MapScene> {
+    const { project, map } = withMap(() => {})
+    return { map, areas: project.areas, lockTypes: project.lockTypes }
+  }
+
+  it('draws nothing when no drag is live', () => {
+    const { ctx, fills, strokes } = fakeContext()
+
+    draw(ctx, onAnEmptyMap())
+
+    expect(sheets(fills)).toEqual([])
+    expect(strokes.some((stroke) => stroke.style === '#marquee')).toBe(false)
+  })
+
+  it('fills the swept rectangle and outlines it', () => {
+    const { ctx, fills, strokes } = fakeContext()
+
+    draw(ctx, { ...onAnEmptyMap(), marquee: { from: { x: 1, y: 2 }, to: { x: 4, y: 5 } } })
+
+    expect(sheets(fills)).toEqual([
+      { style: '#marqueefill', rect: [TILE, 2 * TILE, 3 * TILE, 3 * TILE] },
+    ])
+    const outline = strokes.find((stroke) => stroke.style === '#marquee')!
+    expect(outline.segments).toContainEqual([TILE, 2 * TILE, 4 * TILE, 2 * TILE])
+  })
+
+  // The corners are the drag's origin and its current point, in that order and
+  // no other: a drag running up and to the left has to cover the same ground as
+  // the one that ran down and to the right.
+  it('normalises a drag that runs backwards', () => {
+    const { ctx, fills } = fakeContext()
+
+    draw(ctx, { ...onAnEmptyMap(), marquee: { from: { x: 4, y: 5 }, to: { x: 1, y: 2 } } })
+
+    expect(sheets(fills)[0].rect).toEqual([TILE, 2 * TILE, 3 * TILE, 3 * TILE])
+  })
+
+  // World coordinates, fractional, and no cell arithmetic on the way in:
+  // whether the rectangle snaps to cells is the caller's to decide.
+  it('takes its corners where they are, between cells included', () => {
+    const { ctx, fills } = fakeContext()
+
+    draw(ctx, { ...onAnEmptyMap(), marquee: { from: { x: 0.5, y: 0.5 }, to: { x: 2, y: 2 } } })
+
+    expect(sheets(fills)[0].rect).toEqual([TILE / 2, TILE / 2, 1.5 * TILE, 1.5 * TILE])
+  })
+
+  // Over everything, including the halos the rooms under it are gaining as it
+  // sweeps: it is the live gesture, and a translucent sheet only reads as one if
+  // nothing is drawn on top of it.
+  it('draws over the rooms it is sweeping', () => {
+    const { ctx, fills, strokes } = fakeContext()
+    const { project, map } = withMap((tx, project, map) => {
+      paintCells(tx, project, map, ['0,0', '0,1'], { areaId: WORLD_AREA_ID })
+    })
+    const room = [...map.rooms.values()][0]
+
+    draw(ctx, {
+      map,
+      areas: project.areas,
+      lockTypes: project.lockTypes,
+      selectedRooms: new Set([room.id]),
+      marquee: { from: { x: 0, y: 0 }, to: { x: 3, y: 3 } },
+    })
+
+    expect(fills.at(-1)!.style).toBe('#marqueefill')
+    expect(strokes.at(-1)!.style).toBe('#marquee')
   })
 })
 

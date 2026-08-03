@@ -76,6 +76,18 @@ export interface CanvasPalette {
   // chose, so a cool selection would be indistinguishable from a lock on a blue
   // door, and this one has to read as selection on top of any of them.
   selection: string
+  // The marquee's outline and the sheet inside it, while a select drag is live.
+  //
+  // The selection hue rather than `brush`, because the marquee is the one aid
+  // whose result is a selection: it turns into halos in the same colour the
+  // moment it is released, and a cool box becoming warm outlines would read as
+  // two unrelated events.
+  //
+  // Two entries because the fill has to be transparent enough to work over
+  // rooms, walls and icons at once, and the outline has to stay crisp. One
+  // colour with an alpha applied here would put the number in the renderer.
+  marquee: string
+  marqueeFill: string
 }
 
 function readVar(styles: CSSStyleDeclaration, name: string): string {
@@ -104,5 +116,7 @@ export function readCanvasPalette(): CanvasPalette {
     handle: readVar(styles, '--canvas-handle'),
     handleHover: readVar(styles, '--canvas-handle-hover'),
     selection: readVar(styles, '--canvas-selection'),
+    marquee: readVar(styles, '--canvas-marquee'),
+    marqueeFill: readVar(styles, '--canvas-marquee-fill'),
   }
 }

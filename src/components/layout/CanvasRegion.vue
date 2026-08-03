@@ -178,6 +178,11 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       // map must not halo whatever happens to share it here. Rooms, icons and
       // lines can be in the same selection; the renderer takes transitions.
       selected: selectedTransitions(),
+      // The same, for rooms. Halo and handles land on the same room whenever
+      // exactly one is selected in Draw mode, which is why they are drawn in
+      // different colours on different layers rather than sharing either.
+      selectedRooms: selectedRooms(),
+      marquee: null,
       // Handles are drawn at the size `drawZone` grabs them at: the tolerances
       // come from there rather than being chosen here, so the handle and the
       // thing it grabs cannot disagree.
@@ -256,6 +261,18 @@ function selectedTransitions(): ReadonlySet<TransitionId> {
   if (!tab) return EMPTY_SELECTION
   const ids = selection.transitionsOn(tab.id)
   return ids.length === 0 ? EMPTY_SELECTION : new Set(ids)
+}
+
+// The selected rooms on the tab being drawn. Unlike the two below this is not
+// gated on a layer: rooms are the map, so there is no toggle that could hide
+// what is selected.
+const EMPTY_ROOM_SELECTION: ReadonlySet<RoomId> = new Set()
+
+function selectedRooms(): ReadonlySet<RoomId> {
+  const tab = tabsStore.activeTab
+  if (!tab) return EMPTY_ROOM_SELECTION
+  const ids = selection.roomsOn(tab.id)
+  return ids.length === 0 ? EMPTY_ROOM_SELECTION : new Set(ids)
 }
 
 // Icons and lines in one set, because the renderer takes the markup layer as a

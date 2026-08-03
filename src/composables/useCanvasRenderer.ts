@@ -6,6 +6,7 @@ import {
   type BrushPreview,
   type GhostScene,
   type MapScene,
+  type MarqueeRect,
 } from '@/canvas/renderMap'
 import { RULER_THICKNESS, renderRuler, type RulerUnits } from '@/canvas/renderRuler'
 import type { Camera } from '@/canvas/camera'
@@ -14,7 +15,7 @@ import type { TeleportScene } from '@/canvas/teleports'
 import type { BoxPreview } from '@/gestures/boxDrag'
 import type { Bounds } from '@/canvas/viewport'
 import type { CellKey } from '@/core/cell'
-import type { AreaId, LockTypeId, TransitionId } from '@/core/ids'
+import type { AreaId, LockTypeId, RoomId, TransitionId } from '@/core/ids'
 import type { Area, LockType, MapModel } from '@/core/types'
 
 // Owns the imperative half of the canvas: device-pixel sizing, the cached
@@ -58,8 +59,12 @@ export interface SceneInput {
   pendingTeleport: CellKey | null
   // Transitions selected on this map, drawn as a halo behind each.
   selected: ReadonlySet<TransitionId>
-  // Draw/Edit's active room and its handles, or null when nothing is armed.
+  // Rooms selected on this map, drawn as a halo around each one's outline.
+  selectedRooms: ReadonlySet<RoomId>
+  // The room whose resize handles are drawn, or null when none has them.
   handleRoom: HandleRoomScene | null
+  // The marquee's rectangle while a select drag is live, or null.
+  marquee: MarqueeRect | null
   showGrid: boolean
   showRulers: boolean
   rulerUnits: RulerUnits
@@ -131,7 +136,9 @@ export function useCanvasRenderer(targets: CanvasTargets, scene: () => SceneInpu
       boxPreview: current.boxPreview,
       pendingTeleport: current.pendingTeleport,
       selected: current.selected,
+      selectedRooms: current.selectedRooms,
       handleRoom: current.handleRoom,
+      marquee: current.marquee,
       palette: palette.value!,
       showGrid: current.showGrid,
       showTransitions: current.showTransitions,

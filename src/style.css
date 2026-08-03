@@ -64,6 +64,11 @@
    * selection has to stay legible on top of any of them. Opaque rather than
    * translucent, because it is drawn under the marker it surrounds. */
   --canvas-selection: #f0a020;
+  /* The marquee's outline and the sheet inside it. The selection hue, because
+   * the box turns into halos in that colour the moment it is released. The fill
+   * is faint enough to read rooms, walls and icons through all at once. */
+  --canvas-marquee: rgba(240, 160, 32, 0.9);
+  --canvas-marquee-fill: rgba(240, 160, 32, 0.15);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -96,6 +101,8 @@
     --canvas-handle: rgba(128, 170, 255, 0.4);
     --canvas-handle-hover: rgba(128, 170, 255, 0.85);
     --canvas-selection: #ffc14d;
+    --canvas-marquee: rgba(255, 193, 77, 0.9);
+    --canvas-marquee-fill: rgba(255, 193, 77, 0.18);
   }
 }
 
@@ -124,6 +131,8 @@
   --canvas-handle: rgba(64, 112, 224, 0.4);
   --canvas-handle-hover: rgba(64, 112, 224, 0.85);
   --canvas-selection: #f0a020;
+  --canvas-marquee: rgba(240, 160, 32, 0.9);
+  --canvas-marquee-fill: rgba(240, 160, 32, 0.15);
 }
 :root[data-theme='dark'] {
   --bg: #1e1e1e;
@@ -149,6 +158,8 @@
   --canvas-handle: rgba(128, 170, 255, 0.4);
   --canvas-handle-hover: rgba(128, 170, 255, 0.85);
   --canvas-selection: #ffc14d;
+  --canvas-marquee: rgba(255, 193, 77, 0.9);
+  --canvas-marquee-fill: rgba(255, 193, 77, 0.18);
 }
 
 *,

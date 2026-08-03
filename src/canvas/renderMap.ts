@@ -9,7 +9,7 @@ import { parseCell, segmentFromEdge } from '@/core/cell'
 import type { CellKey, EdgeKey } from '@/core/cell'
 import { interiorVertices, outerWalls, resizableRuns } from '@/core/derive/walls'
 import { clamp } from '@/lib/math'
-import type { AreaId, LockTypeId, TransitionId } from '@/core/ids'
+import type { AreaId, LockTypeId, RoomId, TransitionId } from '@/core/ids'
 import type { Area, LockType, MapModel, Room, WallStyle } from '@/core/types'
 import type { BoxPreview } from '@/gestures/boxDrag'
 
@@ -125,8 +125,35 @@ export interface MapScene {
   // (half a teleport is not a smaller teleport), and it arrives as its own
   // scene input for the same reason `boxPreview` does.
   pendingTeleport: CellKey | null
+  // The rooms currently selected on this map, as a halo around each one's
+  // outline. Ids rather than rooms, resolved against `map` here: the outline is
+  // derived from the room the map already holds, so passing shapes would be a
+  // second copy of it to keep in step.
+  selectedRooms: ReadonlySet<RoomId>
   // The room drawn with resize handles, or null when none is.
   handleRoom: HandleRoomScene | null
+  // The marquee's rectangle while a select drag is live, or null.
+  //
+  // The third thing on the canvas that is in no model, and it is here for the
+  // reason `boxPreview` is: a marquee that has caught nothing yet applies
+  // nothing, so without an outline a drag that is working and an app that has
+  // stopped look identical.
+  marquee: MarqueeRect | null
+}
+
+// The marquee, in world coordinates measured in cells, fractional.
+//
+// World rather than screen so it survives a pan or a zoom mid-drag, and
+// fractional rather than cell-quantised so the corners can sit wherever the
+// pointer is. Snapping the rectangle to whole cells is then a caller's decision
+// and costs nothing here.
+//
+// The two corners are the drag's origin and its current point, in that order
+// and in no other sense ordered: the drag runs in any of four directions, and
+// normalising is this file's job.
+export interface MarqueeRect {
+  from: { x: number; y: number }
+  to: { x: number; y: number }
 }
 
 // The handles on one room: one per resizable edge run, plus a target per
@@ -364,6 +391,13 @@ export function renderMap(
   // that: the pasteboard fill would otherwise eat it.
   drawShafts(ctx, scene, shafts)
   drawRoomFills(ctx, scene, map)
+  // A selected room's halo shares the slot with the transition halo below, and
+  // for the same reason: it is the room's own outline drawn wider, so the wall
+  // has to paint back over the middle of it.
+  //
+  // First of the two, so a selected door on a selected room's wall reads as the
+  // door it is rather than as a bulge in the room's outline.
+  if (scene.selectedRooms.size > 0) drawRoomSelection(ctx, scene, map)
   // The selection halo goes here: over the room fills, under the walls and
   // under every transition it surrounds. That ordering is what makes it a halo
   // rather than a highlight: it is the same shape drawn wider, so it can only
@@ -429,6 +463,10 @@ export function renderMap(
   // create: the box is the gesture, and the gesture has to stay legible on top
   // of its own result.
   if (scene.boxPreview) drawBoxPreview(ctx, scene, scene.boxPreview)
+  // Last, over the rooms it is sweeping and over the halos they are gaining as
+  // it goes: it is the live gesture, and a translucent sheet the map shows
+  // through is only readable if nothing is drawn on top of it.
+  if (scene.marquee) drawMarquee(ctx, scene, scene.marquee)
 }
 
 // Draws one room's resize handles: the grab zones from `drawZone.ts`, made
@@ -545,6 +583,41 @@ function drawBoxPreview(ctx: CanvasRenderingContext2D, scene: MapScene, preview:
   ctx.lineWidth = 1
 }
 
+// A selected room's halo: the room's own outline, drawn wider and in the same
+// warm colour every other halo uses. A room has no marker of its own to
+// thicken, and its shape is the outline of its cells, so that outline is what
+// gets drawn wider.
+//
+// One path per room rather than one over the whole selection, which is what
+// makes two adjacent selected rooms read as two: a shared boundary is an outer
+// wall of both, so each traces its own copy and the line between them survives.
+// Tracing the union would drop exactly that edge and merge the pair into a blob.
+//
+// Doorways are not cut out of it, where `drawWalls` cuts them from the wall.
+// The halo marks the room's shape, and its shape is its boundary rather than its
+// walls minus their openings, so the outline stays continuous through a door.
+//
+// Square caps because the outline is traced edge by edge: each segment has to
+// reach the corner the next one starts from, or a halo this thick shows a notch
+// at every turn.
+function drawRoomSelection(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
+  ctx.strokeStyle = scene.palette.selection
+  ctx.lineWidth = wallWidth(scene.camera.zoom) + SELECTION_HALO_PX * 2
+  ctx.lineCap = 'square'
+  ctx.setLineDash([])
+
+  for (const roomId of scene.selectedRooms) {
+    const room = map.rooms.get(roomId)
+    if (!room) continue
+    ctx.beginPath()
+    for (const edge of outerWalls(room)) traceEdge(ctx, edge, scene)
+    ctx.stroke()
+  }
+
+  ctx.lineCap = 'butt'
+  ctx.lineWidth = 1
+}
+
 // The selection halo: each selected transition's own shape, drawn wider and in
 // one warm colour underneath it.
 //
@@ -632,9 +705,47 @@ function drawPendingTeleport(ctx: CanvasRenderingContext2D, scene: MapScene, cel
   ctx.lineWidth = 1
 }
 
-// A rectangle as a path, for the three outlines that are chrome rather than
-// map: the brush footprint, the rubber-band box, and the pending teleport's
-// origin. Deliberately not `strokeRect`: three separate fake contexts exist
+// The marquee: a translucent sheet over everything it has swept, plus an
+// outline so its edges are exact.
+//
+// The one rectangle here that is filled, because it is the one whose interior
+// carries the meaning. The brush footprint and the rubber-band box both say
+// "these cells" and can say it with an outline; this says "everything inside
+// me", and the fill is how far that reaches.
+//
+// No cell arithmetic anywhere: the corners are world points already, where a
+// `CellKey` names a cell that has to be grown by one to cover itself.
+function drawMarquee(ctx: CanvasRenderingContext2D, scene: MapScene, marquee: MarqueeRect) {
+  const { from, to } = marquee
+  const topLeft = worldToScreen(
+    Math.min(from.x, to.x),
+    Math.min(from.y, to.y),
+    scene.camera,
+    scene.tileSize,
+  )
+  const bottomRight = worldToScreen(
+    Math.max(from.x, to.x),
+    Math.max(from.y, to.y),
+    scene.camera,
+    scene.tileSize,
+  )
+  const width = bottomRight.x - topLeft.x
+  const height = bottomRight.y - topLeft.y
+
+  ctx.fillStyle = scene.palette.marqueeFill
+  ctx.fillRect(topLeft.x, topLeft.y, width, height)
+
+  ctx.strokeStyle = scene.palette.marquee
+  ctx.lineWidth = BOX_PREVIEW_PX
+  ctx.setLineDash([])
+  traceRect(ctx, topLeft.x, topLeft.y, width, height)
+  ctx.stroke()
+  ctx.lineWidth = 1
+}
+
+// A rectangle as a path, for the outlines that are chrome rather than map: the
+// brush footprint, the rubber-band box, the pending teleport's origin and the
+// marquee. Deliberately not `strokeRect`: three separate fake contexts exist
 // in the tests, and every new context method has to be added to all three or
 // one suite fails on a missing function.
 //
