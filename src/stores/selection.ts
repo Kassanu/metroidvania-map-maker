@@ -85,6 +85,22 @@ export const useSelectionStore = defineStore('selection', () => {
     )
   }
 
+  // Union, not toggle: what a shift-marquee means. Sweeping over a room that is
+  // already selected leaves it selected, where a shift-click on it would remove
+  // it. The two gestures differ because a sweep covers whatever it passes over
+  // and a click names one thing.
+  //
+  // Additions keep selection order and land after what was already there.
+  function addAll(refs: ObjectRef[], mapId: MapId): void {
+    if (selectionMapId.value !== mapId) {
+      set(refs, mapId)
+      return
+    }
+    const fresh = refs.filter((ref) => !isSelected(ref))
+    if (fresh.length === 0) return
+    replace([...items.value, ...fresh])
+  }
+
   // What a click means, for every mode. A mode decides only which of its
   // targets are selectable and hands the ref, or null for a click that found
   // nothing; this decides the rest, so no two modes can disagree about it.
@@ -198,6 +214,7 @@ export const useSelectionStore = defineStore('selection', () => {
     isEmpty,
     isSelected: computed(() => (ref: ObjectRef) => isSelected(ref)),
     set,
+    addAll,
     toggle,
     clear,
     clickSelect,

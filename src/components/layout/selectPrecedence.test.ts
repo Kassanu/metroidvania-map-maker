@@ -216,6 +216,83 @@ describe('Select precedence table', () => {
     })
   })
 
+  // The Drag column of the empty row. The object rows drag into a move, which
+  // does not exist yet, so a press on one is still only a click.
+  describe('a marquee', () => {
+    async function sweep(
+      viewport: HTMLElement,
+      from: PointerEventInit,
+      to: PointerEventInit,
+      shiftKey = false,
+    ) {
+      viewport.dispatchEvent(press('pointerdown', { ...from, shiftKey }))
+      viewport.dispatchEvent(press('pointermove', to))
+      viewport.dispatchEvent(press('pointerup', to))
+      await nextTick()
+      await nextTick()
+    }
+
+    it('selects every room it touches, and none of the markup under it', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId, roomA, roomC } = fixture()
+
+      // From bare grid past row 4, so the band covers the line and the icon as
+      // well as all three rooms.
+      await sweep(viewport, at(5.5, 5.5), at(0.5, 0.5))
+
+      expect(selection().roomsOn(mapId)).toEqual(expect.arrayContaining([roomA, roomC]))
+      expect(selection().selected).toHaveLength(3)
+    })
+
+    it('unions with the selection when shift is held', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA, icon } = fixture()
+
+      await click(viewport, at(1.5, 2.5))
+      // From the bare row between the two banks of rooms, up over room A alone.
+      await sweep(viewport, at(1.5, 1.5), at(0.5, 0.5), true)
+
+      expect(selection().selected).toEqual([
+        { kind: 'icon', id: icon },
+        { kind: 'room', id: roomA },
+      ])
+    })
+
+    // Out and back is a drag that swept nothing, not a click: it lands on the
+    // origin cell, which is bare grid, so it selects nothing. A plain marquee
+    // replaces, so that clears.
+    it('clears the selection when the drag returns to where it started', async () => {
+      const { viewport } = await mountCanvas()
+      fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      viewport.dispatchEvent(press('pointerdown', at(9.5, 9.5)))
+      viewport.dispatchEvent(press('pointermove', at(0.5, 0.5)))
+      viewport.dispatchEvent(press('pointermove', at(9.5, 9.5)))
+      viewport.dispatchEvent(press('pointerup', at(9.5, 9.5)))
+      await nextTick()
+
+      expect(selection().isEmpty).toBe(true)
+    })
+
+    // `Esc` ends the press, not just the band. The release that follows must
+    // not fall through to the click on bare grid, which would deselect exactly
+    // what the abort was protecting.
+    it('abandons the band on Esc and keeps the selection, release included', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA } = fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      viewport.dispatchEvent(press('pointerdown', at(9.5, 9.5)))
+      viewport.dispatchEvent(press('pointermove', at(5.5, 5.5)))
+      expect(resolveEscape()).toBe(true)
+      viewport.dispatchEvent(press('pointerup', at(5.5, 5.5)))
+      await nextTick()
+
+      expect(selection().selected).toEqual([{ kind: 'room', id: roomA }])
+    })
+  })
+
   // Cuts across every row.
   describe('every target', () => {
     // The one mode where the secondary button does not erase. It opens the

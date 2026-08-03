@@ -104,6 +104,46 @@ describe('useSelectionStore', () => {
     })
   })
 
+  describe('addAll', () => {
+    // Union, not toggle, which is the difference between a sweep and a click:
+    // sweeping over something already selected leaves it selected.
+    it('adds what is missing and leaves what is already there', () => {
+      const selection = useSelectionStore()
+      const { mapId, roomA, roomB } = populate()
+      selection.set([{ kind: 'room', id: roomA.id }], mapId)
+
+      selection.addAll(
+        [
+          { kind: 'room', id: roomA.id },
+          { kind: 'room', id: roomB.id },
+        ],
+        mapId,
+      )
+
+      expect(selection.selected).toEqual([
+        { kind: 'room', id: roomA.id },
+        { kind: 'room', id: roomB.id },
+      ])
+    })
+
+    it('replaces rather than accumulating when the tab changed', () => {
+      const selection = useSelectionStore()
+      const model = useModelStore()
+      const { mapId, room } = paintRoom(['0,0'])
+      selection.set([{ kind: 'room', id: room.id }], mapId)
+
+      const other = model.run('Add map', PROJECT_SCOPE, (tx) => addMap(tx, model.project, 'Caves'))
+      const elsewhere = model.run('Paint', mapScope(other.id), (tx) =>
+        paintCells(tx, model.project, other, ['0,0'], { areaId: WORLD_AREA_ID }),
+      )
+
+      selection.addAll([{ kind: 'room', id: elsewhere.id }], other.id)
+
+      expect(selection.selected).toEqual([{ kind: 'room', id: elsewhere.id }])
+      expect(selection.mapId).toBe(other.id)
+    })
+  })
+
   // The click policy every mode routes through, as its four cases. A mode
   // supplies only the ref, so these four are the whole of what a click means.
   describe('clickSelect', () => {
@@ -385,6 +425,8 @@ describe('useSelectionStore', () => {
     selection.clickSelect({ kind: 'icon', id: icon.id }, mapId, true)
     agrees()
     selection.clickSelect({ kind: 'cell', id: '0,0' }, mapId, false)
+    agrees()
+    selection.addAll([{ kind: 'room', id: roomA.id }], mapId)
     agrees()
 
     // Pruning writes the list without anyone asking it to, which makes it the

@@ -10,11 +10,11 @@
 // has been drawn. Storing bounds separately creates a second source of truth
 // that goes stale when a room moves. Computed here and memoised per revision.
 
-import { computeBounds } from './walls'
+import { computeBounds, roomBounds } from './walls'
 import type { CellBounds } from './walls'
 import { parseCell } from '../cell'
 import type { CellKey } from '../cell'
-import type { AreaId } from '../ids'
+import type { AreaId, RoomId } from '../ids'
 import type { MapModel } from '../types'
 
 export type { CellBounds }
@@ -83,4 +83,31 @@ export function boundsOfCells(cells: Iterable<CellKey>): CellBounds | null {
 export function boundsContain(bounds: CellBounds, cell: CellKey): boolean {
   const { x, y } = parseCell(cell)
   return x >= bounds.minCol && x <= bounds.maxCol && y >= bounds.minRow && y <= bounds.maxRow
+}
+
+function boundsOverlap(a: CellBounds, b: CellBounds): boolean {
+  return (
+    a.minCol <= b.maxCol && a.maxCol >= b.minCol && a.minRow <= b.maxRow && a.maxRow >= b.minRow
+  )
+}
+
+// Every room with at least one cell inside `bounds`, in map order.
+//
+// Touching, not containment: one cell inside the box is the whole room.
+//
+// The box test only rejects. An L-shaped room's bounding box can overlap while
+// none of its cells do, so an overlap is followed by a scan of that room's
+// cells; a miss skips the scan entirely.
+export function roomsOverlapping(map: MapModel, bounds: CellBounds): RoomId[] {
+  const found: RoomId[] = []
+  for (const room of map.rooms.values()) {
+    const box = roomBounds(room)
+    if (!box || !boundsOverlap(box, bounds)) continue
+    for (const cell of room.cells) {
+      if (!boundsContain(bounds, cell)) continue
+      found.push(room.id)
+      break
+    }
+  }
+  return found
 }

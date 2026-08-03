@@ -7,7 +7,7 @@ import {
   transformCells,
 } from './derive/connectivity'
 import { computeEdgeRuns, computeOuterWalls, interiorVertices, resizableRuns } from './derive/walls'
-import { contentBounds, areaBoundsOnMap } from './derive/bounds'
+import { contentBounds, areaBoundsOnMap, roomsOverlapping } from './derive/bounds'
 import { WORLD_AREA_ID } from './ids'
 import { grid, makeRoom, rect, setup, sorted } from './testUtils'
 
@@ -228,5 +228,56 @@ describe('bounds', () => {
       maxCol: 4,
       maxRow: 3,
     })
+  })
+})
+
+describe('rooms overlapping a box', () => {
+  const box = (minCol: number, minRow: number, maxCol: number, maxRow: number) => ({
+    minCol,
+    minRow,
+    maxCol,
+    maxRow,
+  })
+
+  it('takes a room the box merely touches, and leaves the ones it misses', () => {
+    const { project, map } = setup()
+    const touched = makeRoom(project, map, rect(0, 0, 3, 3))
+    makeRoom(project, map, rect(9, 9, 2, 2))
+
+    // One cell of the 3x3 inside the box is the whole room.
+    expect(roomsOverlapping(map, box(2, 2, 4, 4))).toEqual([touched.id])
+  })
+
+  it('is empty for a box over bare grid', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, rect(0, 0, 2, 2))
+
+    expect(roomsOverlapping(map, box(5, 5, 8, 8))).toEqual([])
+  })
+
+  // The bounding box only rejects. An L has a square box, and a marquee in the
+  // notch overlaps that box while touching none of the room's cells.
+  it('rejects a box inside the notch of an L, whose bounding box it overlaps', () => {
+    const { project, map } = setup()
+    const shape = makeRoom(
+      project,
+      map,
+      grid(`
+      #..
+      #..
+      ###
+    `),
+    )
+
+    expect(roomsOverlapping(map, box(1, 0, 2, 1))).toEqual([])
+    expect(roomsOverlapping(map, box(1, 2, 2, 2))).toEqual([shape.id])
+  })
+
+  it('answers in map order, whichever corner the box was dragged from', () => {
+    const { project, map } = setup()
+    const first = makeRoom(project, map, rect(0, 0, 1, 1))
+    const second = makeRoom(project, map, rect(2, 0, 1, 1))
+
+    expect(roomsOverlapping(map, box(0, 0, 2, 0))).toEqual([first.id, second.id])
   })
 })

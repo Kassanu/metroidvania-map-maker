@@ -54,4 +54,30 @@ test.describe('Select mode', () => {
     expect(await undoLabel(page)).toBe('Undo Delete Room')
     expect(errors).toEqual([])
   })
+
+  // A marquee always leaves the element it started on, and the pointer only
+  // keeps reporting because the drag captures at press. Without capture the
+  // moves stop at the first boundary and no band is ever drawn, which is the
+  // one thing about this gesture jsdom cannot show. The band is swept up and
+  // out over the ruler strip, and what it caught is read back through `Del`.
+  test('sweeps rooms with a band that leaves the canvas', async ({ page }) => {
+    const { errors } = await openApp(page)
+    await page.keyboard.press('2')
+    const grid = await gridMapping(page)
+    const viewport = await page.locator('.canvas-viewport').boundingBox()
+    if (!viewport) throw new Error('no canvas viewport')
+
+    const start = grid.at(BARE_GRID.x, BARE_GRID.y)
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(start.x - 40, start.y - 40)
+    // Past the top edge, onto the ruler: a different element from the one the
+    // press landed on.
+    await page.mouse.move(grid.at(IN_A_ROOM.x, IN_A_ROOM.y).x, viewport.y - 20)
+    await page.mouse.up()
+
+    await page.keyboard.press('Delete')
+    expect(await undoLabel(page)).toBe('Undo Delete Room')
+    expect(errors).toEqual([])
+  })
 })

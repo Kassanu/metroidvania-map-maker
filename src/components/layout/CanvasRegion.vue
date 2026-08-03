@@ -32,6 +32,7 @@ import {
 } from '@/canvas/markupTarget'
 import IconPickerPopover from './IconPickerPopover.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
+import { beginMarquee, type Marquee } from '@/gestures/marquee'
 import { beginLineStroke, type LineStroke } from '@/gestures/lineStroke'
 import { beginIconDrag, type IconDrag } from '@/gestures/iconDrag'
 import { beginLinePeel } from '@/gestures/linePeel'
@@ -143,6 +144,11 @@ let gesture: GhostGesture | null = null
 // other gesture's pending result is visible in the speculative model, and this
 // one's rectangle is not.
 let boxDrag: BoxDrag | null = null
+// The live marquee, kept apart from `gesture` for a stronger reason than the
+// box drag is: this one has no ghost at all. It mutates no model, so there is
+// nothing absorbing and nothing to roll back, and the rectangle is the whole of
+// what it has to show.
+let marquee: Marquee | null = null
 // The icon a drag is currently moving, or null. A ref rather than a plain
 // `let` because the cursor is DOM state: unlike the gestures above, this one
 // has to make Vue re-evaluate the binding while the pointer is down.
@@ -190,7 +196,7 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       // exactly one is selected in Draw mode, which is why they are drawn in
       // different colours on different layers rather than sharing either.
       selectedRooms: selectedRooms(),
-      marquee: null,
+      marquee: marquee?.rect ?? null,
       // Handles are drawn at the size `drawZone` grabs them at: the tolerances
       // come from there rather than being chosen here, so the handle and the
       // thing it grabs cannot disagree.
@@ -798,11 +804,17 @@ function handleSelectPress(event: PointerEvent) {
   // Read at press time with the target, for the same reason: a click means the
   // modifier held when it started, not whatever was let go of first.
   const additive = event.shiftKey
+  const world = worldPoint(event)
   event.preventDefault()
+
+  // A drag from bare grid is a marquee. A drag from an object is a move, which
+  // does not exist yet, so a press on one starts nothing and stays a click.
+  const band = target.kind === 'empty' && world ? beginMarquee(tab.id, world, additive, draw) : null
+  marquee = band
 
   let leftCell = false
 
-  startPointerDrag(event, {
+  const accepted = startPointerDrag(event, {
     buttons: [event.button],
     deadZone: DRAG_DEAD_ZONE,
     resolveTarget: () => container.value,
@@ -810,14 +822,33 @@ function handleSelectPress(event: PointerEvent) {
       const point = worldPoint(context.event)
       if (!point) return
       if (cellKey(Math.floor(point.x), Math.floor(point.y)) !== target.cell) leftCell = true
+      band?.moveTo(point)
     },
     onEnd: () => {
-      if (leftCell) return
+      if (band) {
+        // Read before settling: `Esc` mid-press ends the whole press, not just
+        // the band, so the release that follows must not fall through to the
+        // click. A click on bare grid deselects, which is exactly the selection
+        // the abort was protecting.
+        const aborted = band.settled
+        if (leftCell) band.commit()
+        else band.cancel()
+        if (marquee === band) marquee = null
+        draw()
+        if (aborted || leftCell) return
+      } else if (leftCell) {
+        return
+      }
       // Every row through the one policy, cell rows included: what a click means
       // is the same question in all four modes.
       selection.clickSelect(selectRefOf(target), tab.id, additive)
     },
   })
+
+  if (!accepted && band) {
+    band.cancel()
+    marquee = null
+  }
 }
 
 function handlePointerDown(event: PointerEvent) {
