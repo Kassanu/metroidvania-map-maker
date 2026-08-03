@@ -250,9 +250,15 @@ export interface LineObject {
 
 // Anything selectable, as the selection set stores it. Kind plus id, so the
 // chrome can hold a selection without holding model object references.
+//
+// A cell carries a CellKey where the others carry an id, which is the honest
+// shape rather than a compromise: a cell is not a stored object, so its
+// coordinate is its name. What can go stale under it is ownership, not
+// existence, and cellOwner answers that.
 export type ObjectRef =
   | { kind: 'room'; id: RoomId }
   | { kind: 'area'; id: AreaId }
   | { kind: 'transition'; id: TransitionId }
   | { kind: 'icon'; id: IconId }
   | { kind: 'line'; id: LineId }
+  | { kind: 'cell'; id: CellKey }

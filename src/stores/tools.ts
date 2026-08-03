@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia'
 import { DEFAULT_BRUSH_SIZE, clampBrushSize } from '@/canvas/brush'
+import { useSelectionStore } from './selection'
 import type { WallStyle } from '@/core/types'
 import type { SubMode } from '@/gestures/subMode'
+
+// What Select mode selects. A hard branch, not a filter: the two arms reach
+// different targets, hold different things, move by different ops and delete by
+// different ops. It shares a word with Draw's `SubMode` and nothing else, which
+// is why it is a separate field rather than more members of that union.
+export type SelectSubMode = 'rooms' | 'cells'
 
 // The tool state the per-mode toolbar section owns.
 //
@@ -34,6 +41,9 @@ export const useToolsStore = defineStore('tools', {
     // persist: a user who locked to Resize-only, closed the app and came back
     // would find painting silently broken with no memory of why.
     subMode: 'auto' as SubMode,
+    // Whole rooms by default: it is the granularity the mode is named after,
+    // and the one where every gesture has an obvious meaning.
+    selectSubMode: 'rooms' as SelectSubMode,
   }),
   actions: {
     setWallStyle(style: WallStyle) {
@@ -41,6 +51,20 @@ export const useToolsStore = defineStore('tools', {
     },
     setSubMode(subMode: SubMode) {
       this.subMode = subMode
+    },
+    // Switching granularity clears the selection, because `Delete` means
+    // something different on each side: Rooms removes the objects, Cells erases
+    // cells and can split or destroy a room through the usual cascade. Carrying
+    // a selection across would leave a destructive key pointed at something the
+    // user never selected in the granularity they are now in.
+    //
+    // The clear lives here rather than in the toolbar so every future caller
+    // gets it, and re-selecting the granularity already in use is a no-op:
+    // pressing the active half of a toggle must not wipe a selection.
+    setSelectSubMode(subMode: SelectSubMode) {
+      if (this.selectSubMode === subMode) return
+      this.selectSubMode = subMode
+      useSelectionStore().clear()
     },
     toggleErase() {
       this.erase = !this.erase

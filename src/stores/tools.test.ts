@@ -4,6 +4,10 @@ import { setActivePinia } from 'pinia'
 import { createTestPinia } from '@/test-setup'
 import { useToolsStore } from './tools'
 import { useModeStore } from './mode'
+import { useSelectionStore } from './selection'
+import { mapScope, useModelStore } from './model'
+import { paintCells } from '@/core/ops/rooms'
+import { WORLD_AREA_ID } from '@/core/ids'
 
 describe('tools store', () => {
   beforeEach(() => {
@@ -44,6 +48,47 @@ describe('tools store', () => {
       const tools = useToolsStore()
       tools.setBrushSize(2.5)
       expect(Number.isInteger(tools.brushSize)).toBe(true)
+    })
+  })
+
+  // Rooms and cells are different tables, different move ops and different
+  // deletes, so the granularity cannot carry a selection across.
+  describe('select sub-mode', () => {
+    function selectRoom() {
+      const model = useModelStore()
+      const selection = useSelectionStore()
+      const mapId = model.project.maps[0]
+      const room = model.run('Paint', mapScope(mapId), (tx) =>
+        paintCells(tx, model.project, model.project.mapsById.get(mapId)!, ['0,0'], {
+          areaId: WORLD_AREA_ID,
+        }),
+      )
+      selection.set([{ kind: 'room', id: room.id }], mapId)
+      return selection
+    }
+
+    it('starts on rooms', () => {
+      expect(useToolsStore().selectSubMode).toBe('rooms')
+    })
+
+    // Otherwise the next `Delete` does something different from what the user
+    // last watched themselves select.
+    it('clears the selection when the granularity changes', () => {
+      const tools = useToolsStore()
+      const selection = selectRoom()
+
+      tools.setSelectSubMode('cells')
+      expect(selection.isEmpty).toBe(true)
+    })
+
+    // A toolbar toggle can re-fire the half already active, and that must not
+    // wipe what is selected.
+    it('leaves the selection alone when set to the granularity already in use', () => {
+      const tools = useToolsStore()
+      const selection = selectRoom()
+
+      tools.setSelectSubMode('rooms')
+      expect(selection.selected).toHaveLength(1)
     })
   })
 

@@ -246,36 +246,27 @@ function markupForced(): boolean {
 }
 
 // The selected transitions on the tab being drawn, as a set for the renderer.
-//
-// Two filters, and both matter. The selection is per tab, so a selection
-// belonging to another map must halo nothing here even though the store still
-// holds it: ids are unique across the project, but "selected somewhere else" is
-// not "selected here". And the selection is `ObjectRef[]` because rooms, icons
-// and lines share it; only the transitions concern this layer.
+// The store's selectors answer only for the map asked about, so a selection
+// belonging to another tab halos nothing here.
 const EMPTY_SELECTION: ReadonlySet<TransitionId> = new Set()
 const EMPTY_MARKUP_SELECTION: ReadonlySet<string> = new Set()
 
 function selectedTransitions(): ReadonlySet<TransitionId> {
   const tab = tabsStore.activeTab
-  if (!tab || selection.mapId !== tab.id || selection.isEmpty) return EMPTY_SELECTION
-  const ids = new Set<TransitionId>()
-  for (const item of selection.selected) {
-    if (item.kind === 'transition') ids.add(item.id)
-  }
-  return ids
+  if (!tab) return EMPTY_SELECTION
+  const ids = selection.transitionsOn(tab.id)
+  return ids.length === 0 ? EMPTY_SELECTION : new Set(ids)
 }
 
-// The same filter for the markup half. Its own set rather than a widened
-// `selectedTransitions`, because the renderer gates the two behind different
-// layer toggles and one set would have to be split there instead.
+// Icons and lines in one set, because the renderer takes the markup layer as a
+// unit. Kept separate from the transitions above rather than widened into one
+// set, since the two are gated behind different layer toggles and would have to
+// be split apart again there.
 function selectedMarkup(): ReadonlySet<string> {
   const tab = tabsStore.activeTab
-  if (!tab || selection.mapId !== tab.id || selection.isEmpty) return EMPTY_MARKUP_SELECTION
-  const ids = new Set<string>()
-  for (const item of selection.selected) {
-    if (item.kind === 'icon' || item.kind === 'line') ids.add(item.id)
-  }
-  return ids
+  if (!tab) return EMPTY_MARKUP_SELECTION
+  const ids: string[] = [...selection.iconsOn(tab.id), ...selection.linesOn(tab.id)]
+  return ids.length === 0 ? EMPTY_MARKUP_SELECTION : new Set(ids)
 }
 
 // Pointer position within the canvas: what anchored zoom and cell tracking
@@ -1557,17 +1548,14 @@ watch([() => themeStore.mode, prefersDark], () => repaintForTheme())
 useHotkeyAction('deleteSelection', () => {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
-  if (!tab || !map || selection.mapId !== tab.id) return
+  if (!tab || !map) return
 
-  const transitions = [...selectedTransitions()]
-  const rooms: RoomId[] = []
-  const icons: IconId[] = []
-  const lines: LineId[] = []
-  for (const item of selection.selected) {
-    if (item.kind === 'room') rooms.push(item.id)
-    if (item.kind === 'icon') icons.push(item.id)
-    if (item.kind === 'line') lines.push(item.id)
-  }
+  // The selectors answer for this tab only, so a selection left on another tab
+  // deletes nothing here.
+  const transitions = selection.transitionsOn(tab.id)
+  const rooms = selection.roomsOn(tab.id)
+  const icons = selection.iconsOn(tab.id)
+  const lines = selection.linesOn(tab.id)
   if (rooms.length + transitions.length + icons.length + lines.length === 0) return
 
   // One transaction for the whole selection, not one each: deleting three doors

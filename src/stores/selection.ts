@@ -13,19 +13,36 @@
 // handles on.
 
 import { defineStore } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { useModelStore } from './model'
 import { farEndsOnMap } from '@/core/farEnds'
+import type { CellKey } from '@/core/cell'
 import type { MapModel, ObjectRef } from '@/core/types'
-import type { MapId, RoomId, TransitionId } from '@/core/ids'
+import type { IconId, LineId, MapId, RoomId, TransitionId } from '@/core/ids'
 
 function sameRef(a: ObjectRef, b: ObjectRef): boolean {
   return a.kind === b.kind && a.id === b.id
 }
 
+// Kind and id together, because ids are only unique within a kind and a cell
+// key is not unique at all. Kinds contain no colon, so the join is unambiguous.
+function refKey(ref: ObjectRef): string {
+  return `${ref.kind}:${ref.id}`
+}
+
 export const useSelectionStore = defineStore('selection', () => {
   const model = useModelStore()
   const items = ref<ObjectRef[]>([])
+  // Membership, derived from `items` and never written on its own: every
+  // assignment to the list goes through `replace`, which rebuilds this.
+  //
+  // It exists because `isSelected` is called once per cell per draw and a
+  // marquee re-runs the lot on every pointer move, which a linear scan of
+  // `items` turns into a per-frame O(selection x cells) cost. `shallowRef`
+  // holding a fresh Set rather than a reactive one: the whole set is replaced
+  // on every change, so tracking the ref is enough and `has` stays a raw
+  // lookup.
+  const index = shallowRef<ReadonlySet<string>>(new Set())
   // Selection is per-tab: the objects on the tab you are looking at. Switching
   // away and back does not restore it. A `ref`, not a plain `let`, because the
   // `mapId` getter below is a `computed`. A non-reactive backing value would
@@ -35,17 +52,25 @@ export const useSelectionStore = defineStore('selection', () => {
   const selected = computed<readonly ObjectRef[]>(() => items.value)
   const isEmpty = computed(() => items.value.length === 0)
 
+  // The one place the list is assigned. The array carries order; the index
+  // carries membership, and the two cannot drift because neither is written
+  // anywhere else.
+  function replace(next: ObjectRef[]): void {
+    items.value = next
+    index.value = new Set(next.map(refKey))
+  }
+
   function isSelected(ref: ObjectRef): boolean {
-    return items.value.some((item) => sameRef(item, ref))
+    return index.value.has(refKey(ref))
   }
 
   function set(next: ObjectRef[], mapId: MapId): void {
     selectionMapId.value = mapId
-    items.value = next
+    replace(next)
   }
 
   function clear(): void {
-    items.value = []
+    replace([])
   }
 
   // Shift-click: add if absent, remove if present. The gesture layer decides
@@ -55,9 +80,9 @@ export const useSelectionStore = defineStore('selection', () => {
       set([ref], mapId)
       return
     }
-    items.value = isSelected(ref)
-      ? items.value.filter((item) => !sameRef(item, ref))
-      : [...items.value, ref]
+    replace(
+      isSelected(ref) ? items.value.filter((item) => !sameRef(item, ref)) : [...items.value, ref],
+    )
   }
 
   // What a click means, for every mode. A mode decides only which of its
@@ -90,6 +115,62 @@ export const useSelectionStore = defineStore('selection', () => {
     return only.kind === 'room' ? only.id : null
   }
 
+  // The selected objects of one kind, on the tab asked about, in selection
+  // order.
+  //
+  // Each takes a map for the reason `soleRoomOn` does, and for cells it is the
+  // difference between empty and wrong: a stale room or icon id simply fails to
+  // match anything on another map, but `3,4` names a cell on every map there
+  // is, so an unguarded cell selector would light up the wrong tab.
+  //
+  // Written out per kind rather than derived from a kind argument, because each
+  // one's return type is the point: a caller gets RoomId[] to hand to a room op,
+  // not a union it has to narrow again.
+  function roomsOn(mapId: MapId): RoomId[] {
+    const out: RoomId[] = []
+    if (selectionMapId.value !== mapId) return out
+    for (const item of items.value) {
+      if (item.kind === 'room') out.push(item.id)
+    }
+    return out
+  }
+
+  function cellsOn(mapId: MapId): CellKey[] {
+    const out: CellKey[] = []
+    if (selectionMapId.value !== mapId) return out
+    for (const item of items.value) {
+      if (item.kind === 'cell') out.push(item.id)
+    }
+    return out
+  }
+
+  function transitionsOn(mapId: MapId): TransitionId[] {
+    const out: TransitionId[] = []
+    if (selectionMapId.value !== mapId) return out
+    for (const item of items.value) {
+      if (item.kind === 'transition') out.push(item.id)
+    }
+    return out
+  }
+
+  function iconsOn(mapId: MapId): IconId[] {
+    const out: IconId[] = []
+    if (selectionMapId.value !== mapId) return out
+    for (const item of items.value) {
+      if (item.kind === 'icon') out.push(item.id)
+    }
+    return out
+  }
+
+  function linesOn(mapId: MapId): LineId[] {
+    const out: LineId[] = []
+    if (selectionMapId.value !== mapId) return out
+    for (const item of items.value) {
+      if (item.kind === 'line') out.push(item.id)
+    }
+    return out
+  }
+
   // A selection can outlive the thing it points at: undo removes a room, a
   // delete cascades, a file is opened. Having every op that can destroy an
   // object also prune the selection is the version that eventually misses one.
@@ -101,11 +182,13 @@ export const useSelectionStore = defineStore('selection', () => {
     if (items.value.length === 0) return
     const map = selectionMapId.value ? model.project.mapsById.get(selectionMapId.value) : undefined
     if (!map) {
-      items.value = []
+      replace([])
       return
     }
+    // One pass over the selection, one hash lookup each: a cell selection can
+    // be large, and asking the map about each item must not walk the map.
     const alive = items.value.filter((item) => exists(item, map))
-    if (alive.length !== items.value.length) items.value = alive
+    if (alive.length !== items.value.length) replace(alive)
   }
 
   watch([() => model.project, () => model.rev], prune, { flush: 'sync' })
@@ -119,6 +202,11 @@ export const useSelectionStore = defineStore('selection', () => {
     clear,
     clickSelect,
     soleRoomOn: computed(() => soleRoomOn),
+    roomsOn: computed(() => roomsOn),
+    cellsOn: computed(() => cellsOn),
+    transitionsOn: computed(() => transitionsOn),
+    iconsOn: computed(() => iconsOn),
+    linesOn: computed(() => linesOn),
     // The tab the current selection belongs to, so the canvas can tell whether
     // what it is drawing is the selected map's.
     mapId: computed(() => selectionMapId.value),
@@ -133,6 +221,11 @@ function exists(ref: ObjectRef, map: MapModel): boolean {
       return map.icons.has(ref.id)
     case 'line':
       return map.lines.has(ref.id)
+    // A cell is always there; what it can lose is an owner. Erased back to bare
+    // grid it cannot be moved, cut or erased any further, so it drops out the
+    // same way a deleted room does.
+    case 'cell':
+      return map.cellOwner.has(ref.id)
     // A cross-tab teleport is selectable from its destination tab but stored
     // under its origin, so it is alive if either end knows it.
     case 'transition':
