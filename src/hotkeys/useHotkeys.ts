@@ -41,8 +41,13 @@ export function useHotkeys() {
     // edit) rather than through the Esc precedence stack.
     if (isTextEntryTarget(event.target)) return
 
+    // Escape is not claimed, unlike every other combo below. Popovers and menus
+    // from the component library listen for the same key and stand down if it
+    // has been prevented, so claiming it here would leave a menu on screen with
+    // its tier already released. The precedence stack still absorbs the press,
+    // which is what stops a tier below from answering the same one.
     if (event.key === 'Escape') {
-      if (resolveEscape()) event.preventDefault()
+      resolveEscape()
       return
     }
 

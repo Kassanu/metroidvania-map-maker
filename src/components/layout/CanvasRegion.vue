@@ -31,6 +31,7 @@ import {
   type MarkupTarget,
 } from '@/canvas/markupTarget'
 import IconPickerPopover from './IconPickerPopover.vue'
+import CanvasContextMenu from './CanvasContextMenu.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
 import { beginMarquee, type Marquee } from '@/gestures/marquee'
 import { beginSelectionMove, type SelectionMove } from '@/gestures/selectionMove'
@@ -792,7 +793,10 @@ function handleMarkupPress(event: PointerEvent) {
 // plus a latch for having left the origin cell. A press that wandered is not a
 // click even if it came back.
 function handleSelectPress(event: PointerEvent) {
-  if (event.button === SECONDARY_BUTTON) return
+  if (event.button === SECONDARY_BUTTON) {
+    aimContextMenu(event)
+    return
+  }
   if (event.button !== PRIMARY_BUTTON) return
 
   const tab = tabsStore.activeTab
@@ -876,6 +880,40 @@ function handleSelectPress(event: PointerEvent) {
     band.cancel()
     marquee = null
   }
+}
+
+// The native menu never belongs over the canvas, but who suppresses it depends
+// on the mode. In Select the app's own menu opens and does it; everywhere else
+// the button is erase and there is nothing to open, so this does.
+//
+// Not an unconditional `.prevent`: the context menu trigger waits a tick and
+// then stands down if the event was already prevented, so preventing it here
+// first would mean the menu never opens at all.
+function suppressNativeMenu(event: MouseEvent) {
+  if (modeStore.active === 'select') return
+  event.preventDefault()
+}
+
+// Right-click points the context menu at what it landed on, and runs before it
+// opens: `pointerdown` precedes `contextmenu`, so by the time the menu is up the
+// selection is already the one it will act on.
+//
+// The drag rule, applied to the other button. An unselected object is selected
+// alone, so the menu never acts on something other than what was pointed at; one
+// already in the selection leaves the whole selection alone, so right-clicking
+// any of three selected rooms still offers to delete three.
+//
+// Bare grid changes nothing. A click there deselects, but the menu's four verbs
+// are all about the selection, and clearing it on the way to opening the menu
+// would leave every item disabled.
+function aimContextMenu(event: PointerEvent) {
+  const tab = tabsStore.activeTab
+  const local = localPoint(event)
+  if (!tab || !local) return
+  const target = selectTargetAt(local)
+  const ref = target ? selectRefOf(target) : null
+  if (!ref || selection.isSelected(ref)) return
+  selection.set([ref], tab.id)
 }
 
 // The Drag column's Object rows: the whole selection moves, and a drag that
@@ -1741,6 +1779,11 @@ useHotkeyAction('deleteSelection', () => {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
   if (!tab || !map) return
+  // Two granularities, one key. In the Cells sub-mode `Del` erases the selected
+  // cells back to bare grid, which is a different op on a different kind, so
+  // this branch answers for objects alone rather than deleting the rooms those
+  // cells happen to belong to.
+  if (deletesCells()) return
 
   // The selectors answer for this tab only, so a selection left on another tab
   // deletes nothing here.
@@ -1763,6 +1806,13 @@ useHotkeyAction('deleteSelection', () => {
     if (rooms.length > 0) deleteRooms(tx, model.project, map, rooms)
   })
 })
+
+// Which arm of `Del` this press belongs to. A cell selection can only be built
+// in Select mode's Cells sub-mode, and only that sub-mode erases: the same
+// selection reached from anywhere else still names objects.
+function deletesCells(): boolean {
+  return modeStore.active === 'select' && tools.selectSubMode === 'cells'
+}
 
 // The undo entry for the key above. A selection of one kind names that kind, so
 // the entry reads the same as the right-click that deletes the same object; a
@@ -1831,38 +1881,46 @@ onUnmounted(() => {
     <div class="ruler-corner" />
     <!-- The browser menu is suppressed on the viewport only, because
          right-drag is erase here. Everywhere else in the app the native menu
-         still works. -->
-    <div
-      ref="container"
-      class="canvas-viewport"
-      :style="zoneCursor ? { cursor: zoneCursor } : undefined"
-      @wheel="handleWheel"
-      @contextmenu.prevent
-      @dblclick="handleDoubleClick"
-      @pointerdown="handlePointerDown"
-      @pointermove="handlePointerMove"
-      @pointerleave="handlePointerLeave"
-    >
-      <canvas ref="canvas" class="canvas" />
-      <!-- After the first click the origin endpoint shows a marker on the
-           canvas; this is the accompanying prompt. `aria-live` because it
-           appears without focus moving and without the user having asked for
-           it: it is the app telling you it is waiting. `pointer-events: none`,
-           like the coords readout: it sits over the canvas and every click on
-           the canvas belongs to the gesture it is prompting for. -->
-      <div v-if="pendingTeleport.isPending" class="pending-prompt" role="status" aria-live="polite">
-        {{ t('canvas.pickTeleportDestination') }}
+         still works. The app's own menu replaces it in Select mode alone: the
+         other three spend that button on erase. -->
+    <CanvasContextMenu :disabled="modeStore.active !== 'select'">
+      <div
+        ref="container"
+        class="canvas-viewport"
+        :style="zoneCursor ? { cursor: zoneCursor } : undefined"
+        @wheel="handleWheel"
+        @contextmenu="suppressNativeMenu"
+        @dblclick="handleDoubleClick"
+        @pointerdown="handlePointerDown"
+        @pointermove="handlePointerMove"
+        @pointerleave="handlePointerLeave"
+      >
+        <canvas ref="canvas" class="canvas" />
+        <!-- After the first click the origin endpoint shows a marker on the
+             canvas; this is the accompanying prompt. `aria-live` because it
+             appears without focus moving and without the user having asked for
+             it: it is the app telling you it is waiting. `pointer-events: none`,
+             like the coords readout: it sits over the canvas and every click on
+             the canvas belongs to the gesture it is prompting for. -->
+        <div
+          v-if="pendingTeleport.isPending"
+          class="pending-prompt"
+          role="status"
+          aria-live="polite"
+        >
+          {{ t('canvas.pickTeleportDestination') }}
+        </div>
+        <div v-if="canvasView.showCoords" class="coords-overlay">{{ coordsLabel }}</div>
+        <!-- Anchored to a map cell rather than to a control, so it lives inside
+             the viewport whose coordinate space its anchor is positioned in. -->
+        <IconPickerPopover
+          :at="pickerAt"
+          :cell="pickerCell"
+          @pick="handleIconPicked"
+          @close="closeIconPicker"
+        />
       </div>
-      <div v-if="canvasView.showCoords" class="coords-overlay">{{ coordsLabel }}</div>
-      <!-- Anchored to a map cell rather than to a control, so it lives inside
-           the viewport whose coordinate space its anchor is positioned in. -->
-      <IconPickerPopover
-        :at="pickerAt"
-        :cell="pickerCell"
-        @pick="handleIconPicked"
-        @close="closeIconPicker"
-      />
-    </div>
+    </CanvasContextMenu>
   </section>
 </template>
 

@@ -212,6 +212,28 @@ describe('Select precedence table', () => {
       expect(selection().selected).toEqual([{ kind: 'cell', id: '1,2' }])
     })
 
+    // Two granularities, one key. Erasing cells is a different op on a
+    // different kind, so this arm answers for nothing yet rather than deleting
+    // the room the selected cells belong to.
+    it('deletes nothing on Del, where Rooms would delete the room', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId, roomC } = fixture()
+      const tools = useToolsStore()
+
+      tools.setSelectSubMode('cells')
+      await click(viewport, at(0.5, 2.5))
+      expect(selection().selected).toEqual([{ kind: 'cell', id: '0,2' }])
+      runAction('deleteSelection')
+      expect(map().rooms.has(roomC)).toBe(true)
+
+      // The same key on the same pixel, one sub-mode over.
+      tools.setSelectSubMode('rooms')
+      await click(viewport, at(0.5, 2.5))
+      runAction('deleteSelection')
+      expect(map().rooms.has(roomC)).toBe(false)
+      expect(selection().roomsOn(mapId)).toEqual([])
+    })
+
     it('deselects on a cell no room owns, where a line happens to run', async () => {
       const { viewport } = await mountCanvas()
       fixture()
@@ -388,18 +410,48 @@ describe('Select precedence table', () => {
 
   // Cuts across every row.
   describe('every target', () => {
-    // The one mode where the secondary button does not erase. It opens the
-    // context menu, which does not exist yet, so what has to hold today is that
-    // nothing is deleted and nothing is selected by it.
-    it('deletes nothing on a right-click, unlike the other three modes', async () => {
+    // The one mode where the secondary button does not erase. It aims the
+    // context menu instead, which means selecting what it landed on.
+    it('selects rather than deleting on a right-click, unlike the other three modes', async () => {
       const { viewport } = await mountCanvas()
       const { icon } = fixture()
 
       await click(viewport, at(1.5, 2.5), 2)
 
       expect(map().icons.has(icon)).toBe(true)
-      expect(selection().isEmpty).toBe(true)
+      expect(selection().selected).toEqual([{ kind: 'icon', id: icon }])
       expect(useModelStore().status.undoLabel).not.toContain('Delete')
+    })
+
+    // The drag rule, applied to the other button: what the menu acts on is what
+    // was pointed at. A multi-selection survives a right-click on any of its
+    // members, or the menu would offer to delete one room where the user can
+    // see three haloed.
+    it('leaves a multi-selection alone when the right-click lands inside it', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA, icon } = fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      await shiftClick(viewport, at(1.5, 2.5))
+      await click(viewport, at(0.5, 0.5), 2)
+
+      expect(selection().selected).toEqual([
+        { kind: 'room', id: roomA },
+        { kind: 'icon', id: icon },
+      ])
+    })
+
+    // Bare grid is not a target, and the menu's four verbs are all about the
+    // selection: clearing it on the way to opening the menu would leave every
+    // item disabled.
+    it('leaves the selection alone on a right-click over bare grid', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA } = fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      await click(viewport, at(9.5, 9.5), 2)
+
+      expect(selection().selected).toEqual([{ kind: 'room', id: roomA }])
     })
 
     // A press that wandered is a drag and not also a click. Shift is what makes

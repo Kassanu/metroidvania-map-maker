@@ -14,6 +14,14 @@ export function registerAction(id: ActionId, handler: () => void): () => void {
   }
 }
 
+// Whether anything would happen if this action ran. A menu item asks so it can
+// disable itself rather than offering a command that quietly does nothing: the
+// keymap is fully populated ahead of the features, so an id exists long before
+// a handler for it does.
+export function hasAction(id: ActionId): boolean {
+  return handlers.has(id)
+}
+
 export function runAction(id: ActionId): boolean {
   const handler = handlers.get(id)
   if (!handler) return false

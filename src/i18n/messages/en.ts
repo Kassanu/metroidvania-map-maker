@@ -83,6 +83,15 @@ export const en = {
   'menu.edit.redo': 'Redo',
   'menu.edit.undoStep': 'Undo {label}',
   'menu.edit.redoStep': 'Redo {label}',
+  // The seven that act on a selection. The canvas context menu is the shorter
+  // list: four of these, without Paste, Select All or Deselect.
+  'menu.edit.cut': 'Cut',
+  'menu.edit.copy': 'Copy',
+  'menu.edit.paste': 'Paste',
+  'menu.edit.duplicate': 'Duplicate',
+  'menu.edit.delete': 'Delete',
+  'menu.edit.selectAll': 'Select All',
+  'menu.edit.deselect': 'Deselect',
   // Marks unsaved work in the project title and the browser tab.
   'title.unsaved': '{name} •',
 

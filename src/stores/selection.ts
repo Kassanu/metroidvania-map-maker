@@ -187,6 +187,20 @@ export const useSelectionStore = defineStore('selection', () => {
     return out
   }
 
+  // Whether anything in the selection could go on a clipboard.
+  //
+  // Transitions are never copied, and an icon travels as content on a cell
+  // rather than on its own, so a selection holding only those two has no
+  // payload at all. Copy, cut and duplicate refuse such a selection before the
+  // click rather than producing an empty payload a later paste does nothing
+  // with.
+  function hasCopyableOn(mapId: MapId): boolean {
+    if (selectionMapId.value !== mapId) return false
+    return items.value.some(
+      (item) => item.kind === 'room' || item.kind === 'cell' || item.kind === 'line',
+    )
+  }
+
   // A selection can outlive the thing it points at: undo removes a room, a
   // delete cascades, a file is opened. Having every op that can destroy an
   // object also prune the selection is the version that eventually misses one.
@@ -224,6 +238,7 @@ export const useSelectionStore = defineStore('selection', () => {
     transitionsOn: computed(() => transitionsOn),
     iconsOn: computed(() => iconsOn),
     linesOn: computed(() => linesOn),
+    hasCopyableOn: computed(() => hasCopyableOn),
     // The tab the current selection belongs to, so the canvas can tell whether
     // what it is drawing is the selected map's.
     mapId: computed(() => selectionMapId.value),

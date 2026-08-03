@@ -8,9 +8,17 @@ import { usePanelsStore } from '@/stores/panels'
 import { useUiStore } from '@/stores/ui'
 import { useThemeStore } from '@/stores/theme'
 import { useCanvasViewStore } from '@/stores/canvasView'
-import { PROJECT_SCOPE, useModelStore } from '@/stores/model'
+import { mapScope, PROJECT_SCOPE, useModelStore } from '@/stores/model'
 import { useTabsStore } from '@/stores/tabs'
+import { useSelectionStore } from '@/stores/selection'
+import { registerAction } from '@/hotkeys/actions'
 import { renameProject } from '@/core/ops/project'
+import { paintCells } from '@/core/ops/rooms'
+import { createFromBox } from '@/core/ops/doors'
+import { ok } from '@/core/testUtils'
+import { WORLD_AREA_ID } from '@/core/ids'
+import type { ActionId } from '@/hotkeys/keymap'
+import type { MapId } from '@/core/ids'
 
 describe('MenuBar', () => {
   let wrapper: VueWrapper
@@ -139,6 +147,32 @@ describe('MenuBar', () => {
     })
   })
 
+  // A room on the active tab, for the items that need something selected.
+  function paintRoom() {
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    const room = model.run('Paint', mapScope(mapId), (tx) =>
+      paintCells(tx, model.project, model.project.mapsById.get(mapId)!, ['0,0', '1,0'], {
+        areaId: WORLD_AREA_ID,
+      }),
+    )
+    return { mapId, roomId: room.id }
+  }
+
+  // Two rooms and the door between them: a transition is the kind with nothing
+  // to put on a clipboard.
+  function paintRoomsWithDoor() {
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    const transitionId = model.run('Paint', mapScope(mapId), (tx) => {
+      const map = model.project.mapsById.get(mapId)!
+      paintCells(tx, model.project, map, ['0,0'], { areaId: WORLD_AREA_ID })
+      paintCells(tx, model.project, map, ['1,0'], { areaId: WORLD_AREA_ID })
+      return ok(createFromBox(tx, model.project, map, '0,0', '1,0'))[0].id
+    })
+    return { mapId, transitionId }
+  }
+
   describe('Edit menu', () => {
     async function openEditMenu() {
       const trigger = wrapper.findAll('.menu-item').find((el) => el.text() === 'Edit')!
@@ -150,11 +184,103 @@ describe('MenuBar', () => {
       return Array.from(document.querySelectorAll('.edit-menu-content [role="menuitem"]'))
     }
 
-    it('offers Undo and Redo, both disabled on an untouched project', async () => {
+    function itemNamed(label: string) {
+      return editItems().find((el) => el.textContent?.trim() === label)!
+    }
+
+    const enabled = (label: string) => itemNamed(label).getAttribute('data-disabled') === null
+
+    it('offers the seven selection verbs beside Undo and Redo, in the locked order', async () => {
       await openEditMenu()
-      const items = editItems()
-      expect(items.map((el) => el.textContent?.trim())).toEqual(['Undo', 'Redo'])
-      for (const item of items) expect(item.getAttribute('data-disabled')).not.toBeNull()
+
+      expect(editItems().map((el) => el.textContent?.trim())).toEqual([
+        'Undo',
+        'Redo',
+        'Cut',
+        'Copy',
+        'Paste',
+        'Duplicate',
+        'Delete',
+        'Select All',
+        'Deselect',
+      ])
+    })
+
+    // Nothing done, nothing selected, and none of the features that own these
+    // ids mounted: every item refuses before the click rather than after it.
+    it('disables all of them on an untouched project', async () => {
+      await openEditMenu()
+      for (const item of editItems()) expect(item.getAttribute('data-disabled')).not.toBeNull()
+    })
+
+    // An id exists in the keymap long before the feature that answers it, so a
+    // registered handler is half of what enables an item. This is what makes the
+    // clipboard items light up in one step when the clipboard lands.
+    it('leaves an item disabled while nothing has registered its action', async () => {
+      const selection = useSelectionStore()
+      const { roomId, mapId } = paintRoom()
+      selection.set([{ kind: 'room', id: roomId }], mapId)
+      await openEditMenu()
+
+      expect(enabled('Copy')).toBe(false)
+      expect(enabled('Delete')).toBe(false)
+    })
+
+    it('enables the selection verbs once a handler exists and something is selected', async () => {
+      const selection = useSelectionStore()
+      const { roomId, mapId } = paintRoom()
+      const pops = ['copy', 'cut', 'duplicate', 'deleteSelection', 'deselect'].map((id) =>
+        registerAction(id as ActionId, () => {}),
+      )
+
+      await openEditMenu()
+      expect(enabled('Copy')).toBe(false)
+      expect(enabled('Delete')).toBe(false)
+
+      selection.set([{ kind: 'room', id: roomId }], mapId)
+      await nextTick()
+      expect(enabled('Copy')).toBe(true)
+      expect(enabled('Cut')).toBe(true)
+      expect(enabled('Duplicate')).toBe(true)
+      expect(enabled('Delete')).toBe(true)
+      expect(enabled('Deselect')).toBe(true)
+
+      pops.forEach((pop) => pop())
+    })
+
+    // A transition is never copied and an icon travels as content on a cell, so
+    // a selection of only those has nothing to put on a clipboard. The three
+    // clipboard verbs refuse it while Delete, which needs no payload, does not.
+    it('disables the clipboard verbs for a selection with no payload', async () => {
+      const selection = useSelectionStore()
+      const { mapId, transitionId } = paintRoomsWithDoor()
+      const pops = ['copy', 'cut', 'duplicate', 'deleteSelection'].map((id) =>
+        registerAction(id as ActionId, () => {}),
+      )
+
+      selection.set([{ kind: 'transition', id: transitionId }], mapId)
+      await openEditMenu()
+
+      expect(enabled('Copy')).toBe(false)
+      expect(enabled('Cut')).toBe(false)
+      expect(enabled('Duplicate')).toBe(false)
+      expect(enabled('Delete')).toBe(true)
+
+      pops.forEach((pop) => pop())
+    })
+
+    // The selection is per-tab, so a selection left on another map enables
+    // nothing here: the verbs would act on objects the user cannot see.
+    it('ignores a selection belonging to another tab', async () => {
+      const selection = useSelectionStore()
+      const { roomId } = paintRoom()
+      const pop = registerAction('deleteSelection', () => {})
+      selection.set([{ kind: 'room', id: roomId }], 'map_elsewhere' as MapId)
+
+      await openEditMenu()
+      expect(enabled('Delete')).toBe(false)
+
+      pop()
     })
 
     // The label comes off the transaction, so the menu names the step it will
