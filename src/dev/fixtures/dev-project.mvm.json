@@ -141,6 +141,34 @@
               [3, 10]
             ],
             "innerWalls": []
+          },
+          {
+            "id": "room_20",
+            "areaId": "world",
+            "name": "Yard",
+            "notes": "",
+            "cells": [
+              [0, 11],
+              [1, 11],
+              [2, 11],
+              [0, 12],
+              [1, 12],
+              [2, 12]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_21",
+            "areaId": "world",
+            "name": "Shed",
+            "notes": "",
+            "cells": [
+              [5, 11],
+              [6, 11],
+              [5, 12],
+              [6, 12]
+            ],
+            "innerWalls": []
           }
         ],
         "transitions": [

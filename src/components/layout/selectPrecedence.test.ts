@@ -173,6 +173,33 @@ describe('Select precedence table', () => {
       await shiftClick(viewport, at(0.5, 0.5))
       expect(selection().selected).toEqual([{ kind: 'icon', id: icon }])
     })
+
+    // The other two kinds through the same column, so the row really is one row
+    // for four kinds rather than two that happen to have been tested.
+    it('builds a selection across all four kinds', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA, door, icon, line } = fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      await shiftClick(viewport, at(2, 0.5))
+      await shiftClick(viewport, at(1.5, 2.5))
+      await shiftClick(viewport, at(2.5, 4.5))
+
+      expect(selection().selected).toEqual([
+        { kind: 'room', id: roomA },
+        { kind: 'transition', id: door },
+        { kind: 'icon', id: icon },
+        { kind: 'line', id: line },
+      ])
+
+      // And out again, from the middle of the list.
+      await shiftClick(viewport, at(2, 0.5))
+      expect(selection().selected).toEqual([
+        { kind: 'room', id: roomA },
+        { kind: 'icon', id: icon },
+        { kind: 'line', id: line },
+      ])
+    })
   })
 
   describe('empty space', () => {
@@ -314,6 +341,27 @@ describe('Select precedence table', () => {
       expect(useModelStore().status.undoLabel).toBe(before)
     })
 
+    // The other two movable kinds. Each has its own op, and the Drag column is
+    // one row for all of them, so a press on any of the three has to reach it.
+    it('moves an icon, by the same press that moves a room', async () => {
+      const { viewport } = await mountCanvas()
+      const { icon } = fixture()
+
+      await drag(viewport, at(1.5, 2.5), at(2.5, 2.5))
+
+      expect(map().icons.get(icon)!.cell).toBe('2,2')
+      expect(selection().selected).toEqual([{ kind: 'icon', id: icon }])
+    })
+
+    it('translates a line by the same press', async () => {
+      const { viewport } = await mountCanvas()
+      const { line } = fixture()
+
+      await drag(viewport, at(2.5, 4.5), at(2.5, 5.5))
+
+      expect(map().lines.get(line)!.points).toEqual(['0,5', '1,5', '2,5', '3,5', '4,5'])
+    })
+
     it('leaves no undo step when the drag comes back to the cell it started on', async () => {
       const { viewport } = await mountCanvas()
       const { roomA } = fixture()
@@ -405,6 +453,82 @@ describe('Select precedence table', () => {
       await nextTick()
 
       expect(selection().selected).toEqual([{ kind: 'room', id: roomA }])
+    })
+  })
+
+  // The `Del` column, which is one op per kind and one transaction for the mix.
+  describe('Del', () => {
+    it('deletes whichever kind is selected', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA, door, icon, line } = fixture()
+
+      await click(viewport, at(2, 0.5))
+      runAction('deleteSelection')
+      expect(map().transitions.has(door)).toBe(false)
+
+      await click(viewport, at(1.5, 2.5))
+      runAction('deleteSelection')
+      expect(map().icons.has(icon)).toBe(false)
+
+      await click(viewport, at(2.5, 4.5))
+      runAction('deleteSelection')
+      expect(map().lines.has(line)).toBe(false)
+
+      await click(viewport, at(0.5, 0.5))
+      runAction('deleteSelection')
+      expect(map().rooms.has(roomA)).toBe(false)
+    })
+
+    it('deletes a mixed selection in one step', async () => {
+      const { viewport } = await mountCanvas()
+      const model = useModelStore()
+      const { roomA, icon, line } = fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      await shiftClick(viewport, at(1.5, 2.5))
+      await shiftClick(viewport, at(2.5, 4.5))
+      runAction('deleteSelection')
+
+      expect(map().rooms.has(roomA)).toBe(false)
+      expect(map().icons.has(icon)).toBe(false)
+      expect(map().lines.has(line)).toBe(false)
+      expect(model.status.undoLabel).toBe('Delete Selection')
+
+      // One step for three kinds: a single undo brings all of them back.
+      model.undo()
+      expect(map().rooms.has(roomA)).toBe(true)
+      expect(map().icons.has(icon)).toBe(true)
+      expect(map().lines.has(line)).toBe(true)
+    })
+
+    // The dead cell of the column: nothing selected, nothing to delete, and no
+    // undo step for a key that did nothing.
+    it('does nothing with an empty selection', async () => {
+      await mountCanvas()
+      const model = useModelStore()
+      fixture()
+      const before = model.status.undoLabel
+
+      runAction('deleteSelection')
+
+      expect(model.status.undoLabel).toBe(before)
+      expect(map().rooms.size).toBe(3)
+    })
+
+    // Deleting a room cascades to the transitions on its edges and the icons in
+    // its cells, so a selection naming both a room and something it carries
+    // must not trip over ids the cascade already swept up.
+    it('deletes a room and the icon standing on it together', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomC, icon } = fixture()
+
+      await click(viewport, at(1.5, 2.5))
+      await shiftClick(viewport, at(0.5, 2.5))
+      expect(selection().selected).toHaveLength(2)
+      runAction('deleteSelection')
+
+      expect(map().rooms.has(roomC)).toBe(false)
+      expect(map().icons.has(icon)).toBe(false)
     })
   })
 
