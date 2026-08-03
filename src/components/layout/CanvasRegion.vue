@@ -1695,6 +1695,30 @@ function deleteSelectionLabel(): string {
   return t('history.deleteTransition')
 }
 
+// `Ctrl+A` selects every room on the tab, and only in Select mode. The other
+// three modes each act on one kind through one gesture, so a whole-map
+// selection in them would change nothing but what `Del` and `Esc` do.
+//
+// Rooms, not everything on the map: icons, lines and transitions are reached by
+// click and shift-click. In the Cells sub-mode the same key means every owned
+// cell, a different list of a different kind, so this arm answers for Rooms
+// alone.
+useHotkeyAction('selectAll', () => {
+  if (modeStore.active !== 'select' || tools.selectSubMode !== 'rooms') return
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (!tab || !map) return
+
+  selection.set(
+    [...map.rooms.keys()].map((id) => ({ kind: 'room', id })),
+    tab.id,
+  )
+})
+
+// The Edit menu's Deselect. Ungated, because there is one selection and every
+// mode can hold one: the same reason `Esc` clears it everywhere.
+useHotkeyAction('deselect', () => selection.clear())
+
 useResizeObserver(container, resize)
 
 onMounted(resize)

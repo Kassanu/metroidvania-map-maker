@@ -19,7 +19,7 @@ const CATEGORIES: ShortcutCategory[] = [
   { labelKey: 'cheatSheet.section.general', actions: ['undo', 'redo', 'save', 'deleteSelection'] },
   {
     labelKey: 'cheatSheet.section.clipboard',
-    actions: ['copy', 'cut', 'paste', 'selectAll', 'duplicate'],
+    actions: ['copy', 'cut', 'paste', 'selectAll', 'deselect', 'duplicate'],
   },
   { labelKey: 'cheatSheet.section.drawEdit', actions: ['brushSizeDown', 'brushSizeUp'] },
   { labelKey: 'cheatSheet.section.zoom', actions: ['zoomIn', 'zoomOut', 'zoomReset'] },
@@ -39,6 +39,7 @@ const ACTION_LABEL_KEYS: Record<ActionId, MessageKey> = {
   cut: 'action.cut',
   paste: 'action.paste',
   selectAll: 'action.selectAll',
+  deselect: 'action.deselect',
   duplicate: 'action.duplicate',
   brushSizeDown: 'action.brushSizeDown',
   brushSizeUp: 'action.brushSizeUp',

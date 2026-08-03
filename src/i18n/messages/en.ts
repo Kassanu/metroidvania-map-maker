@@ -283,6 +283,7 @@ export const en = {
   'action.cut': 'Cut',
   'action.paste': 'Paste',
   'action.selectAll': 'Select all',
+  'action.deselect': 'Deselect',
   'action.duplicate': 'Duplicate',
   'action.brushSizeDown': 'Decrease brush size',
   'action.brushSizeUp': 'Increase brush size',

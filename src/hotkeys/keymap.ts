@@ -14,6 +14,11 @@ export type ActionId =
   | 'cut'
   | 'paste'
   | 'selectAll'
+  // Bound to nothing. `Esc` already clears the selection through the Esc
+  // precedence stack, where it sits below any live gesture; a combo here would
+  // be a second route that skips that ordering. It exists as an id so the menu
+  // item can run it.
+  | 'deselect'
   | 'duplicate'
   | 'brushSizeUp'
   | 'brushSizeDown'

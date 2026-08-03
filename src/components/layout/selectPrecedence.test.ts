@@ -10,6 +10,8 @@ import { useModeStore } from '@/stores/mode'
 import { useSelectionStore } from '@/stores/selection'
 import { useCanvasViewStore } from '@/stores/canvasView'
 import { mapScope, useModelStore } from '@/stores/model'
+import { runAction } from '@/hotkeys/actions'
+import { resolveEscape } from '@/hotkeys/escStack'
 import { paintCells } from '@/core/ops/rooms'
 import { createFromBox } from '@/core/ops/doors'
 import { createLine, placeIcon } from '@/core/ops/markup'
@@ -265,6 +267,98 @@ describe('Select precedence table', () => {
 
       await click(viewport, at(0.5, 0.5))
       expect(selection().selected).toEqual([{ kind: 'room', id: roomA }])
+    })
+  })
+
+  // The keys that edit the selection without a pointer. `Ctrl+A` belongs to
+  // this mode alone; `Deselect` and `Esc` belong to the selection, which every
+  // mode shares.
+  describe('the selection keys', () => {
+    it('selects every room on the tab and nothing else that is on it', async () => {
+      await mountCanvas()
+      const { mapId, roomA, roomC } = fixture()
+
+      runAction('selectAll')
+
+      expect(selection().roomsOn(mapId)).toEqual(expect.arrayContaining([roomA, roomC]))
+      expect(selection().roomsOn(mapId)).toHaveLength(3)
+      // The door, the icon and the line are all inside the rectangle a marquee
+      // over this map would cover, and none of them is selected: `Ctrl+A` means
+      // every room, not everything.
+      expect(selection().selected).toHaveLength(3)
+    })
+
+    it('selects the rooms of the tab it is pressed on, not the other tabs', async () => {
+      await mountCanvas()
+      const { mapId } = fixture()
+      const tabs = useTabsStore()
+      const model = useModelStore()
+
+      tabs.addTab()
+      const other = tabs.activeTabId
+      model.run('Setup', mapScope(other), (tx) => {
+        const map = model.project.mapsById.get(other)!
+        paintCells(tx, model.project, map, ['0,0'], { areaId: WORLD_AREA_ID })
+      })
+      await nextTick()
+
+      runAction('selectAll')
+
+      expect(selection().roomsOn(other)).toHaveLength(1)
+      expect(selection().roomsOn(mapId)).toEqual([])
+    })
+
+    it('does nothing in the three modes that are not Select', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA } = fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      for (const mode of ['draw', 'door', 'markup'] as const) {
+        useModeStore().setMode(mode)
+        await nextTick()
+        runAction('selectAll')
+        expect(selection().selected).toEqual([{ kind: 'room', id: roomA }])
+      }
+    })
+
+    // The two sub-modes hold different things, so a whole-tab select in Cells
+    // is a list of cells. Selecting the rooms instead would put a selection in
+    // the store that no press in this sub-mode could have made.
+    it('does nothing in the Cells sub-mode', async () => {
+      await mountCanvas()
+      fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      runAction('selectAll')
+
+      expect(selection().isEmpty).toBe(true)
+    })
+
+    it('clears the selection on Deselect, whatever the mode', async () => {
+      const { viewport } = await mountCanvas()
+      fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      useModeStore().setMode('draw')
+      await nextTick()
+
+      expect(runAction('deselect')).toBe(true)
+      expect(selection().isEmpty).toBe(true)
+    })
+
+    // `Esc` needs no new wiring: the selection tier already holds it. What has
+    // to stay true is that a multi-selection clears in one press rather than
+    // peeling off one object at a time.
+    it('clears a whole multi-selection on Esc, in one press', async () => {
+      const { viewport } = await mountCanvas()
+      fixture()
+
+      runAction('selectAll')
+      await shiftClick(viewport, at(2.5, 4.5))
+      expect(selection().selected).toHaveLength(4)
+
+      expect(resolveEscape()).toBe(true)
+      expect(selection().isEmpty).toBe(true)
     })
   })
 })
