@@ -1565,7 +1565,11 @@ describe('CanvasRegion edge-run resize', () => {
     wrapper.unmount()
   })
 
-  it('does nothing outside Draw mode', () => {
+  // The resize gesture is Draw's alone. Select mode answers the same pixel from
+  // its own table, where a drag on a room moves it, so the room does travel:
+  // what says no resize happened is that it arrived whole, two cells to the
+  // right, rather than having grown a column.
+  it('does not resize outside Draw mode', () => {
     const { wrapper, viewport } = mountCanvas()
     const mapId = useTabsStore().activeTabId
     const roomId = strip(mapId, ROOM)
@@ -1575,7 +1579,7 @@ describe('CanvasRegion edge-run resize', () => {
     viewport.dispatchEvent(pointer('pointermove', at(5.5, 2.5)))
     viewport.dispatchEvent(pointer('pointerup', at(5.5, 2.5)))
 
-    expect(cellsOf(mapId, roomId)).toEqual(ROOM.slice().sort())
+    expect(cellsOf(mapId, roomId)).toEqual(['4,2', '4,3', '5,2', '5,3'])
     wrapper.unmount()
   })
 

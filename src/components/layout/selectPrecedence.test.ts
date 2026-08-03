@@ -75,8 +75,15 @@ describe('Select precedence table', () => {
     await click(viewport, { ...point, shiftKey: true })
   }
 
-  async function drag(viewport: HTMLElement, from: PointerEventInit, to: PointerEventInit) {
-    viewport.dispatchEvent(press('pointerdown', from))
+  // One move, so the press crosses the dead zone and leaves its origin cell in
+  // a single step: a drag, by both halves of the rule at once.
+  async function drag(
+    viewport: HTMLElement,
+    from: PointerEventInit,
+    to: PointerEventInit,
+    shiftKey = false,
+  ) {
+    viewport.dispatchEvent(press('pointerdown', { ...from, shiftKey }))
     viewport.dispatchEvent(press('pointermove', to))
     viewport.dispatchEvent(press('pointerup', to))
     await nextTick()
@@ -216,29 +223,115 @@ describe('Select precedence table', () => {
     })
   })
 
-  // The Drag column of the empty row. The object rows drag into a move, which
-  // does not exist yet, so a press on one is still only a click.
-  describe('a marquee', () => {
-    async function sweep(
-      viewport: HTMLElement,
-      from: PointerEventInit,
-      to: PointerEventInit,
-      shiftKey = false,
-    ) {
-      viewport.dispatchEvent(press('pointerdown', { ...from, shiftKey }))
-      viewport.dispatchEvent(press('pointermove', to))
-      viewport.dispatchEvent(press('pointerup', to))
-      await nextTick()
-      await nextTick()
+  // The Drag column's Object rows. What each kind moves by is the gesture's own
+  // suite; what this pins is which press reaches it and what the selection
+  // looks like when it does.
+  describe('dragging an object', () => {
+    function roomCells(id: RoomId) {
+      return [...map().rooms.get(id)!.cells].sort()
     }
 
+    it('moves a selected room, and the press stays out of the click column', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA } = fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      await drag(viewport, at(0.5, 0.5), at(0.5, 1.5))
+
+      expect(roomCells(roomA)).toEqual(['0,1', '1,1'])
+      expect(selection().selected).toEqual([{ kind: 'room', id: roomA }])
+    })
+
+    // The half that is new here: what moves is what was pointed at, so an
+    // unselected object is selected first rather than dragging the selection
+    // that happens to be live somewhere else.
+    it('selects an unselected room before moving it, dropping what was selected', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA, roomC } = fixture()
+
+      await click(viewport, at(0.5, 2.5))
+      await drag(viewport, at(0.5, 0.5), at(0.5, 1.5))
+
+      expect(selection().selected).toEqual([{ kind: 'room', id: roomA }])
+      expect(roomCells(roomA)).toEqual(['0,1', '1,1'])
+      // The room that was selected stayed exactly where it was.
+      expect(roomCells(roomC)).toEqual(['0,2', '1,2', '2,2'])
+    })
+
+    it('adds an unselected room to the selection on a shift-drag, and moves both', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA, roomC } = fixture()
+
+      await click(viewport, at(0.5, 2.5))
+      viewport.dispatchEvent(press('pointerdown', { ...at(0.5, 0.5), shiftKey: true }))
+      viewport.dispatchEvent(press('pointermove', at(0.5, 1.5)))
+      viewport.dispatchEvent(press('pointerup', at(0.5, 1.5)))
+      await nextTick()
+      await nextTick()
+
+      expect(selection().selected).toEqual([
+        { kind: 'room', id: roomC },
+        { kind: 'room', id: roomA },
+      ])
+      expect(roomCells(roomA)).toEqual(['0,1', '1,1'])
+      expect(roomCells(roomC)).toEqual(['0,3', '1,3', '2,3'])
+    })
+
+    // The documented dead cell. Tested with a drag rather than a click, because
+    // a click cannot pin "this does nothing": the gesture at zero delta does
+    // nothing anyway.
+    it('selects a transition on a drag and moves nothing', async () => {
+      const { viewport } = await mountCanvas()
+      const { door } = fixture()
+      const before = useModelStore().status.undoLabel
+
+      await drag(viewport, at(2, 0.5), at(2, 3.5))
+
+      expect(selection().selected).toEqual([{ kind: 'transition', id: door }])
+      expect(map().transitions.has(door)).toBe(true)
+      expect(useModelStore().status.undoLabel).toBe(before)
+    })
+
+    it('leaves no undo step when the drag comes back to the cell it started on', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA } = fixture()
+      const before = useModelStore().status.undoLabel
+
+      await click(viewport, at(0.5, 0.5))
+      viewport.dispatchEvent(press('pointerdown', at(0.5, 0.5)))
+      viewport.dispatchEvent(press('pointermove', at(3.5, 3.5)))
+      viewport.dispatchEvent(press('pointermove', at(0.5, 0.5)))
+      viewport.dispatchEvent(press('pointerup', at(0.5, 0.5)))
+      await nextTick()
+
+      expect(roomCells(roomA)).toEqual(['0,0', '1,0'])
+      expect(useModelStore().status.undoLabel).toBe(before)
+    })
+
+    it('puts the room back on Esc mid-drag', async () => {
+      const { viewport } = await mountCanvas()
+      const { roomA } = fixture()
+
+      await click(viewport, at(0.5, 0.5))
+      viewport.dispatchEvent(press('pointerdown', at(0.5, 0.5)))
+      viewport.dispatchEvent(press('pointermove', at(0.5, 1.5)))
+      expect(resolveEscape()).toBe(true)
+      viewport.dispatchEvent(press('pointerup', at(0.5, 1.5)))
+      await nextTick()
+
+      expect(roomCells(roomA)).toEqual(['0,0', '1,0'])
+    })
+  })
+
+  // The Drag column of the empty row.
+  describe('a marquee', () => {
     it('selects every room it touches, and none of the markup under it', async () => {
       const { viewport } = await mountCanvas()
       const { mapId, roomA, roomC } = fixture()
 
       // From bare grid past row 4, so the band covers the line and the icon as
       // well as all three rooms.
-      await sweep(viewport, at(5.5, 5.5), at(0.5, 0.5))
+      await drag(viewport, at(5.5, 5.5), at(0.5, 0.5))
 
       expect(selection().roomsOn(mapId)).toEqual(expect.arrayContaining([roomA, roomC]))
       expect(selection().selected).toHaveLength(3)
@@ -250,7 +343,7 @@ describe('Select precedence table', () => {
 
       await click(viewport, at(1.5, 2.5))
       // From the bare row between the two banks of rooms, up over room A alone.
-      await sweep(viewport, at(1.5, 1.5), at(0.5, 0.5), true)
+      await drag(viewport, at(1.5, 1.5), at(0.5, 0.5), true)
 
       expect(selection().selected).toEqual([
         { kind: 'icon', id: icon },
@@ -309,14 +402,21 @@ describe('Select precedence table', () => {
       expect(useModelStore().status.undoLabel).not.toContain('Delete')
     })
 
-    // A press that wandered is not a click. Nothing consumes the drag yet, so
-    // what this pins is that the press did not quietly become one.
-    it('selects nothing when the press leaves its cell', async () => {
+    // A press that wandered is a drag and not also a click. Shift is what makes
+    // that visible: the click column would toggle the dragged object straight
+    // back out of the selection it is being moved with.
+    it('does not fire the click column as well when the press leaves its cell', async () => {
       const { viewport } = await mountCanvas()
-      fixture()
+      const { roomA } = fixture()
 
-      await drag(viewport, at(0.5, 0.5), at(3.5, 3.5))
-      expect(selection().isEmpty).toBe(true)
+      await click(viewport, at(0.5, 0.5))
+      viewport.dispatchEvent(press('pointerdown', { ...at(0.5, 0.5), shiftKey: true }))
+      viewport.dispatchEvent(press('pointermove', at(0.5, 1.5)))
+      viewport.dispatchEvent(press('pointerup', at(0.5, 1.5)))
+      await nextTick()
+      await nextTick()
+
+      expect(selection().selected).toEqual([{ kind: 'room', id: roomA }])
     })
 
     // You cannot select what you cannot see. The press falls through to the room

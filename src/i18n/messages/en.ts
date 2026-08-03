@@ -56,6 +56,8 @@ export const en = {
   // chrome the user reached it through.
   'history.placeIcon': 'Place Icon',
   'history.moveIcon': 'Move Icon',
+  'history.moveRoom': 'Move Room',
+  'history.moveSelection': 'Move Selection',
   'history.drawLine': 'Draw Line',
   'history.extendLine': 'Extend Line',
   'history.moveLine': 'Move Line',

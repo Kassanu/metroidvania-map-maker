@@ -33,6 +33,7 @@ import {
 import IconPickerPopover from './IconPickerPopover.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
 import { beginMarquee, type Marquee } from '@/gestures/marquee'
+import { beginSelectionMove, type SelectionMove } from '@/gestures/selectionMove'
 import { beginLineStroke, type LineStroke } from '@/gestures/lineStroke'
 import { beginIconDrag, type IconDrag } from '@/gestures/iconDrag'
 import { beginLinePeel } from '@/gestures/linePeel'
@@ -807,12 +808,19 @@ function handleSelectPress(event: PointerEvent) {
   const world = worldPoint(event)
   event.preventDefault()
 
-  // A drag from bare grid is a marquee. A drag from an object is a move, which
-  // does not exist yet, so a press on one starts nothing and stays a click.
+  // A drag from bare grid is a marquee, and it can start at press because a
+  // band one cell across draws nothing. A drag from an object is a move, which
+  // cannot: it has to know what is selected, and on an unselected object that
+  // is not decided until the press turns out to be a drag.
   const band = target.kind === 'empty' && world ? beginMarquee(tab.id, world, additive, draw) : null
   marquee = band
 
   let leftCell = false
+  let move: SelectionMove | null = null
+  // Latched separately from `move` because a drag on a transition resolves the
+  // selection and then starts nothing: without this, every later move would try
+  // again.
+  let moveResolved = false
 
   const accepted = startPointerDrag(event, {
     buttons: [event.button],
@@ -821,10 +829,29 @@ function handleSelectPress(event: PointerEvent) {
     onMove: (context) => {
       const point = worldPoint(context.event)
       if (!point) return
-      if (cellKey(Math.floor(point.x), Math.floor(point.y)) !== target.cell) leftCell = true
+      const cell = cellKey(Math.floor(point.x), Math.floor(point.y))
+      if (cell !== target.cell) leftCell = true
       band?.moveTo(point)
+      // Begun on leaving the origin cell rather than on crossing the dead zone,
+      // which makes one fact decide both halves: a press that left its cell is
+      // a drag and not a click, and until it does the delta is zero anyway.
+      if (leftCell && !moveResolved && target.kind === 'object') {
+        moveResolved = true
+        move = beginObjectMove(tab.id, target, additive)
+      }
+      move?.moveTo(cell)
     },
     onEnd: () => {
+      if (move) {
+        // Committed even when the pointer came back: out and back is a drag
+        // that moved nothing, so the transaction is empty and the seam drops
+        // it, leaving no undo step.
+        move.commit()
+        gesture = null
+        move = null
+        draw()
+        return
+      }
       if (band) {
         // Read before settling: `Esc` mid-press ends the whole press, not just
         // the band, so the release that follows must not fall through to the
@@ -849,6 +876,30 @@ function handleSelectPress(event: PointerEvent) {
     band.cancel()
     marquee = null
   }
+}
+
+// The Drag column's Object rows: the whole selection moves, and a drag that
+// began on something unselected selects it first so that what moves is what was
+// pointed at.
+//
+// Shift on an unselected object adds it and moves the group; shift on one
+// already selected leaves the selection alone, because the toggle would remove
+// the very thing being dragged.
+//
+// A transition selects and then does nothing: it is anchored to the edge
+// between two rooms and has no geometry of its own, so `beginSelectionMove`
+// answers null for a selection holding nothing else.
+function beginObjectMove(
+  mapId: MapId,
+  target: SelectTarget,
+  additive: boolean,
+): SelectionMove | null {
+  if (target.kind !== 'object') return null
+  if (!movesOnDrag(target.ref)) selection.clickSelect(target.ref, mapId, additive)
+
+  const started = beginSelectionMove(mapId, target.cell, draw)
+  if (started) gesture = started
+  return started
 }
 
 function handlePointerDown(event: PointerEvent) {
