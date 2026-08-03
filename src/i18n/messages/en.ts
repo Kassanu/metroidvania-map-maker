@@ -15,8 +15,8 @@ export const en = {
 
   'name.project': 'Untitled Project',
   'name.map': 'Map {n}',
-  'name.mapCopy': '{base} copy',
-  'name.mapCopyNth': '{base} copy {n}',
+  'name.copy': '{base} copy',
+  'name.copyNth': '{base} copy {n}',
   // The two immutable fallbacks and the one shipped editable lock type. Core
   // reserves their ids but takes their names as parameters. A name is content:
   // see createProject's ProjectSeed.
@@ -65,6 +65,10 @@ export const en = {
   'history.deleteLine': 'Delete Line',
   'history.deleteRoom': 'Delete Room',
   'history.deleteSelection': 'Delete Selection',
+  // Copy leaves no undo step, having changed no model. The other three do.
+  'history.cut': 'Cut',
+  'history.paste': 'Paste',
+  'history.duplicate': 'Duplicate',
   'history.peelLine': 'Erase Line',
 
   'common.close': 'Close',

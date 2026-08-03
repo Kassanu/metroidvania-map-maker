@@ -15,6 +15,7 @@ import { DEFAULT_PAN, type Bounds, type Pan } from '@/canvas/viewport'
 import { contentBounds } from '@/core/derive/bounds'
 import { addMap, deleteMap, duplicateMap, renameMap, reorderMap } from '@/core/ops/maps'
 import { t, templateMatcher } from '@/i18n'
+import { copyName } from '@/i18n/naming'
 import type { MapId } from '@/core/ids'
 
 // What the tab bar renders. Identity and name both come from the model now, so
@@ -53,23 +54,6 @@ function nextMapName(existingNames: string[]): string {
   let n = 1
   while (usedNumbers.has(n)) n++
   return t('name.map', { n })
-}
-
-// Google-Sheets-style duplicate naming: "Map 1" -> "Map 1 copy" -> "Map 1
-// copy 2" -> ... Duplicating a copy re-derives the original base name
-// (stripping a trailing "copy"/"copy N") so it continues the same sequence
-// instead of nesting ("copy copy").
-function duplicateName(originalName: string, existingNames: string[]): string {
-  const matchCopy = templateMatcher(t('name.mapCopy'), { base: '.*' })
-  const matchCopyNth = templateMatcher(t('name.mapCopyNth'), { base: '.*', n: '\\d+' })
-
-  const base = matchCopyNth(originalName)?.base ?? matchCopy(originalName)?.base ?? originalName
-  const firstCopy = t('name.mapCopy', { base })
-  if (!existingNames.includes(firstCopy)) return firstCopy
-
-  let n = 2
-  while (existingNames.includes(t('name.mapCopyNth', { base, n }))) n++
-  return t('name.mapCopyNth', { base, n })
 }
 
 export const useTabsStore = defineStore('tabs', () => {
@@ -197,7 +181,7 @@ export const useTabsStore = defineStore('tabs', () => {
     const source = model.project.mapsById.get(mapId)
     if (!source) return
     const copy = model.run(t('history.duplicateMap'), PROJECT_SCOPE, (tx) => {
-      const created = duplicateMap(tx, model.project, mapId, duplicateName(source.name, names()))
+      const created = duplicateMap(tx, model.project, mapId, copyName(source.name, names()))
       tx.scope = mapScope(created.id)
       return created
     })

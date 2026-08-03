@@ -206,11 +206,16 @@ describe('the canvas context menu', () => {
     // An id exists in the keymap long before the feature that answers it. An
     // item with no handler is disabled rather than offering a command that
     // quietly does nothing.
+    //
+    // Cleared after mounting, because the canvas registers the real ones as it
+    // mounts and registration is last-wins.
     it('disables an item whose action nothing has registered', async () => {
       const { viewport } = await mountCanvas()
       const selection = useSelectionStore()
       const { roomId, mapId } = paintRoom()
-      handle('deleteSelection')
+      // Registering a throwaway and dropping it immediately is what makes the
+      // removal unconditional: an unregister only drops its own handler.
+      registerAction('copy', () => {})()
       selection.set([{ kind: 'room', id: roomId }], mapId)
 
       await rightClick(viewport)

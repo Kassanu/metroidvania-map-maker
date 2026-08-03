@@ -61,6 +61,10 @@ afterEach(() => {
 
 // Both menus disable an item whose action has no handler, so a test about the
 // selection rules has to put a handler behind every id first.
+//
+// After mounting, never before: the canvas registers real handlers for these
+// ids as it mounts, and registration is last-wins, so spies put on first would
+// be the ones replaced.
 function registerVerbHandlers(): void {
   for (const id of VERB_ACTIONS) {
     const handler = vi.fn()
@@ -245,12 +249,9 @@ async function openEditMenu(): Promise<HTMLElement> {
 // ===========================================================================
 
 describe('canvas context menu', () => {
-  beforeEach(() => {
-    registerVerbHandlers()
-  })
-
   it('holds exactly Cut, Copy, Duplicate, Delete, in that order', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     await rightClick(viewport)
 
@@ -263,6 +264,7 @@ describe('canvas context menu', () => {
 
   it('opens in Select mode', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     await rightClick(viewport)
     expect(isOpen(canvasMenu())).toBe(true)
@@ -273,6 +275,7 @@ describe('canvas context menu', () => {
   for (const mode of ['draw', 'door', 'markup'] as const) {
     it(`does not open in ${mode} mode`, async () => {
       const viewport = await mountCanvas()
+      registerVerbHandlers()
       await setMode(mode)
       await rightClick(viewport)
       expect(isOpen(canvasMenu())).toBe(false)
@@ -285,6 +288,7 @@ describe('canvas context menu', () => {
   // the same press. Whether the menu actually goes away is a browser test.
   it('claims the dialog Esc tier while open, leaving the selection alone', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     const room = paint(['0,0'])
     const selection = useSelectionStore()
@@ -305,6 +309,7 @@ describe('canvas context menu', () => {
 
   it('enables all four for a room selection', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     const room = paint(['0,0', '1,0'])
     useSelectionStore().set([{ kind: 'room', id: room.id }], activeMapId())
@@ -320,6 +325,7 @@ describe('canvas context menu', () => {
 
   it('disables all four when nothing is selected', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     await rightClick(viewport)
 
@@ -336,6 +342,7 @@ describe('canvas context menu', () => {
   // them is still meaningful.
   it('offers only Delete for a selection of icons and transitions', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     paint(['0,0'])
     paint(['4,0'])
@@ -360,6 +367,7 @@ describe('canvas context menu', () => {
 
   it('enables the clipboard verbs for a cell selection', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     paint(['0,0', '1,0'])
     useToolsStore().setSelectSubMode('cells')
@@ -376,6 +384,7 @@ describe('canvas context menu', () => {
 
   it('enables the clipboard verbs for a line selection', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     const line = addLine(['3,3', '4,3'])
     useSelectionStore().set([{ kind: 'line', id: line.id }], activeMapId())
@@ -393,6 +402,7 @@ describe('canvas context menu', () => {
   // this map's menu can act on.
   it('disables all four for a selection belonging to another map', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     const tabs = useTabsStore()
     const home = tabs.activeTabId
@@ -415,6 +425,7 @@ describe('canvas context menu', () => {
   // item with no handler behind it would offer a command that does nothing.
   it('disables an item whose action nothing has registered', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     const room = paint(['0,0'])
     useSelectionStore().set([{ kind: 'room', id: room.id }], activeMapId())
@@ -431,6 +442,7 @@ describe('canvas context menu', () => {
 
   it('runs the action behind an enabled item', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     const room = paint(['0,0'])
     useSelectionStore().set([{ kind: 'room', id: room.id }], activeMapId())
@@ -443,6 +455,7 @@ describe('canvas context menu', () => {
 
   it('runs nothing when a disabled item is clicked', async () => {
     const viewport = await mountCanvas()
+    registerVerbHandlers()
     await setMode('select')
     await rightClick(viewport)
 
@@ -464,12 +477,13 @@ describe('Edit menu', () => {
 
   it('lists Undo and Redo, a separator, then the seven selection verbs', async () => {
     await mountMenuBar()
+    registerVerbHandlers()
     expectOutline(outline(await openEditMenu()), ['Undo', 'Redo', '---', ...EDIT_VERBS])
   })
 
   it('disables every verb whose action nothing has registered', async () => {
-    for (const id of VERB_ACTIONS) clearAction(id)
     await mountMenuBar()
+    for (const id of VERB_ACTIONS) clearAction(id)
     const room = paint(['0,0'])
     useSelectionStore().set([{ kind: 'room', id: room.id }], activeMapId())
 
@@ -488,6 +502,7 @@ describe('Edit menu', () => {
   // selection rather than with Paste and Select All.
   it('offers only Paste and Select All when nothing is selected', async () => {
     await mountMenuBar()
+    registerVerbHandlers()
 
     expect(enabledState(await openEditMenu(), EDIT_VERBS)).toEqual({
       Cut: false,
@@ -502,6 +517,7 @@ describe('Edit menu', () => {
 
   it('enables every verb for a room selection', async () => {
     await mountMenuBar()
+    registerVerbHandlers()
     const room = paint(['0,0', '1,0'])
     useSelectionStore().set([{ kind: 'room', id: room.id }], activeMapId())
 
@@ -518,6 +534,7 @@ describe('Edit menu', () => {
 
   it('withholds the clipboard verbs from a selection of icons and transitions', async () => {
     await mountMenuBar()
+    registerVerbHandlers()
     paint(['0,0'])
     paint(['4,0'])
     const icon = addIcon('0,0')
@@ -543,6 +560,7 @@ describe('Edit menu', () => {
 
   it('enables the clipboard verbs for a cell selection', async () => {
     await mountMenuBar()
+    registerVerbHandlers()
     paint(['0,0', '1,0'])
     useToolsStore().setSelectSubMode('cells')
     useSelectionStore().set([{ kind: 'cell', id: '0,0' }], activeMapId())
@@ -560,6 +578,7 @@ describe('Edit menu', () => {
 
   it('enables the clipboard verbs for a line selection', async () => {
     await mountMenuBar()
+    registerVerbHandlers()
     const line = addLine(['3,3', '4,3'])
     useSelectionStore().set([{ kind: 'line', id: line.id }], activeMapId())
 
@@ -576,6 +595,7 @@ describe('Edit menu', () => {
 
   it('treats a selection belonging to another map as no selection', async () => {
     await mountMenuBar()
+    registerVerbHandlers()
     const tabs = useTabsStore()
     const home = tabs.activeTabId
     tabs.addTab()
@@ -600,6 +620,7 @@ describe('Edit menu', () => {
   it('enables the same verbs outside Select mode', async () => {
     await setMode('draw')
     await mountMenuBar()
+    registerVerbHandlers()
     const room = paint(['0,0'])
     useSelectionStore().set([{ kind: 'room', id: room.id }], activeMapId())
 
@@ -616,6 +637,7 @@ describe('Edit menu', () => {
 
   it('runs the action behind an enabled item', async () => {
     await mountMenuBar()
+    registerVerbHandlers()
     itemNamed(await openEditMenu(), 'Paste').click()
     await nextTick()
     expect(handlerFor('paste')).toHaveBeenCalledTimes(1)
@@ -623,6 +645,7 @@ describe('Edit menu', () => {
 
   it('runs nothing when a disabled item is clicked', async () => {
     await mountMenuBar()
+    registerVerbHandlers()
     itemNamed(await openEditMenu(), 'Deselect').click()
     await nextTick()
     expect(handlerFor('deselect')).not.toHaveBeenCalled()

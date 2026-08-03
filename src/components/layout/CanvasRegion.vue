@@ -10,6 +10,7 @@ import { usePendingTeleportStore } from '@/stores/pendingTeleport'
 import { useArmedIconStore } from '@/stores/armedIcon'
 import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
 import { useSelectionStore } from '@/stores/selection'
+import { useClipboardStore } from '@/stores/clipboard'
 import { resolveZone, zoneTolerances, type DrawZone } from '@/canvas/drawZone'
 import { pushEscHandler } from '@/hotkeys/escStack'
 import { useHotkeyAction } from '@/hotkeys/useHotkeyAction'
@@ -43,6 +44,15 @@ import { movesOnDrag } from '@/gestures/moveOnDrag'
 import { deleteTransition } from '@/core/ops/doors'
 import { deleteRooms } from '@/core/ops/rooms'
 import {
+  copySelection,
+  cutSelection,
+  defaultPasteAt,
+  duplicateSelection,
+  paste,
+  type ClipboardPayload,
+} from '@/core/ops/clipboard'
+import { copyName } from '@/i18n/naming'
+import {
   createLine,
   deleteIcon,
   deleteLine,
@@ -73,7 +83,7 @@ import { PRIMARY_BUTTON, SECONDARY_BUTTON, startPointerDrag } from '@/composable
 import { DRAG_DEAD_ZONE } from '@/config/constants'
 import { cellKey, parseCell } from '@/core/cell'
 import type { GhostGesture } from '@/gestures/ghostGesture'
-import type { MapModel } from '@/core/types'
+import type { LineObject, MapModel, ObjectRef, Room } from '@/core/types'
 import type { BrushPreview, HoveredHandle } from '@/canvas/renderMap'
 import type { WorldPoint } from '@/canvas/stroke'
 import type { IconId, LineId, MapId, RoomId, TransitionId } from '@/core/ids'
@@ -99,6 +109,7 @@ const pendingTeleport = usePendingTeleportStore()
 const armedIcon = useArmedIconStore()
 const markupDefaults = useMarkupDefaultsStore()
 const selection = useSelectionStore()
+const clipboard = useClipboardStore()
 
 const container = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -1850,6 +1861,101 @@ useHotkeyAction('selectAll', () => {
 // The Edit menu's Deselect. Ungated, because there is one selection and every
 // mode can hold one: the same reason `Esc` clears it everywhere.
 useHotkeyAction('deselect', () => selection.clear())
+
+// The clipboard, all four verbs, and Select mode's alone. The other three spend
+// their gestures on authoring; a copy taken in Draw would act on the selection
+// that is only there to carry resize handles.
+//
+// Rooms and lines together, because Select can hold both at once and the
+// payload has to keep the geometry between them. Transitions are never copied,
+// and an icon travels as content on a cell that a copied room carries.
+function clipboardScope() {
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (modeStore.active !== 'select' || !tab || !map) return null
+  return {
+    tab,
+    map,
+    ids: { rooms: selection.roomsOn(tab.id), lines: selection.linesOn(tab.id) },
+  }
+}
+
+useHotkeyAction('copy', () => {
+  const scope = clipboardScope()
+  // Nothing a clipboard can hold, so nothing replaces what is already on it: a
+  // copy that quietly emptied the clipboard would be worse than one that
+  // refused.
+  if (!scope || !selection.hasCopyableOn(scope.tab.id)) return
+  clipboard.put(copySelection(scope.map, scope.ids))
+})
+
+useHotkeyAction('cut', () => {
+  const scope = clipboardScope()
+  if (!scope || !selection.hasCopyableOn(scope.tab.id)) return
+  model.run(t('history.cut'), mapScope(scope.tab.id), (tx) => {
+    clipboard.put(cutSelection(tx, model.project, scope.map, scope.ids))
+  })
+})
+
+useHotkeyAction('paste', () => {
+  const scope = clipboardScope()
+  if (!scope || clipboard.isEmpty) return
+  const payload = clipboard.payload
+  const landed = model.run(t('history.paste'), mapScope(scope.tab.id), (tx) =>
+    paste(tx, model.project, scope.map, payload, {
+      at: pasteAnchor(payload),
+      nameFor: roomNamer(scope.map),
+    }),
+  )
+  selectPasted(scope.tab.id, landed)
+})
+
+useHotkeyAction('duplicate', () => {
+  const scope = clipboardScope()
+  if (!scope || !selection.hasCopyableOn(scope.tab.id)) return
+  const landed = model.run(t('history.duplicate'), mapScope(scope.tab.id), (tx) =>
+    duplicateSelection(tx, model.project, scope.map, scope.ids, {
+      nameFor: roomNamer(scope.map),
+    }),
+  )
+  selectPasted(scope.tab.id, landed)
+})
+
+// Where the payload's origin lands: the cell under the pointer when there is
+// one, and otherwise clear of where the copy was taken from.
+//
+// `hoverWorld` is null once the pointer has left the canvas, which is exactly
+// the case the fallback is for: the key was pressed with the pointer over a
+// menu, a panel, or nothing at all.
+function pasteAnchor(payload: ClipboardPayload): { x: number; y: number } {
+  if (!hoverWorld) return defaultPasteAt(payload)
+  return { x: Math.floor(hoverWorld.x), y: Math.floor(hoverWorld.y) }
+}
+
+// The locked "<name> copy" / "copy 2" convention, against the names already on
+// the destination map.
+//
+// The accumulator matters when one paste lands several rooms: each name has to
+// avoid the ones the same paste just used, and the map cannot be asked, because
+// nothing has been added to it yet at the moment `paste` asks.
+function roomNamer(map: MapModel) {
+  const taken = [...map.rooms.values()].map((room) => room.name)
+  return ({ name }: { name: string; index: number }) => {
+    const next = copyName(name, taken)
+    taken.push(next)
+    return next
+  }
+}
+
+// What landed is what is selected, which is what makes a paste followed by a
+// drag move the copy rather than whatever was selected before it.
+function selectPasted(mapId: MapId, landed: { rooms: Room[]; lines: LineObject[] }): void {
+  const refs: ObjectRef[] = [
+    ...landed.rooms.map((room) => ({ kind: 'room', id: room.id }) as const),
+    ...landed.lines.map((line) => ({ kind: 'line', id: line.id }) as const),
+  ]
+  if (refs.length > 0) selection.set(refs, mapId)
+}
 
 useResizeObserver(container, resize)
 

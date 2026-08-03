@@ -1,10 +1,21 @@
 import { describe, it, expect } from 'vitest'
 import { edgeOfCell } from '../cell'
 import { createNewArea } from './project'
-import { copyCells, copyLines, copyRooms, cutCells, duplicateRooms, paste } from './clipboard'
+import {
+  copyCells,
+  copyLines,
+  copyRooms,
+  copySelection,
+  cutCells,
+  cutSelection,
+  defaultPasteAt,
+  duplicateRooms,
+  isClipboardEmpty,
+  paste,
+} from './clipboard'
 import { createFromBox } from './doors'
 import { createLine, placeIcon } from './markup'
-import { drawInnerWall, paintCells } from './rooms'
+import { drawInnerWall, moveRooms, paintCells } from './rooms'
 import { cellsOf, checkInvariants, grid, makeRoom, ok, rect, setup, sorted, tx } from '../testUtils'
 
 const LINE_DEFAULTS = { color: '#ffcc00', arrowStart: false, arrowEnd: true }
@@ -288,5 +299,180 @@ describe('clipboard survives a paste into another map', () => {
     const transaction = tx(map)
     const { rooms } = paste(transaction, project, map, payload, { at: { x: 0, y: 0 } })
     expect(cellsOf(rooms[0])).toEqual(sorted(rect(0, 0, 2, 2)))
+  })
+})
+
+describe('a mixed room and line selection', () => {
+  // Two payloads merged after the fact would each be relative to their own
+  // top-left, and the line would paste somewhere it never was relative to the
+  // room. One origin over the union is what keeps the pair rigid.
+  it('keeps the geometry between a room and a line, through a paste', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(4, 4, 2, 2))
+    const seed = tx(map)
+    const line = ok(createLine(seed, map, ['4,7', '5,7'], LINE_DEFAULTS))
+    seed.commit()
+
+    const payload = copySelection(map, { rooms: [room.id], lines: [line.id] })
+    const transaction = tx(map)
+    const pasted = paste(transaction, project, map, payload, { at: { x: 10, y: 20 } })
+
+    // The room's top-left is the union's, so it lands on the anchor; the line
+    // stays three rows below it, exactly as it was.
+    expect(cellsOf(pasted.rooms[0])).toEqual(sorted(rect(10, 20, 2, 2)))
+    expect(pasted.lines[0].points).toEqual(['10,23', '11,23'])
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  // The union's top-left can belong to the line rather than the room, and the
+  // rule does not care which: it is one anchor for both.
+  it('anchors on the line when the line is the top-left of the pair', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(4, 8, 2, 2))
+    const seed = tx(map)
+    const line = ok(createLine(seed, map, ['2,4', '3,4'], LINE_DEFAULTS))
+    seed.commit()
+
+    const payload = copySelection(map, { rooms: [room.id], lines: [line.id] })
+    expect(payload.sourceOrigin).toEqual({ x: 2, y: 4 })
+
+    const transaction = tx(map)
+    const pasted = paste(transaction, project, map, payload, { at: { x: 0, y: 0 } })
+    expect(pasted.lines[0].points).toEqual(['0,0', '1,0'])
+    expect(cellsOf(pasted.rooms[0])).toEqual(sorted(rect(2, 4, 2, 2)))
+  })
+
+  it('keeps whole-room boundaries when the payload holds both kinds', () => {
+    const { project, map } = setup()
+    const a = makeRoom(project, map, rect(0, 0, 1, 1))
+    const b = makeRoom(project, map, rect(1, 0, 1, 1))
+    const seed = tx(map)
+    const line = ok(createLine(seed, map, ['0,3', '1,3'], LINE_DEFAULTS))
+    seed.commit()
+
+    const payload = copySelection(map, { rooms: [a.id, b.id], lines: [line.id] })
+    const transaction = tx(map)
+    const pasted = paste(transaction, project, map, payload, { at: { x: 10, y: 10 } })
+
+    // Two rooms in, two rooms out: touching cells do not fuse into one, which
+    // is what `fromRooms` decides and what a line in the payload must not undo.
+    expect(pasted.rooms).toHaveLength(2)
+  })
+
+  it('is empty for a selection holding neither kind', () => {
+    const { map } = setup()
+    expect(isClipboardEmpty(copySelection(map, {}))).toBe(true)
+  })
+})
+
+describe('cutSelection', () => {
+  it('takes the payload and removes both kinds in the one transaction', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 2, 1))
+    const seed = tx(map)
+    const line = ok(createLine(seed, map, ['0,3', '1,3'], LINE_DEFAULTS))
+    seed.commit()
+
+    const transaction = tx(map)
+    const payload = cutSelection(transaction, project, map, { rooms: [room.id], lines: [line.id] })
+    transaction.commit()
+
+    expect(map.rooms.has(room.id)).toBe(false)
+    expect(map.lines.has(line.id)).toBe(false)
+    // The room's two cells. A line carries points rather than cells, so it
+    // adds none.
+    expect(payload.cells).toHaveLength(2)
+    expect(payload.lines).toHaveLength(1)
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  // The payload is what was there before the cut, so pasting it back restores
+  // the pair, still rigid.
+  it('round-trips what it took', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(4, 4, 2, 2))
+    const seed = tx(map)
+    const line = ok(createLine(seed, map, ['4,7', '5,7'], LINE_DEFAULTS))
+    seed.commit()
+
+    const cut = tx(map)
+    const payload = cutSelection(cut, project, map, { rooms: [room.id], lines: [line.id] })
+    cut.commit()
+
+    const back = tx(map)
+    const pasted = paste(back, project, map, payload, { at: payload.sourceOrigin })
+    back.commit()
+
+    expect(cellsOf(pasted.rooms[0])).toEqual(sorted(rect(4, 4, 2, 2)))
+    expect(pasted.lines[0].points).toEqual(['4,7', '5,7'])
+  })
+})
+
+describe('the default paste anchor', () => {
+  it('clears the source by its own width plus a gap', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(3, 2, 4, 1))
+
+    expect(defaultPasteAt(copyRooms(map, [room.id]))).toEqual({ x: 3 + 4 + 1, y: 2 })
+  })
+
+  // The point of recording the origin at copy time: by paste time there may be
+  // no source left to measure from.
+  it('still answers after the source has been cut', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(3, 2, 2, 2))
+
+    const transaction = tx(map)
+    const payload = cutSelection(transaction, project, map, { rooms: [room.id] })
+    transaction.commit()
+
+    expect(map.rooms.size).toBe(0)
+    expect(defaultPasteAt(payload)).toEqual({ x: 6, y: 2 })
+  })
+
+  it('answers where the copy was taken from, not where the source has since moved', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(3, 2, 2, 2))
+    const payload = copyRooms(map, [room.id])
+
+    const transaction = tx(map)
+    moveRooms(transaction, project, map, [room.id], 10, 10)
+    transaction.commit()
+
+    expect(defaultPasteAt(payload)).toEqual({ x: 6, y: 2 })
+  })
+
+  // Duplicate and a pointerless paste are the same offset by construction, so
+  // the two routes cannot drift apart.
+  it('is where duplicate puts its copy', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 1))
+
+    const transaction = tx(map)
+    const [copy] = duplicateRooms(transaction, project, map, [room.id])
+    transaction.commit()
+
+    const at = defaultPasteAt(copyRooms(map, [room.id]))
+    expect(cellsOf(copy)).toEqual(sorted(rect(at.x, at.y, 3, 1)))
+  })
+})
+
+describe('sourceOrigin', () => {
+  it('records the top-left each kind of copy normalised against', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, rect(2, 3, 2, 2))
+    const room = makeRoom(project, map, rect(7, 1, 1, 1))
+    const seed = tx(map)
+    const line = ok(createLine(seed, map, ['9,9', '10,9'], LINE_DEFAULTS))
+    seed.commit()
+
+    expect(copyRooms(map, [room.id]).sourceOrigin).toEqual({ x: 7, y: 1 })
+    expect(copyCells(map, ['2,4', '3,3']).sourceOrigin).toEqual({ x: 3, y: 3 })
+    expect(copyLines(map, [line.id]).sourceOrigin).toEqual({ x: 9, y: 9 })
+  })
+
+  it('is the top-left of an empty payload, not a stale coordinate', () => {
+    const { map } = setup()
+    expect(copyRooms(map, []).sourceOrigin).toEqual({ x: 0, y: 0 })
   })
 })

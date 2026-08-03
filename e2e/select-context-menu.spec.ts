@@ -22,12 +22,10 @@ test.describe('Select mode context menu', () => {
     await expect(menu).toBeVisible()
     await expect(menu.getByRole('menuitem')).toHaveText(['Cut', 'Copy', 'Duplicate', 'Delete'])
 
-    // Nothing was selected before the right-click, so Delete being live is what
-    // says the press selected the room under it.
+    // Nothing was selected before the right-click, so every item being live is
+    // what says the press selected the room under it.
     await expect(menu.getByRole('menuitem', { name: 'Delete' })).toBeEnabled()
-    // The clipboard verbs have no handler until the clipboard lands, so they
-    // refuse before the click rather than after it.
-    await expect(menu.getByRole('menuitem', { name: 'Copy' })).toBeDisabled()
+    await expect(menu.getByRole('menuitem', { name: 'Copy' })).toBeEnabled()
 
     await menu.getByRole('menuitem', { name: 'Delete' }).click()
     expect(await undoLabel(page)).toBe('Undo Delete Room')

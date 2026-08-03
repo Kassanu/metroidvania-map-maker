@@ -23,6 +23,7 @@ import type { Transaction } from '../journal'
 import { addCell, putIcon, putLine, putRoom, setInnerWall } from '../primitives'
 import type { LineObject, MapModel, ProjectModel, Room, WallStyle } from '../types'
 import { deleteRooms, eraseCells } from './rooms'
+import { deleteLine } from './markup'
 
 // One copied room's worth of payload. Named because `paste` carries it through
 // as the identity of the room it is about to create, rather than re-deriving
@@ -58,13 +59,32 @@ export interface ClipboardPayload {
   fromRooms: boolean
   // Lines travel only when explicitly selected as their own objects.
   lines: Omit<LineObject, 'id'>[]
+  // Where on the source map the payload's origin was, in absolute cells.
+  //
+  // The only absolute coordinate here, and it is not geometry: everything else
+  // is relative precisely so a payload survives being pasted into another map.
+  // This is what a paste with no pointer to aim at offsets from, and it has to
+  // be recorded at copy time because by paste time the source may have been
+  // cut, moved, or left behind on another tab.
+  //
+  // A save-file shape if the clipboard is ever persisted, which is why it is a
+  // plain pair of numbers rather than a CellKey.
+  sourceOrigin: { x: number; y: number }
 }
 
 // An empty payload is a value, not a refusal: copying nothing is a coherent
 // outcome (the selection was empty), and `isClipboardEmpty` is the predicate
 // that asks. Nothing here can be refused by a rule.
 export function emptyClipboard(): ClipboardPayload {
-  return { cells: [], icons: [], innerWalls: [], rooms: [], fromRooms: false, lines: [] }
+  return {
+    cells: [],
+    icons: [],
+    innerWalls: [],
+    rooms: [],
+    fromRooms: false,
+    lines: [],
+    sourceOrigin: { x: 0, y: 0 },
+  }
 }
 
 export function isClipboardEmpty(payload: ClipboardPayload): boolean {
@@ -93,16 +113,25 @@ function originOf(cells: Iterable<CellKey>): { x: number; y: number } {
 // ---------------------------------------------------------------------------
 
 // Room-select copy: whole rooms with their identity, inner walls and icons.
-export function copyRooms(map: MapModel, roomIds: Iterable<RoomId>): ClipboardPayload {
+//
+// `sharedOrigin` is for a selection holding more than one kind: the two halves
+// have to be normalised against the same cell or the relative geometry between
+// them is lost. Alone, each kind uses its own top-left.
+export function copyRooms(
+  map: MapModel,
+  roomIds: Iterable<RoomId>,
+  sharedOrigin?: { x: number; y: number },
+): ClipboardPayload {
   const rooms = [...roomIds]
     .map((id) => map.rooms.get(id))
     .filter((room): room is Room => room !== undefined)
   if (rooms.length === 0) return emptyClipboard()
 
   const all = rooms.flatMap((room) => [...room.cells])
-  const origin = originOf(all)
+  const origin = sharedOrigin ?? originOf(all)
   const payload = emptyClipboard()
   payload.fromRooms = true
+  payload.sourceOrigin = origin
 
   for (const room of rooms) {
     payload.rooms.push({
@@ -128,6 +157,7 @@ export function copyCells(map: MapModel, cells: Iterable<CellKey>): ClipboardPay
 
   const origin = originOf(selected)
   const payload = emptyClipboard()
+  payload.sourceOrigin = origin
   payload.cells = selected.map((cell) => offset(cell, -origin.x, -origin.y))
 
   // One pseudo-room per source room, so areas survive the round trip without
@@ -167,14 +197,19 @@ export function copyCells(map: MapModel, cells: Iterable<CellKey>): ClipboardPay
 }
 
 // Lines travel only as their own selected objects.
-export function copyLines(map: MapModel, lineIds: Iterable<LineId>): ClipboardPayload {
+export function copyLines(
+  map: MapModel,
+  lineIds: Iterable<LineId>,
+  sharedOrigin?: { x: number; y: number },
+): ClipboardPayload {
   const payload = emptyClipboard()
   const lines = [...lineIds]
     .map((id) => map.lines.get(id))
     .filter((line): line is LineObject => line !== undefined)
   if (lines.length === 0) return payload
 
-  const origin = originOf(lines.flatMap((line) => line.points))
+  const origin = sharedOrigin ?? originOf(lines.flatMap((line) => line.points))
+  payload.sourceOrigin = origin
   for (const line of lines) {
     const { id: _id, ...rest } = line
     void _id
@@ -184,6 +219,50 @@ export function copyLines(map: MapModel, lineIds: Iterable<LineId>): ClipboardPa
     })
   }
   return payload
+}
+
+// A Select-mode copy, which can hold rooms and lines at once.
+//
+// Both halves are normalised against the union's top-left rather than against
+// their own, which is the whole reason this exists: two payloads merged after
+// the fact would each be relative to a different cell, and pasting them would
+// put the line somewhere it never was relative to the room.
+//
+// Transitions and icons are not parameters. A transition is never copied, and
+// an icon travels as content on a cell, picked up by the rooms that carry it.
+export function copySelection(
+  map: MapModel,
+  selection: { rooms?: Iterable<RoomId>; lines?: Iterable<LineId> },
+): ClipboardPayload {
+  const roomIds = [...(selection.rooms ?? [])]
+  const lineIds = [...(selection.lines ?? [])]
+
+  const cells: CellKey[] = []
+  for (const id of roomIds) {
+    const room = map.rooms.get(id)
+    if (room) cells.push(...room.cells)
+  }
+  for (const id of lineIds) {
+    const line = map.lines.get(id)
+    if (line) cells.push(...line.points)
+  }
+  if (cells.length === 0) return emptyClipboard()
+
+  const origin = originOf(cells)
+  const rooms = copyRooms(map, roomIds, origin)
+  const lines = copyLines(map, lineIds, origin)
+
+  return {
+    cells: [...rooms.cells, ...lines.cells],
+    icons: [...rooms.icons, ...lines.icons],
+    innerWalls: [...rooms.innerWalls, ...lines.innerWalls],
+    rooms: [...rooms.rooms, ...lines.rooms],
+    // True if any whole room travelled: the pasted rooms keep the boundaries
+    // the copy stated rather than being refused into connected groups.
+    fromRooms: rooms.fromRooms || lines.fromRooms,
+    lines: [...rooms.lines, ...lines.lines],
+    sourceOrigin: origin,
+  }
 }
 
 function collectIcons(
@@ -237,6 +316,21 @@ export function cutCells(
 ): ClipboardPayload {
   const payload = copyCells(map, cells)
   eraseCells(tx, project, map, cells)
+  return payload
+}
+
+// The Select-mode cut: `copySelection` and then remove what it took, in the one
+// transaction the caller opened. Both halves together, so no caller can copy
+// and forget to delete, or delete in a second step that undoes separately.
+export function cutSelection(
+  tx: Transaction,
+  project: ProjectModel,
+  map: MapModel,
+  selection: { rooms?: Iterable<RoomId>; lines?: Iterable<LineId> },
+): ClipboardPayload {
+  const payload = copySelection(map, selection)
+  for (const id of selection.lines ?? []) deleteLine(tx, map, id)
+  if (selection.rooms) deleteRooms(tx, project, map, selection.rooms)
   return payload
 }
 
@@ -373,26 +467,59 @@ function horizontalSpan(cells: Iterable<CellKey>): number {
 // Duplicate
 // ---------------------------------------------------------------------------
 
-// Copy + paste at an offset, as one transaction: the Hierarchy's right-click
-// Duplicate, and Ctrl+D.
+// Where a payload lands when nothing aims it: clear of where it came from, by
+// its own full width plus a one-cell gap.
+//
+// Clear of the source because paste is destructive, so any offset that
+// overlapped would erase part of what was copied. Measured from `sourceOrigin`
+// rather than from the live source, which is what makes it hold after a cut,
+// after the source has moved, and on a map the source was never on.
+//
+// One definition for both routes: duplicate offsets by it, and a paste with no
+// pointer over the canvas falls back to it.
+export function defaultPasteAt(payload: ClipboardPayload): { x: number; y: number } {
+  return {
+    x: payload.sourceOrigin.x + horizontalSpan(payload.cells) + 1,
+    y: payload.sourceOrigin.y,
+  }
+}
+
+export interface DuplicateOptions {
+  offset?: { x: number; y: number }
+  nameFor?: PasteOptions['nameFor']
+}
+
+// Copy + paste at an offset, as one transaction, without going near the
+// clipboard: duplicating something must not cost the user whatever they had
+// copied.
+export function duplicateSelection(
+  tx: Transaction,
+  project: ProjectModel,
+  map: MapModel,
+  selection: { rooms?: Iterable<RoomId>; lines?: Iterable<LineId> },
+  options: DuplicateOptions = {},
+): { rooms: Room[]; lines: LineObject[] } {
+  const payload = copySelection(map, selection)
+  if (isClipboardEmpty(payload)) return { rooms: [], lines: [] }
+
+  // Callers that know where the user dropped it pass their own offset, still
+  // measured from the source's origin.
+  const at = options.offset
+    ? {
+        x: payload.sourceOrigin.x + options.offset.x,
+        y: payload.sourceOrigin.y + options.offset.y,
+      }
+    : defaultPasteAt(payload)
+  return paste(tx, project, map, payload, { at, nameFor: options.nameFor })
+}
+
+// Rooms alone, for callers that have no lines to offer.
 export function duplicateRooms(
   tx: Transaction,
   project: ProjectModel,
   map: MapModel,
   roomIds: Iterable<RoomId>,
-  options: { offset?: { x: number; y: number }; nameFor?: PasteOptions['nameFor'] } = {},
+  options: DuplicateOptions = {},
 ): Room[] {
-  const payload = copyRooms(map, roomIds)
-  if (isClipboardEmpty(payload)) return []
-
-  // Clear of the original, because paste is destructive: it erases whatever
-  // occupies the destination cells. Any offset that overlaps the source would
-  // delete part of the source. The default clears the selection's full width
-  // with a one-cell gap. Callers that know where the user dropped it pass their own.
-  const at = options.offset ?? { x: horizontalSpan(payload.cells) + 1, y: 0 }
-  const origin = originOf([...roomIds].flatMap((id) => [...(map.rooms.get(id)?.cells ?? [])]))
-  return paste(tx, project, map, payload, {
-    at: { x: origin.x + at.x, y: origin.y + at.y },
-    nameFor: options.nameFor,
-  }).rooms
+  return duplicateSelection(tx, project, map, { rooms: roomIds }, options).rooms
 }
