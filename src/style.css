@@ -64,6 +64,10 @@
    * selection has to stay legible on top of any of them. Opaque rather than
    * translucent, because it is drawn under the marker it surrounds. */
   --canvas-selection: #f0a020;
+  /* The tint over a selected cell, which the outline above surrounds the union
+   * of. Denser than the marquee sheet below: the band is a live gesture over
+   * everything it passes, where this marks the cells that stay marked. */
+  --canvas-selection-fill: rgba(240, 160, 32, 0.22);
   /* The marquee's outline and the sheet inside it. The selection hue, because
    * the box turns into halos in that colour the moment it is released. The fill
    * is faint enough to read rooms, walls and icons through all at once. */
@@ -101,6 +105,7 @@
     --canvas-handle: rgba(128, 170, 255, 0.4);
     --canvas-handle-hover: rgba(128, 170, 255, 0.85);
     --canvas-selection: #ffc14d;
+    --canvas-selection-fill: rgba(255, 193, 77, 0.25);
     --canvas-marquee: rgba(255, 193, 77, 0.9);
     --canvas-marquee-fill: rgba(255, 193, 77, 0.18);
   }
@@ -131,6 +136,7 @@
   --canvas-handle: rgba(64, 112, 224, 0.4);
   --canvas-handle-hover: rgba(64, 112, 224, 0.85);
   --canvas-selection: #f0a020;
+  --canvas-selection-fill: rgba(240, 160, 32, 0.22);
   --canvas-marquee: rgba(240, 160, 32, 0.9);
   --canvas-marquee-fill: rgba(240, 160, 32, 0.15);
 }
@@ -158,6 +164,7 @@
   --canvas-handle: rgba(128, 170, 255, 0.4);
   --canvas-handle-hover: rgba(128, 170, 255, 0.85);
   --canvas-selection: #ffc14d;
+  --canvas-selection-fill: rgba(255, 193, 77, 0.25);
   --canvas-marquee: rgba(255, 193, 77, 0.9);
   --canvas-marquee-fill: rgba(255, 193, 77, 0.18);
 }

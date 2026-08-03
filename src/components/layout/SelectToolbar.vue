@@ -8,15 +8,10 @@ import type { SelectSubMode } from '@/canvas/selectTarget'
 // selected is the Inspector's job, and every column of the table is a pointer
 // gesture or a key.
 //
-// `enabled` rather than a filtered list, so the disabled half is visible and
-// says what it is instead of being missing. Cells resolves and is tested, but
-// nothing consumes a cell selection and no cell gesture exists, so a live
-// toggle would offer a granularity where every press resolves correctly and
-// then does nothing.
 const GRANULARITY = [
-  { mode: 'rooms', label: 'toolbar.select.rooms', enabled: true },
-  { mode: 'cells', label: 'toolbar.select.cells', enabled: false },
-] as const satisfies readonly { mode: SelectSubMode; label: MessageKey; enabled: boolean }[]
+  { mode: 'rooms', label: 'toolbar.select.rooms' },
+  { mode: 'cells', label: 'toolbar.select.cells' },
+] as const satisfies readonly { mode: SelectSubMode; label: MessageKey }[]
 
 const tools = useToolsStore()
 </script>
@@ -36,10 +31,8 @@ const tools = useToolsStore()
         type="button"
         class="toolbar-button granularity-button"
         role="radio"
-        :disabled="!option.enabled"
         :aria-checked="tools.selectSubMode === option.mode"
         :class="{ active: tools.selectSubMode === option.mode }"
-        :title="option.enabled ? undefined : t('toolbar.select.cellsUnavailable')"
         @click="tools.setSelectSubMode(option.mode)"
       >
         {{ t(option.label) }}
@@ -66,9 +59,5 @@ const tools = useToolsStore()
 .granularity-button.active {
   background: var(--accent-soft, var(--surface-raised));
   font-weight: 600;
-}
-.granularity-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 </style>

@@ -7,7 +7,7 @@ import { drawIconBadge, drawIconPlate, UNKNOWN_ICON_ART, type IconArt } from './
 import { cellCentre, type TeleportEnd, type TeleportScene } from './teleports'
 import { parseCell, segmentFromEdge } from '@/core/cell'
 import type { CellKey, EdgeKey } from '@/core/cell'
-import { interiorVertices, outerWalls, resizableRuns } from '@/core/derive/walls'
+import { boundaryEdges, interiorVertices, outerWalls, resizableRuns } from '@/core/derive/walls'
 import { clamp } from '@/lib/math'
 import type { AreaId, LockTypeId, RoomId, TransitionId } from '@/core/ids'
 import type { Area, LockType, MapModel, Room, WallStyle } from '@/core/types'
@@ -130,6 +130,14 @@ export interface MapScene {
   // derived from the room the map already holds, so passing shapes would be a
   // second copy of it to keep in step.
   selectedRooms: ReadonlySet<RoomId>
+  // The cells currently selected on this map, tinted individually and outlined
+  // around their union.
+  //
+  // Cells rather than ids, because a cell key is the whole of what a cell is;
+  // there is nothing on the map to resolve it against. The set may span several
+  // rooms, which is the ordinary case: the union is a region the user swept,
+  // not a property of any room.
+  selectedCells: ReadonlySet<CellKey>
   // The room drawn with resize handles, or null when none is.
   handleRoom: HandleRoomScene | null
   // The marquee's rectangle while a select drag is live, or null.
@@ -398,6 +406,9 @@ export function renderMap(
   // First of the two, so a selected door on a selected room's wall reads as the
   // door it is rather than as a bulge in the room's outline.
   if (scene.selectedRooms.size > 0) drawRoomSelection(ctx, scene, map)
+  // Beside the room halo and in the same slot: it is the same mark in the same
+  // colour on a different shape, and both have to sit under the walls.
+  if (scene.selectedCells.size > 0) drawCellSelection(ctx, scene)
   // The selection halo goes here: over the room fills, under the walls and
   // under every transition it surrounds. That ordering is what makes it a halo
   // rather than a highlight: it is the same shape drawn wider, so it can only
@@ -613,6 +624,42 @@ function drawRoomSelection(ctx: CanvasRenderingContext2D, scene: MapScene, map: 
     for (const edge of outerWalls(room)) traceEdge(ctx, edge, scene)
     ctx.stroke()
   }
+
+  ctx.lineCap = 'butt'
+  ctx.lineWidth = 1
+}
+
+// A cell selection: every selected cell tinted, and one outline traced around
+// the boundary of the whole set.
+//
+// Not the halo treatment the other four kinds get. A cell's own shape is the
+// grid square, so drawing each one wider underneath itself would turn fifty
+// selected cells into fifty boxes; what the user selected is the region, and
+// the region is what gets the outline.
+//
+// One path over the union, which is the opposite of the room halo's rule
+// directly above and for the same reason: two selected cells side by side are
+// one region and the seam between them must go, where two selected rooms side
+// by side stay two. Cells that touch nothing else keep their own boundary in
+// the same set, so a scattered selection draws as several outlines with no
+// connectivity walk here.
+//
+// Square caps, as in `drawRoomSelection`: the outline is traced edge by edge
+// and a line this thick shows a notch at every corner otherwise.
+function drawCellSelection(ctx: CanvasRenderingContext2D, scene: MapScene) {
+  ctx.fillStyle = scene.palette.selectionFill
+  for (const cell of scene.selectedCells) {
+    const [x, y, width, height] = cellRect(cell, scene)
+    ctx.fillRect(x, y, width, height)
+  }
+
+  ctx.strokeStyle = scene.palette.selection
+  ctx.lineWidth = wallWidth(scene.camera.zoom) + SELECTION_HALO_PX * 2
+  ctx.lineCap = 'square'
+  ctx.setLineDash([])
+  ctx.beginPath()
+  for (const edge of boundaryEdges(scene.selectedCells)) traceEdge(ctx, edge, scene)
+  ctx.stroke()
 
   ctx.lineCap = 'butt'
   ctx.lineWidth = 1

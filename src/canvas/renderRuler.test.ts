@@ -50,6 +50,7 @@ const palette: CanvasPalette = {
   handle: '#handle',
   handleHover: '#handlehover',
   selection: '#selection',
+  selectionFill: '#selectionfill',
   marquee: '#marquee',
   marqueeFill: '#marqueefill',
 }

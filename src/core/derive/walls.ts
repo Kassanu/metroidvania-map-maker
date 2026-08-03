@@ -26,14 +26,24 @@ export interface EdgeRun {
   edges: EdgeKey[]
 }
 
-export function computeOuterWalls(room: Room): Set<EdgeKey> {
-  const walls = new Set<EdgeKey>()
-  for (const cell of room.cells) {
+// The boundary of an arbitrary cell set: every edge with no member across it.
+//
+// A room's outer walls are this over its own cells, and a cell selection's
+// outline is this over cells that may span several rooms or none. Two disjoint
+// clumps yield both their boundaries in one set, so the result draws as two
+// outlines without anything here knowing about connectivity.
+export function boundaryEdges(cells: ReadonlySet<CellKey>): Set<EdgeKey> {
+  const edges = new Set<EdgeKey>()
+  for (const cell of cells) {
     for (const side of SIDES) {
-      if (!room.cells.has(neighborOn(cell, side))) walls.add(edgeOfCell(cell, side))
+      if (!cells.has(neighborOn(cell, side))) edges.add(edgeOfCell(cell, side))
     }
   }
-  return walls
+  return edges
+}
+
+export function computeOuterWalls(room: Room): Set<EdgeKey> {
+  return boundaryEdges(room.cells)
 }
 
 export function computeEdgeRuns(room: Room): EdgeRun[] {

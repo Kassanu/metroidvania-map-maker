@@ -5,6 +5,7 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import CanvasRegion from './CanvasRegion.vue'
 import { useModeStore } from '@/stores/mode'
+import { useToolsStore } from '@/stores/tools'
 import { useSelectionStore } from '@/stores/selection'
 import { useClipboardStore } from '@/stores/clipboard'
 import { useTabsStore } from '@/stores/tabs'
@@ -144,6 +145,24 @@ describe('the clipboard verbs', () => {
       runAction('copy')
 
       expect(clipboard().isEmpty).toBe(true)
+    })
+
+    // A cell selection carries no room and no line, so every verb here would
+    // act on two empty lists. Refusing keeps the clipboard the user filled in
+    // the other granularity, rather than replacing it with a payload a paste
+    // does nothing with.
+    it('leaves the clipboard alone in the Cells sub-mode', async () => {
+      await mountCanvas()
+      const a = room(['0,0'])
+      selection().set([{ kind: 'room', id: a }], mapId())
+      runAction('copy')
+      const kept = clipboard().payload
+
+      useToolsStore().setSelectSubMode('cells')
+      selection().set([{ kind: 'cell', id: '0,0' }], mapId())
+      runAction('copy')
+
+      expect(clipboard().payload).toBe(kept)
     })
   })
 

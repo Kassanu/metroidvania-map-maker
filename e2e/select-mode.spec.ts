@@ -1,5 +1,24 @@
 import { test, expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { openApp, gridMapping, undoLabel } from './support/canvas'
+
+// The colour the map canvas has at a screen point, in backing-store pixels.
+// The only way to read a mark that lives nowhere but the bitmap.
+async function pixelAt(page: Page, point: { x: number; y: number }) {
+  return page.evaluate(({ x, y }) => {
+    const canvas = document.querySelector('.canvas-viewport canvas.canvas') as HTMLCanvasElement
+    const box = canvas.getBoundingClientRect()
+    const ratio = window.devicePixelRatio || 1
+    const ctx = canvas.getContext('2d')!
+    const { data } = ctx.getImageData(
+      Math.round((x - box.x) * ratio),
+      Math.round((y - box.y) * ratio),
+      1,
+      1,
+    )
+    return [data[0], data[1], data[2], data[3]]
+  }, point)
+}
 
 // Select mode's shell in a real browser: the toolbar it grew, and the cursor,
 // which is the only part of the resolver a user can see before they commit to a
@@ -10,7 +29,7 @@ const IN_A_ROOM = { x: 1.5, y: 0.5 }
 const BARE_GRID = { x: 9.5, y: 3.5 }
 
 test.describe('Select mode', () => {
-  test('offers rooms and cells, with cells not yet pickable', async ({ page }) => {
+  test('offers rooms and cells, starting on rooms', async ({ page }) => {
     const { errors } = await openApp(page)
     await page.keyboard.press('2')
 
@@ -19,7 +38,36 @@ test.describe('Select mode', () => {
       'aria-checked',
       'true',
     )
-    await expect(granularity.getByRole('radio', { name: 'Cells' })).toBeDisabled()
+    await granularity.getByRole('radio', { name: 'Cells' }).click()
+    await expect(granularity.getByRole('radio', { name: 'Cells' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    expect(errors).toEqual([])
+  })
+
+  // A cell selection has no DOM and no undo entry to read it back through: the
+  // canvas is the whole of it. So this asks the canvas directly, which is also
+  // the only claim worth making here, that picking Cells is visibly not a
+  // no-op.
+  test('marks a clicked cell on the canvas, and only that cell', async ({ page }) => {
+    const { errors } = await openApp(page)
+    await page.keyboard.press('2')
+    await page
+      .getByRole('radiogroup', { name: 'Select' })
+      .getByRole('radio', { name: 'Cells' })
+      .click()
+    const grid = await gridMapping(page)
+
+    const target = grid.at(IN_A_ROOM.x, IN_A_ROOM.y)
+    const neighbour = grid.at(IN_A_ROOM.x + 1, IN_A_ROOM.y)
+    const before = await pixelAt(page, target)
+    const neighbourBefore = await pixelAt(page, neighbour)
+
+    await page.mouse.click(target.x, target.y)
+
+    expect(await pixelAt(page, target)).not.toEqual(before)
+    expect(await pixelAt(page, neighbour)).toEqual(neighbourBefore)
     expect(errors).toEqual([])
   })
 

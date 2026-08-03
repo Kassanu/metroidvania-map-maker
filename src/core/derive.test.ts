@@ -6,7 +6,13 @@ import {
   topLeftMost,
   transformCells,
 } from './derive/connectivity'
-import { computeEdgeRuns, computeOuterWalls, interiorVertices, resizableRuns } from './derive/walls'
+import {
+  boundaryEdges,
+  computeEdgeRuns,
+  computeOuterWalls,
+  interiorVertices,
+  resizableRuns,
+} from './derive/walls'
 import { contentBounds, areaBoundsOnMap, roomsOverlapping } from './derive/bounds'
 import { WORLD_AREA_ID } from './ids'
 import { grid, makeRoom, rect, setup, sorted } from './testUtils'
@@ -151,6 +157,44 @@ describe('outer walls', () => {
     const room = makeRoom(project, map, rect(0, 0, 1, 1))
     makeRoom(project, map, rect(1, 0, 1, 1), room.id)
     expect(computeOuterWalls(room).has(edgeOfCell('0,0', 'E'))).toBe(false)
+  })
+})
+
+// The same walk over a set nobody owns: what a cell selection is outlined by.
+describe('boundary edges', () => {
+  it('answers a room its own outer walls', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 2, 1))
+    expect(boundaryEdges(room.cells)).toEqual(computeOuterWalls(room))
+  })
+
+  it('drops the seam between two cells that touch', () => {
+    const edges = boundaryEdges(new Set(rect(0, 0, 2, 1)))
+
+    expect(edges.size).toBe(6)
+    expect(edges.has(edgeOfCell('0,0', 'E'))).toBe(false)
+  })
+
+  // Two clumps that touch nothing come back as both their boundaries in one
+  // set, which is what lets the renderer draw a scattered selection as several
+  // outlines without walking connectivity itself.
+  it('keeps the boundary of every disjoint clump', () => {
+    const edges = boundaryEdges(new Set(grid(`##.##`)))
+
+    expect(edges.size).toBe(12)
+    expect(edges.has(edgeOfCell('1,0', 'E'))).toBe(true)
+    expect(edges.has(edgeOfCell('3,0', 'W'))).toBe(true)
+  })
+
+  // A diagonal touch is not a touch: the two cells share a corner and no edge,
+  // so nothing is dropped between them.
+  it('treats a diagonal contact as two separate shapes', () => {
+    const edges = boundaryEdges(new Set(grid(`#.\n.#`)))
+    expect(edges.size).toBe(8)
+  })
+
+  it('has no edges for an empty set', () => {
+    expect(boundaryEdges(new Set()).size).toBe(0)
   })
 })
 

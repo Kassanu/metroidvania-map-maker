@@ -161,6 +161,7 @@ const palette: CanvasPalette = {
   handle: '#handle',
   handleHover: '#handlehover',
   selection: '#selection',
+  selectionFill: '#selectionfill',
   marquee: '#marquee',
   marqueeFill: '#marqueefill',
 }
@@ -192,6 +193,7 @@ function scene(overrides: Partial<MapScene> = {}): MapScene {
     pendingTeleport: null,
     selected: new Set(),
     selectedRooms: new Set(),
+    selectedCells: new Set(),
     handleRoom: null,
     marquee: null,
     palette,
@@ -1428,6 +1430,133 @@ describe('renderMap drawing selected rooms', () => {
     draw(ctx, { ...onMap(fixture), selectedRooms: new Set(['room_elsewhere' as RoomId]) })
 
     expect(halos(strokes)).toEqual([])
+  })
+})
+
+// The one selection mark that is not a halo: a tint per cell, and a single
+// outline around the union rather than around each of them.
+describe('renderMap drawing a cell selection', () => {
+  const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
+    renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
+
+  const tints = <T extends { style: string }>(fills: T[]) =>
+    fills.filter((fill) => fill.style === '#selectionfill')
+  const outlines = <T extends { style: string }>(strokes: T[]) =>
+    strokes.filter((stroke) => stroke.style === '#selection')
+
+  // Two 2x1 rooms side by side, sharing the boundary at x=2, so a selection can
+  // span both of them.
+  //
+  //   room L (0,0)(1,0)   room R (2,0)(3,0)
+  function twoRooms() {
+    const built = withMap((tx, project, map) => {
+      paintCells(tx, project, map, ['0,0', '1,0'], { areaId: WORLD_AREA_ID })
+      paintCells(tx, project, map, ['2,0', '3,0'], { areaId: WORLD_AREA_ID })
+    })
+    return { map: built.map, areas: built.project.areas, lockTypes: built.project.lockTypes }
+  }
+
+  it('draws nothing when no cell is selected', () => {
+    const { ctx, fills, strokes } = fakeContext()
+
+    draw(ctx, twoRooms())
+
+    expect(tints(fills)).toEqual([])
+    expect(outlines(strokes)).toEqual([])
+  })
+
+  it('tints each selected cell, and only those', () => {
+    const { ctx, fills } = fakeContext()
+
+    draw(ctx, { ...twoRooms(), selectedCells: new Set<CellKey>(['1,0', '2,0']) })
+
+    expect(tints(fills).map((fill) => fill.rect)).toEqual([
+      [TILE, 0, TILE, TILE],
+      [2 * TILE, 0, TILE, TILE],
+    ])
+  })
+
+  // The rule that makes a swept region read as one thing: two selected cells
+  // side by side are one region, so the seam between them goes. This is the
+  // opposite of the room halo, where two adjacent selected rooms stay two.
+  it('outlines the union in one path, without the seam between neighbours', () => {
+    const { ctx, strokes } = fakeContext()
+
+    draw(ctx, { ...twoRooms(), selectedCells: new Set<CellKey>(['1,0', '2,0']) })
+
+    const drawn = outlines(strokes)
+    expect(drawn).toHaveLength(1)
+    // Six edges for a 2x1 region, and the seam at x=2 is not one of them.
+    expect(drawn[0].segments).toHaveLength(6)
+    expect(drawn[0].segments).not.toContainEqual([2 * TILE, 0, 2 * TILE, TILE])
+  })
+
+  // A selection spanning two rooms is one region: the wall between them is the
+  // rooms' business, and the outline says what was selected, not what owns it.
+  it('spans two rooms as one outline', () => {
+    const { ctx, strokes } = fakeContext()
+
+    draw(ctx, { ...twoRooms(), selectedCells: new Set<CellKey>(['0,0', '1,0', '2,0', '3,0']) })
+
+    const drawn = outlines(strokes)
+    expect(drawn).toHaveLength(1)
+    expect(drawn[0].segments).toHaveLength(10)
+  })
+
+  // Still one path, and it holds both boundaries: a scattered selection reads
+  // as the several regions it is, with no connectivity walk anywhere.
+  it('keeps two clumps apart in the same path', () => {
+    const { ctx, strokes } = fakeContext()
+
+    draw(ctx, { ...twoRooms(), selectedCells: new Set<CellKey>(['0,0', '3,0']) })
+
+    const drawn = outlines(strokes)
+    expect(drawn).toHaveLength(1)
+    expect(drawn[0].segments).toHaveLength(8)
+  })
+
+  // Under the walls and over the fills, the slot the room halo sits in: the
+  // tint marks cells, and a wall drawn over it stays crisp.
+  it('draws under the walls and over the room fills', () => {
+    const { ctx, fills, strokes } = fakeContext()
+
+    draw(ctx, { ...twoRooms(), selectedCells: new Set<CellKey>(['0,0']) })
+
+    const outline = strokes.findIndex((stroke) => stroke.style === '#selection')
+    const wall = strokes.findIndex((stroke) => stroke.style === '#roomwall')
+    expect(outline).toBeLessThan(wall)
+    const tint = fills.findIndex((fill) => fill.style === '#selectionfill')
+    const roomFill = fills.findIndex((fill) => fill.style === '#roomfill')
+    expect(roomFill).toBeLessThan(tint)
+  })
+
+  // The same screen measure the room halo stands proud by, so the two selection
+  // marks read as one language at any zoom.
+  it('stands the same distance proud of the wall at every zoom', () => {
+    for (const zoom of [0.4, 1, 3]) {
+      const { ctx, strokes } = fakeContext()
+
+      draw(ctx, {
+        ...twoRooms(),
+        camera: { pan: { x: 0, y: 0 }, zoom },
+        selectedCells: new Set<CellKey>(['0,0']),
+      })
+
+      const outline = outlines(strokes)[0]
+      const wall = strokes.find((stroke) => stroke.style === '#roomwall')!
+      expect(outline.width - wall.width).toBeCloseTo(6)
+    }
+  })
+
+  // The cells are the whole of what a cell selection is: nothing resolves them
+  // against the map, so a cell no room owns still draws.
+  it('draws a cell no room owns', () => {
+    const { ctx, fills, strokes } = fakeContext()
+
+    draw(ctx, { ...twoRooms(), selectedCells: new Set<CellKey>(['9,9']) })
+
+    expect(tints(fills)).toHaveLength(1)
+    expect(outlines(strokes)[0].segments).toHaveLength(4)
   })
 })
 

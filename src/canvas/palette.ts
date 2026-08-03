@@ -76,6 +76,14 @@ export interface CanvasPalette {
   // chose, so a cool selection would be indistinguishable from a lock on a blue
   // door, and this one has to read as selection on top of any of them.
   selection: string
+  // The tint over a selected cell, under the outline `selection` draws around
+  // the union of them.
+  //
+  // A cell has no marker to thicken and no shape but the grid square it is, so
+  // the halo language every other kind speaks has nothing to say here: fifty
+  // squares each outlined in turn is a grid, not a selection. Translucent so
+  // the room fill, the icon on it and the walls around it all read through.
+  selectionFill: string
   // The marquee's outline and the sheet inside it, while a select drag is live.
   //
   // The selection hue rather than `brush`, because the marquee is the one aid
@@ -116,6 +124,7 @@ export function readCanvasPalette(): CanvasPalette {
     handle: readVar(styles, '--canvas-handle'),
     handleHover: readVar(styles, '--canvas-handle-hover'),
     selection: readVar(styles, '--canvas-selection'),
+    selectionFill: readVar(styles, '--canvas-selection-fill'),
     marquee: readVar(styles, '--canvas-marquee'),
     marqueeFill: readVar(styles, '--canvas-marquee-fill'),
   }

@@ -209,6 +209,7 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       // exactly one is selected in Draw mode, which is why they are drawn in
       // different colours on different layers rather than sharing either.
       selectedRooms: selectedRooms(),
+      selectedCells: selectedCells(),
       marquee: marquee?.rect ?? null,
       // Handles are drawn at the size `drawZone` grabs them at: the tolerances
       // come from there rather than being chosen here, so the handle and the
@@ -291,6 +292,18 @@ function selectedRooms(): ReadonlySet<RoomId> {
   if (!tab) return EMPTY_ROOM_SELECTION
   const ids = selection.roomsOn(tab.id)
   return ids.length === 0 ? EMPTY_ROOM_SELECTION : new Set(ids)
+}
+
+// The selected cells on the tab being drawn. Ungated like the rooms above, and
+// drawn in every mode: a cell selection can only be built in one of them, but
+// what is selected does not stop being selected because the mode changed.
+const EMPTY_CELL_SELECTION: ReadonlySet<CellKey> = new Set()
+
+function selectedCells(): ReadonlySet<CellKey> {
+  const tab = tabsStore.activeTab
+  if (!tab) return EMPTY_CELL_SELECTION
+  const cells = selection.cellsOn(tab.id)
+  return cells.length === 0 ? EMPTY_CELL_SELECTION : new Set(cells)
 }
 
 // Icons and lines in one set, because the renderer takes the markup layer as a
@@ -827,7 +840,11 @@ function handleSelectPress(event: PointerEvent) {
   // band one cell across draws nothing. A drag from an object is a move, which
   // cannot: it has to know what is selected, and on an unselected object that
   // is not decided until the press turns out to be a drag.
-  const band = target.kind === 'empty' && world ? beginMarquee(tab.id, world, additive, draw) : null
+  //
+  // Rooms only: the band commits whole rooms, so running it in the Cells
+  // sub-mode would answer a granularity nobody asked for.
+  const bandable = target.kind === 'empty' && tools.selectSubMode === 'rooms'
+  const band = bandable && world ? beginMarquee(tab.id, world, additive, draw) : null
   marquee = band
 
   let leftCell = false
@@ -1838,24 +1855,25 @@ function deleteSelectionLabel(): string {
   return t('history.deleteTransition')
 }
 
-// `Ctrl+A` selects every room on the tab, and only in Select mode. The other
-// three modes each act on one kind through one gesture, so a whole-map
-// selection in them would change nothing but what `Del` and `Esc` do.
+// `Ctrl+A` selects everything at the granularity in use, and only in Select
+// mode. The other three modes each act on one kind through one gesture, so a
+// whole-map selection in them would change nothing but what `Del` and `Esc` do.
 //
-// Rooms, not everything on the map: icons, lines and transitions are reached by
-// click and shift-click. In the Cells sub-mode the same key means every owned
-// cell, a different list of a different kind, so this arm answers for Rooms
-// alone.
+// Rooms are not everything on the map: icons, lines and transitions are reached
+// by click and shift-click. Cells are every cell a room owns, never bare grid,
+// which comes straight from asking `cellOwner` rather than the grid: an
+// unbounded grid has no "all" to select.
 useHotkeyAction('selectAll', () => {
-  if (modeStore.active !== 'select' || tools.selectSubMode !== 'rooms') return
+  if (modeStore.active !== 'select') return
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
   if (!tab || !map) return
 
-  selection.set(
-    [...map.rooms.keys()].map((id) => ({ kind: 'room', id })),
-    tab.id,
-  )
+  const refs: ObjectRef[] =
+    tools.selectSubMode === 'cells'
+      ? [...map.cellOwner.keys()].map((id) => ({ kind: 'cell', id }))
+      : [...map.rooms.keys()].map((id) => ({ kind: 'room', id }))
+  selection.set(refs, tab.id)
 })
 
 // The Edit menu's Deselect. Ungated, because there is one selection and every
@@ -1873,6 +1891,10 @@ function clipboardScope() {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
   if (modeStore.active !== 'select' || !tab || !map) return null
+  // Rooms only, for now. A cell selection carries no room or line, so every
+  // verb below would act on an empty pair of lists, and copy would replace a
+  // useful clipboard with a payload a paste does nothing with.
+  if (tools.selectSubMode !== 'rooms') return null
   return {
     tab,
     map,

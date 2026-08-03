@@ -226,9 +226,9 @@ describe('Select precedence table', () => {
     })
   })
 
-  // The Cells arm, reached through the store because the toolbar's half of it is
-  // deliberately disabled. Every press resolves to the cell it landed in, and
-  // the objects standing on that cell are unreachable.
+  // The Cells arm. Every press resolves to the cell it landed in, and the
+  // objects standing on that cell are unreachable: the granularity is the
+  // whole of what the toggle changes.
   describe('the Cells sub-mode', () => {
     it('selects the cell where Rooms selects the object on it', async () => {
       const { viewport } = await mountCanvas()
@@ -237,6 +237,74 @@ describe('Select precedence table', () => {
 
       await click(viewport, at(1.5, 2.5))
       expect(selection().selected).toEqual([{ kind: 'cell', id: '1,2' }])
+    })
+
+    // The icon on (1,2) and the door on the seam at x=2 are both topmost in
+    // Rooms. Here neither is reachable, which is what makes this a different
+    // table rather than the same one filtered.
+    it('takes the cell under a door, where Rooms takes the door', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId, door } = fixture()
+      const tools = useToolsStore()
+
+      await click(viewport, at(2, 0.5))
+      expect(selection().selected).toEqual([{ kind: 'transition', id: door }])
+
+      tools.setSelectSubMode('cells')
+      await click(viewport, at(2, 0.5))
+      expect(selection().transitionsOn(mapId)).toEqual([])
+      expect(selection().cellsOn(mapId)).toHaveLength(1)
+    })
+
+    it('adds and removes a cell on shift-click', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId } = fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await click(viewport, at(0.5, 2.5))
+      await shiftClick(viewport, at(1.5, 2.5))
+      expect(selection().cellsOn(mapId)).toEqual(['0,2', '1,2'])
+
+      await shiftClick(viewport, at(0.5, 2.5))
+      expect(selection().cellsOn(mapId)).toEqual(['1,2'])
+    })
+
+    // Cells of two different rooms in one selection, which is the ordinary
+    // case: what was swept is a region, and which room owns each cell of it is
+    // not the selection's business.
+    it('builds a selection spanning two rooms', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId } = fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await click(viewport, at(1.5, 0.5))
+      await shiftClick(viewport, at(2.5, 0.5))
+      expect(selection().cellsOn(mapId)).toEqual(['1,0', '2,0'])
+    })
+
+    // The same rule bare grid follows in Rooms, and for the same reason: a
+    // stray shift-click must not destroy the selection it is building.
+    it('leaves the selection alone on a shift-click off any room', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId } = fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await click(viewport, at(0.5, 2.5))
+      await shiftClick(viewport, at(9.5, 9.5))
+      expect(selection().cellsOn(mapId)).toEqual(['0,2'])
+    })
+
+    // The Drag column belongs to the cell marquee, which this sub-mode does not
+    // have yet. Until it does, a drag over the grid must not fall through to
+    // the band that selects whole rooms.
+    it('marquees nothing on a drag over the grid', async () => {
+      const { viewport } = await mountCanvas()
+      fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await drag(viewport, at(9.5, 9.5), at(0.5, 0.5))
+
+      expect(selection().isEmpty).toBe(true)
     })
 
     // Two granularities, one key. Erasing cells is a different op on a
@@ -677,14 +745,26 @@ describe('Select precedence table', () => {
     // The two sub-modes hold different things, so a whole-tab select in Cells
     // is a list of cells. Selecting the rooms instead would put a selection in
     // the store that no press in this sub-mode could have made.
-    it('does nothing in the Cells sub-mode', async () => {
+    //
+    // Owned cells only. The grid is unbounded, so "every cell" is not a list,
+    // and the line on row 4 sits on cells no room owns.
+    it('selects every owned cell in the Cells sub-mode, and no bare grid', async () => {
       await mountCanvas()
-      fixture()
+      const { mapId } = fixture()
       useToolsStore().setSelectSubMode('cells')
 
       runAction('selectAll')
 
-      expect(selection().isEmpty).toBe(true)
+      expect([...selection().cellsOn(mapId)].sort()).toEqual([
+        '0,0',
+        '0,2',
+        '1,0',
+        '1,2',
+        '2,0',
+        '2,2',
+        '3,0',
+      ])
+      expect(selection().roomsOn(mapId)).toEqual([])
     })
 
     it('clears the selection on Deselect, whatever the mode', async () => {

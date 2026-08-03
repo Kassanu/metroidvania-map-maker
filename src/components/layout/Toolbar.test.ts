@@ -441,20 +441,16 @@ describe('Toolbar', () => {
       expect(buttons.map((button) => button.attributes('aria-checked'))).toEqual(['true', 'false'])
     })
 
-    // Disabled rather than absent, so the granularity that exists in the spec is
-    // visible and says why it cannot be picked. Every press in Cells resolves
-    // correctly and then does nothing, which would be indistinguishable from a
-    // broken app.
-    it('shows Cells disabled, with a reason', async () => {
+    it('switches the granularity, and marks which one is on', async () => {
       const tools = useToolsStore()
       const wrapper = mount(Toolbar)
       const cells = wrapper.findAll('.granularity-button')[1]
 
-      expect(cells.attributes('disabled')).toBeDefined()
-      expect(cells.attributes('title')).toContain('not available yet')
+      expect(cells.attributes('disabled')).toBeUndefined()
 
       await cells.trigger('click')
-      expect(tools.selectSubMode).toBe('rooms')
+      expect(tools.selectSubMode).toBe('cells')
+      expect(cells.attributes('aria-checked')).toBe('true')
     })
 
     it('is Select-only, like the rest of the section', async () => {

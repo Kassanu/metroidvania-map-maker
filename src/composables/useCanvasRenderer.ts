@@ -61,6 +61,8 @@ export interface SceneInput {
   selected: ReadonlySet<TransitionId>
   // Rooms selected on this map, drawn as a halo around each one's outline.
   selectedRooms: ReadonlySet<RoomId>
+  // Cells selected on this map, tinted and outlined around their union.
+  selectedCells: ReadonlySet<CellKey>
   // The room whose resize handles are drawn, or null when none has them.
   handleRoom: HandleRoomScene | null
   // The marquee's rectangle while a select drag is live, or null.
@@ -137,6 +139,7 @@ export function useCanvasRenderer(targets: CanvasTargets, scene: () => SceneInpu
       pendingTeleport: current.pendingTeleport,
       selected: current.selected,
       selectedRooms: current.selectedRooms,
+      selectedCells: current.selectedCells,
       handleRoom: current.handleRoom,
       marquee: current.marquee,
       palette: palette.value!,

@@ -185,7 +185,6 @@ export const en = {
   'toolbar.select.cells': 'Cells',
   'toolbar.select.granularityTitle':
     'What a press selects: whole rooms and the objects on them, or individual cells.',
-  'toolbar.select.cellsUnavailable': 'Cell selection is not available yet.',
 
   'zoom.label': 'Zoom',
   'zoom.options': 'Zoom options',
