@@ -59,7 +59,14 @@ import { beginRunResize, handleGrabAllowed } from '@/gestures/runResize'
 import { beginInnerWallStroke, beginInnerWallErase } from '@/gestures/innerWallStroke'
 import { strokeActionFor, type StrokeAction } from '@/gestures/strokeAction'
 import { liveRows, visibleHandles } from '@/gestures/subMode'
-import { startPointerDrag } from '@/composables/pointerDrag'
+import {
+  resolveSelectTarget,
+  selectCursor,
+  selectRefOf,
+  type SelectTarget,
+} from '@/canvas/selectTarget'
+import type { VisibleLayers } from '@/canvas/hitTest'
+import { PRIMARY_BUTTON, SECONDARY_BUTTON, startPointerDrag } from '@/composables/pointerDrag'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
 import { cellKey, parseCell } from '@/core/cell'
 import type { GhostGesture } from '@/gestures/ghostGesture'
@@ -145,6 +152,7 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
   { container, main: canvas, topRuler: topRulerCanvas, leftRuler: leftRulerCanvas },
   () => {
     const tab = tabsStore.activeTab
+    const layers = visibleLayers()
     return {
       camera: { pan: tab?.pan ?? DEFAULT_PAN, zoom: tab?.zoom ?? 1 },
       tileSize: model.tileSize,
@@ -208,22 +216,13 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       // store keeps `activeTabId` on a live map, so they match what a blank
       // map would give rather than collapsing the page to a single cell.
       bounds: tab?.bounds ?? pageBounds(null),
-      // Door mode overrides the master toggle: entering Door mode means you are
-      // working on transitions, so they stay visible there regardless of the
-      // toggle. Hiding them instead would leave the objects live but invisible:
-      // a press on a hidden door would miss it, start a teleport instead, and
-      // be refused by the one-per-cell rule with nothing on screen to explain
-      // why.
-      //
-      // Only the master is overridden. A teleport line is not a target in any
-      // mode, so the sub-toggle for lines stays honoured.
-      showTransitions: canvasView.showTransitions || modeStore.active === 'door',
+      showTransitions: layers.transitions,
+      // Not part of `layers`: a teleport line is not a target in any mode, so
+      // the sub-toggle for it gates drawing only. It stays nested under the
+      // master, which is why hiding transitions takes the lines with them.
       showTeleportLines: canvasView.showTeleportLines,
-      // The same override for the same reason, but reaching further: Markup
-      // mode forces the master *and* both sub-toggles, because unlike a
-      // teleport line each of these gates something a press lands on.
-      showIcons: markupForced() || (canvasView.showMarkup && canvasView.showIcons),
-      showLines: markupForced() || (canvasView.showMarkup && canvasView.showLines),
+      showIcons: layers.icons,
+      showLines: layers.lines,
       showAllLabels: canvasView.showAllLabels,
       hoveredLabel,
       selectedMarkup: selectedMarkup(),
@@ -773,7 +772,59 @@ function handleMarkupPress(event: PointerEvent) {
   })
 }
 
+// Select mode's press dispatch, and the one mode that does not route through
+// `strokeActionFor`.
+//
+// That table answers "erase" for the secondary button unconditionally, which is
+// right for the three modes that author something and wrong here: right-click
+// means the context menu in this mode, the first time that button has meant two
+// different things. A special case threaded through the shared table would put
+// a mode name inside it.
+//
+// The click-vs-drag rule is Door's and Markup's: the drag primitive's dead zone
+// plus a latch for having left the origin cell. A press that wandered is not a
+// click even if it came back.
+function handleSelectPress(event: PointerEvent) {
+  if (event.button === SECONDARY_BUTTON) return
+  if (event.button !== PRIMARY_BUTTON) return
+
+  const tab = tabsStore.activeTab
+  const local = localPoint(event)
+  if (!tab || !local) return
+  // Resolved once at press time and reused on release, so a click means the row
+  // it started on rather than wherever the pointer drifted inside the dead zone.
+  const target = selectTargetAt(local)
+  if (!target) return
+  // Read at press time with the target, for the same reason: a click means the
+  // modifier held when it started, not whatever was let go of first.
+  const additive = event.shiftKey
+  event.preventDefault()
+
+  let leftCell = false
+
+  startPointerDrag(event, {
+    buttons: [event.button],
+    deadZone: DRAG_DEAD_ZONE,
+    resolveTarget: () => container.value,
+    onMove: (context) => {
+      const point = worldPoint(context.event)
+      if (!point) return
+      if (cellKey(Math.floor(point.x), Math.floor(point.y)) !== target.cell) leftCell = true
+    },
+    onEnd: () => {
+      if (leftCell) return
+      // Every row through the one policy, cell rows included: what a click means
+      // is the same question in all four modes.
+      selection.clickSelect(selectRefOf(target), tab.id, additive)
+    },
+  })
+}
+
 function handlePointerDown(event: PointerEvent) {
+  if (modeStore.active === 'select') {
+    handleSelectPress(event)
+    return
+  }
   if (modeStore.active === 'markup') {
     handleMarkupPress(event)
     return
@@ -1030,6 +1081,44 @@ function placeIconAt(iconType: string, cell: CellKey) {
   draw()
 }
 
+// Which object layers are drawn right now. One answer, read by the renderer and
+// by Select mode's resolver: you cannot select what you cannot see, and a rule
+// each of them worked out for itself would drift.
+//
+// The mode overrides live here. Door mode forces the transitions master on
+// because it acts on exactly those, and hiding them would leave the objects live
+// but invisible: a press on a hidden door would miss it, start a teleport
+// instead, and be refused by the one-per-cell rule with nothing on screen to
+// explain why. Markup forces its master and both sub-toggles, reaching further
+// for the same reason: each of those gates something a press lands on.
+function visibleLayers(): VisibleLayers {
+  return {
+    transitions: canvasView.showTransitions || modeStore.active === 'door',
+    icons: markupForced() || (canvasView.showMarkup && canvasView.showIcons),
+    lines: markupForced() || (canvasView.showMarkup && canvasView.showLines),
+  }
+}
+
+// What Select mode's pointer is over, as a row of whichever of its two tables
+// is live. The sub-mode goes in with the point, because which table applies is
+// part of the question rather than something to filter the answer by.
+function selectTargetAt(point: ScreenPoint): SelectTarget | null {
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (!tab || !map) return null
+  return resolveSelectTarget(
+    point,
+    {
+      project: model.project,
+      map,
+      camera: { pan: tab.pan, zoom: tab.zoom },
+      tileSize: model.tileSize,
+    },
+    tools.selectSubMode,
+    visibleLayers(),
+  )
+}
+
 // What Markup mode's pointer is over, as a row of its table. The same shape as
 // `doorTargetAt`, against its own resolver: Markup's priority is the reverse of
 // `hitTest`'s, so the two modes cannot share one.
@@ -1200,6 +1289,10 @@ function cursorAt(
   markupTarget: MarkupTarget | null,
 ): string | null {
   if (!point) return null
+  if (modeStore.active === 'select') {
+    const target = selectTargetAt(point)
+    return target && selectCursor(target)
+  }
   if (modeStore.active === 'door') {
     const target = doorTargetAt(point)
     if (!target) return null

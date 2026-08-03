@@ -39,30 +39,60 @@ export function cellAt(point: ScreenPoint, camera: Camera, tileSize: number): Ce
   return cellKey(Math.floor(world.x), Math.floor(world.y))
 }
 
+// Which object layers are on screen, and so which ones a press can reach. You
+// cannot select what you cannot see.
+//
+// Rooms are absent because they have no toggle: they are the map, so there is
+// nothing that could hide one.
+export interface VisibleLayers {
+  transitions: boolean
+  icons: boolean
+  lines: boolean
+}
+
+export const ALL_LAYERS: VisibleLayers = { transitions: true, icons: true, lines: true }
+
 // The topmost object at a screen point, or null on empty grid.
 //
 // A teleport's far end is a real target on the destination tab even though the
 // transition is stored under its origin map. The id comes back either way;
 // pass it through `resolveTransition` to get the transition and the map that
 // actually holds it.
-export function hitTest(point: ScreenPoint, scene: HitScene): ObjectRef | null {
+//
+// A hidden layer is skipped rather than tested and then discarded, which is
+// what makes the fall-through right: an icon nobody can see must not shadow the
+// room underneath it, and rejecting the answer afterwards would return "nothing
+// here" over a perfectly visible room.
+export function hitTest(
+  point: ScreenPoint,
+  scene: HitScene,
+  layers: VisibleLayers = ALL_LAYERS,
+): ObjectRef | null {
   const band = grabBand(scene)
 
   // 1-D targets, topmost first.
-  const line = lineHit(point, scene, band)
-  if (line) return line
+  if (layers.lines) {
+    const line = lineHit(point, scene, band)
+    if (line) return line
+  }
 
-  const edge = edgeTransitionAt(point, scene, band)
-  if (edge) return edge
+  if (layers.transitions) {
+    const edge = edgeTransitionAt(point, scene, band)
+    if (edge) return edge
+  }
 
   // 2-D targets, topmost first.
   const cell = cellAt(point, scene.camera, scene.tileSize)
 
-  const iconId = scene.map.iconAtCell.get(cell)
-  if (iconId !== undefined) return { kind: 'icon', id: iconId }
+  if (layers.icons) {
+    const iconId = scene.map.iconAtCell.get(cell)
+    if (iconId !== undefined) return { kind: 'icon', id: iconId }
+  }
 
-  const teleport = teleportAt(cell, scene)
-  if (teleport) return teleport
+  if (layers.transitions) {
+    const teleport = teleportAt(cell, scene)
+    if (teleport) return teleport
+  }
 
   const roomId = scene.map.cellOwner.get(cell)
   if (roomId !== undefined) return { kind: 'room', id: roomId }

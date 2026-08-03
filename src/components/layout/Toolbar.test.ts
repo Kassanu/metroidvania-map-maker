@@ -20,8 +20,7 @@ describe('Toolbar', () => {
     setActivePinia(createTestPinia())
   })
 
-  // The dynamic section is per-mode: Draw and Door have real controls, the rest
-  // are still placeholder text until their tools are built.
+  // The dynamic section is per-mode, and every mode has one of its own.
   it('shows the Draw tools in the dynamic section, and only in Draw mode', async () => {
     const modeStore = useModeStore()
     const wrapper = mount(Toolbar)
@@ -53,7 +52,8 @@ describe('Toolbar', () => {
       expect(wrapper.find('.erase-toggle-button').exists()).toBe(true)
       expect(wrapper.find('.replace-button').exists()).toBe(true)
 
-      // And absent from the one mode whose tools are still unbuilt.
+      // And absent from Select, which erases nothing: `Del` there deletes the
+      // selection, and the secondary button opens a menu rather than erasing.
       modeStore.setMode('select')
       await nextTick()
       expect(wrapper.find('.erase-toggle-button').exists()).toBe(false)
@@ -423,6 +423,47 @@ describe('Toolbar', () => {
       useModeStore().setMode('draw')
       await nextTick()
       expect(wrapper.find('.lock-select').exists()).toBe(false)
+    })
+  })
+
+  // Select's whole section: what a press selects, and nothing else. A mode
+  // toggle, not a selection editor.
+  describe('the Select granularity toggle', () => {
+    beforeEach(() => {
+      useModeStore().setMode('select')
+    })
+
+    it('offers rooms and cells, with rooms checked', () => {
+      const wrapper = mount(Toolbar)
+      const buttons = wrapper.findAll('.granularity-button')
+
+      expect(buttons.map((button) => button.text())).toEqual(['Rooms', 'Cells'])
+      expect(buttons.map((button) => button.attributes('aria-checked'))).toEqual(['true', 'false'])
+    })
+
+    // Disabled rather than absent, so the granularity that exists in the spec is
+    // visible and says why it cannot be picked. Every press in Cells resolves
+    // correctly and then does nothing, which would be indistinguishable from a
+    // broken app.
+    it('shows Cells disabled, with a reason', async () => {
+      const tools = useToolsStore()
+      const wrapper = mount(Toolbar)
+      const cells = wrapper.findAll('.granularity-button')[1]
+
+      expect(cells.attributes('disabled')).toBeDefined()
+      expect(cells.attributes('title')).toContain('not available yet')
+
+      await cells.trigger('click')
+      expect(tools.selectSubMode).toBe('rooms')
+    })
+
+    it('is Select-only, like the rest of the section', async () => {
+      const wrapper = mount(Toolbar)
+      expect(wrapper.find('.granularity-button').exists()).toBe(true)
+
+      useModeStore().setMode('draw')
+      await nextTick()
+      expect(wrapper.find('.granularity-button').exists()).toBe(false)
     })
   })
 })

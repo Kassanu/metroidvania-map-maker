@@ -1698,7 +1698,10 @@ describe('CanvasRegion edge-run resize', () => {
       viewport.dispatchEvent(new PointerEvent('pointermove', { ...at(3.97, 2.5), bubbles: true }))
       await nextTick()
 
-      expect(cursorOf(wrapper)).toBe('')
+      // Not "no cursor": Select mode answers the same pixel from its own table,
+      // where a room's edge is a room and a click on it selects. What must not
+      // survive the mode switch is the resize cursor.
+      expect(cursorOf(wrapper)).toBe('pointer')
       wrapper.unmount()
     })
   })

@@ -3,12 +3,9 @@ import { DEFAULT_BRUSH_SIZE, clampBrushSize } from '@/canvas/brush'
 import { useSelectionStore } from './selection'
 import type { WallStyle } from '@/core/types'
 import type { SubMode } from '@/gestures/subMode'
-
-// What Select mode selects. A hard branch, not a filter: the two arms reach
-// different targets, hold different things, move by different ops and delete by
-// different ops. It shares a word with Draw's `SubMode` and nothing else, which
-// is why it is a separate field rather than more members of that union.
-export type SelectSubMode = 'rooms' | 'cells'
+// Both sub-mode types live with the resolver that branches on them, not here:
+// the store holds which one is on, the resolver holds what each one means.
+import type { SelectSubMode } from '@/canvas/selectTarget'
 
 // The tool state the per-mode toolbar section owns.
 //

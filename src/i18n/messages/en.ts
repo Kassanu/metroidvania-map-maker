@@ -163,7 +163,14 @@ export const en = {
   'toolbar.area': 'Area',
   'toolbar.areaTitle':
     'The area new rooms are drawn into. Growing an existing room keeps its own area.',
-  'toolbar.modeOptions.select': 'Select options: rooms / cells',
+  // Select mode's toolbar: what a press selects, and nothing else.
+  'toolbar.select.label': 'Select options',
+  'toolbar.select.granularity': 'Select',
+  'toolbar.select.rooms': 'Rooms',
+  'toolbar.select.cells': 'Cells',
+  'toolbar.select.granularityTitle':
+    'What a press selects: whole rooms and the objects on them, or individual cells.',
+  'toolbar.select.cellsUnavailable': 'Cell selection is not available yet.',
 
   'zoom.label': 'Zoom',
   'zoom.options': 'Zoom options',

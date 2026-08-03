@@ -1,22 +1,16 @@
 <script setup lang="ts">
 import ZoomControl from '../ZoomControl.vue'
 import DrawToolbar from './DrawToolbar.vue'
+import SelectToolbar from './SelectToolbar.vue'
 import DoorToolbar from './DoorToolbar.vue'
 import MarkupToolbar from './MarkupToolbar.vue'
 
-import { computed } from 'vue'
 import { useModeStore } from '@/stores/mode'
 import { useUiStore } from '@/stores/ui'
 import { t } from '@/i18n'
 
 const modeStore = useModeStore()
 const ui = useUiStore()
-
-// Placeholder text for the modes whose tools are unbuilt. Draw, Door and
-// Markup have real components instead: see the template.
-const modeOptionsLabel = computed(() =>
-  modeStore.active === 'select' ? t('toolbar.modeOptions.select') : '',
-)
 </script>
 
 <template>
@@ -28,10 +22,11 @@ const modeOptionsLabel = computed(() =>
       <button type="button" class="toolbar-button" :title="t('toolbar.redo')">↷</button>
     </div>
     <span class="toolbar-divider" aria-hidden="true" />
+    <!-- One component per mode, and every mode has one. -->
     <DrawToolbar v-if="modeStore.active === 'draw'" />
+    <SelectToolbar v-else-if="modeStore.active === 'select'" />
     <DoorToolbar v-else-if="modeStore.active === 'door'" />
     <MarkupToolbar v-else-if="modeStore.active === 'markup'" />
-    <div v-else class="toolbar-group dynamic">{{ modeOptionsLabel }}</div>
     <button
       type="button"
       class="toolbar-button zen-toggle-button"
