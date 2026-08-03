@@ -1,9 +1,12 @@
-// Select mode's marquee: the rubber band that selects the rooms it touches.
+// Select mode's marquee: the rubber band that selects what it sweeps, at the
+// granularity the mode is in.
 //
 // `runResize`'s shape, not a stroke's. The rectangle is a quantity replaced on
 // every move, so backtracking shrinks it and coming back to the origin leaves a
-// band one cell across, which selects whatever that cell holds. A marquee only
-// starts on bare grid, so that is nothing.
+// band one cell across, which selects whatever that cell holds: nothing from
+// bare grid, and the cell itself from inside a room, which is what a click on
+// that same point would have selected. Abandoning a band is `Esc`, and that
+// keeps the selection the press started with.
 //
 // Not a `GhostGesture`, and the difference is the whole file: this mutates no
 // model, opens no transaction and leaves no undo step, so there is nothing to
@@ -16,14 +19,20 @@
 // The band is snapped to whole cells, which is what makes it honest: selection
 // is decided per cell, so the drawn edge is exactly where the answer changes.
 // `boundsFor` is the one source for both the drawn rectangle and the query.
+//
+// The two granularities share every line of this except the one query at
+// release. The rectangle, the snapping, the shift-adds rule, the preview and
+// the Esc handling are the gesture; what a swept rectangle names is the table.
 
 import { pushEscHandler } from '@/hotkeys/escStack'
 import { useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
-import { roomsOverlapping, type CellBounds } from '@/core/derive/bounds'
+import { ownedCellsIn, roomsOverlapping, type CellBounds } from '@/core/derive/bounds'
+import type { SelectSubMode } from '@/canvas/selectTarget'
 import type { MarqueeRect } from '@/canvas/renderMap'
 import type { WorldPoint } from '@/canvas/stroke'
 import type { MapId } from '@/core/ids'
+import type { MapModel, ObjectRef } from '@/core/types'
 
 export interface Marquee {
   // The band, in fractional world cells, or null when there is nothing to
@@ -62,6 +71,22 @@ function sameBounds(a: CellBounds, b: CellBounds): boolean {
   )
 }
 
+// What a swept rectangle names, which is the one thing the two granularities do
+// not share.
+//
+// Rooms: whole rooms, and only rooms. Icons, lines and transitions are reached
+// by click and shift-click, never by a sweep, even when the band covers them.
+//
+// Cells: owned cells, and only owned cells. Bare grid inside the band selects
+// nothing, which is what keeps the selection and a fragment move agreeing about
+// what can be held: a cell with no owner cannot be moved, cut or erased.
+function sweptRefs(map: MapModel, bounds: CellBounds, subMode: SelectSubMode): ObjectRef[] {
+  if (subMode === 'cells') {
+    return ownedCellsIn(map, bounds).map((id) => ({ kind: 'cell', id }))
+  }
+  return roomsOverlapping(map, bounds).map((id) => ({ kind: 'room', id }))
+}
+
 // `additive` is shift held at press: a plain marquee replaces the selection, a
 // shift-marquee unions with it. Read once, like every other press-time
 // modifier.
@@ -71,6 +96,7 @@ function sameBounds(a: CellBounds, b: CellBounds): boolean {
 export function beginMarquee(
   mapId: MapId,
   from: WorldPoint,
+  subMode: SelectSubMode,
   additive: boolean,
   onChange: () => void,
 ): Marquee | null {
@@ -118,11 +144,9 @@ export function beginMarquee(
     },
     commit: () =>
       settle(() => {
-        // Rooms only. Icons, lines and transitions are reached by click and
-        // shift-click, never by a sweep, even when the band covers them.
-        const rooms = roomsOverlapping(map, bounds).map((id) => ({ kind: 'room', id }) as const)
-        if (additive) selection.addAll([...rooms], mapId)
-        else selection.set([...rooms], mapId)
+        const refs = sweptRefs(map, bounds, subMode)
+        if (additive) selection.addAll(refs, mapId)
+        else selection.set(refs, mapId)
       }),
     cancel: () => settle(() => {}),
   }

@@ -294,17 +294,67 @@ describe('Select precedence table', () => {
       expect(selection().cellsOn(mapId)).toEqual(['0,2'])
     })
 
-    // The Drag column belongs to the cell marquee, which this sub-mode does not
-    // have yet. Until it does, a drag over the grid must not fall through to
-    // the band that selects whole rooms.
-    it('marquees nothing on a drag over the grid', async () => {
+    // The Drag column. A band from bare grid takes the owned cells it covers,
+    // where the same drag one granularity over takes whole rooms.
+    it('marquees cells on a drag over the grid, and no bare grid with them', async () => {
       const { viewport } = await mountCanvas()
-      fixture()
+      const { mapId } = fixture()
       useToolsStore().setSelectSubMode('cells')
 
-      await drag(viewport, at(9.5, 9.5), at(0.5, 0.5))
+      // Sixteen cells swept, seven of them owned.
+      await drag(viewport, at(3.5, 3.5), at(0.5, 0.5))
 
-      expect(selection().isEmpty).toBe(true)
+      expect([...selection().cellsOn(mapId)].sort()).toEqual([
+        '0,0',
+        '0,2',
+        '1,0',
+        '1,2',
+        '2,0',
+        '2,2',
+        '3,0',
+      ])
+      expect(selection().roomsOn(mapId)).toEqual([])
+    })
+
+    // A drag from an unselected cell bands rather than moving, which looks
+    // wrong from the Rooms table's side and is not: sweeping out from inside a
+    // room is how a cell selection gets built, so the fragment move stays
+    // reserved for cells that are already selected.
+    it('marquees from an unselected cell rather than moving it', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId, roomC } = fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await drag(viewport, at(0.5, 2.5), at(1.5, 2.5))
+
+      expect([...selection().cellsOn(mapId)].sort()).toEqual(['0,2', '1,2'])
+      // The band selected; it moved nothing.
+      expect([...map().rooms.get(roomC)!.cells].sort()).toEqual(['0,2', '1,2', '2,2'])
+    })
+
+    // The other half of the same row, and the half that survives into the
+    // fragment move: a drag that starts on a cell already selected is not a
+    // band, whatever it goes on to do.
+    it('does not marquee from a cell that is already selected', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId } = fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await click(viewport, at(0.5, 2.5))
+      await drag(viewport, at(0.5, 2.5), at(2.5, 2.5))
+
+      expect(selection().cellsOn(mapId)).toEqual(['0,2'])
+    })
+
+    it('unions with the selection when the band is dragged with shift', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId } = fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await click(viewport, at(3.5, 0.5))
+      await drag(viewport, at(0.5, 2.5), at(1.5, 2.5), true)
+
+      expect(selection().cellsOn(mapId)).toEqual(['3,0', '0,2', '1,2'])
     })
 
     // Two granularities, one key. Erasing cells is a different op on a

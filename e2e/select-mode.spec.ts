@@ -71,6 +71,37 @@ test.describe('Select mode', () => {
     expect(errors).toEqual([])
   })
 
+  // The band's own browser claim is capture, which the Rooms test below makes.
+  // What this adds is the granularity: the same sweep marks the cells a room
+  // owns and leaves the bare grid inside it alone.
+  test('a band in Cells marks the owned cells it sweeps, and not the grid', async ({ page }) => {
+    const { errors } = await openApp(page)
+    await page.keyboard.press('2')
+    await page
+      .getByRole('radiogroup', { name: 'Select' })
+      .getByRole('radio', { name: 'Cells' })
+      .click()
+    const grid = await gridMapping(page)
+
+    // A cell of the seed's first room that carries no icon, since an icon is
+    // drawn over the tint, and a cell inside the band that no room owns. The
+    // band runs from beyond both, up and to the left.
+    const owned = grid.at(0.5, 1.5)
+    const bare = grid.at(1.5, 3.5)
+    const ownedBefore = await pixelAt(page, owned)
+    const bareBefore = await pixelAt(page, bare)
+
+    const start = grid.at(3.5, 3.5)
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(grid.at(0.5, 0.5).x, grid.at(0.5, 0.5).y, { steps: 10 })
+    await page.mouse.up()
+
+    expect(await pixelAt(page, owned)).not.toEqual(ownedBefore)
+    expect(await pixelAt(page, bare)).toEqual(bareBefore)
+    expect(errors).toEqual([])
+  })
+
   test('points at what a click would select, and says nothing over bare grid', async ({ page }) => {
     const { errors } = await openApp(page)
     await page.keyboard.press('2')

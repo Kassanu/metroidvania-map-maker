@@ -76,6 +76,7 @@ import {
   resolveSelectTarget,
   selectCursor,
   selectRefOf,
+  type SelectSubMode,
   type SelectTarget,
 } from '@/canvas/selectTarget'
 import type { VisibleLayers } from '@/canvas/hitTest'
@@ -804,6 +805,24 @@ function handleMarkupPress(event: PointerEvent) {
   })
 }
 
+// Whether a press on this row starts a band, which is the Drag column's first
+// question in both granularities.
+//
+// Rooms bands from bare grid only: a press on an object is a move.
+//
+// Cells bands from bare grid and from an *unselected* cell, which looks wrong
+// from the Rooms table's side and is not. Drag-a-selected-thing-to-move-it is
+// the app-wide default and it still holds here; what this narrows is the half
+// the Rooms table adds on top of it, where a drag on an unselected object
+// selects it first and then moves it. Sweeping out a region from inside a room
+// is the ordinary way to build a cell selection, so a fragment move stays
+// reserved for cells that are already selected.
+function bandableAt(target: SelectTarget, subMode: SelectSubMode): boolean {
+  if (target.kind === 'empty') return true
+  if (subMode !== 'cells' || target.kind !== 'cell') return false
+  return !selection.isSelected({ kind: 'cell', id: target.cell })
+}
+
 // Select mode's press dispatch, and the one mode that does not route through
 // `strokeActionFor`.
 //
@@ -831,8 +850,11 @@ function handleSelectPress(event: PointerEvent) {
   const target = selectTargetAt(local)
   if (!target) return
   // Read at press time with the target, for the same reason: a click means the
-  // modifier held when it started, not whatever was let go of first.
+  // modifier held when it started, not whatever was let go of first. The
+  // granularity goes with them: a toggle flipped mid-drag must not change what
+  // the band in flight is collecting.
   const additive = event.shiftKey
+  const subMode = tools.selectSubMode
   const world = worldPoint(event)
   event.preventDefault()
 
@@ -840,11 +862,10 @@ function handleSelectPress(event: PointerEvent) {
   // band one cell across draws nothing. A drag from an object is a move, which
   // cannot: it has to know what is selected, and on an unselected object that
   // is not decided until the press turns out to be a drag.
-  //
-  // Rooms only: the band commits whole rooms, so running it in the Cells
-  // sub-mode would answer a granularity nobody asked for.
-  const bandable = target.kind === 'empty' && tools.selectSubMode === 'rooms'
-  const band = bandable && world ? beginMarquee(tab.id, world, additive, draw) : null
+  const band =
+    bandableAt(target, subMode) && world
+      ? beginMarquee(tab.id, world, subMode, additive, draw)
+      : null
   marquee = band
 
   let leftCell = false

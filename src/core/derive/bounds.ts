@@ -91,6 +91,19 @@ function boundsOverlap(a: CellBounds, b: CellBounds): boolean {
   )
 }
 
+// Every cell inside `bounds` that a room owns, in map order.
+//
+// Walks the owned cells rather than the rectangle: a band is unbounded, since
+// the user can sweep the whole page, where the map's content is not. Bare grid
+// inside the band is not a cell anything can hold, so it is simply absent.
+export function ownedCellsIn(map: MapModel, bounds: CellBounds): CellKey[] {
+  const found: CellKey[] = []
+  for (const cell of map.cellOwner.keys()) {
+    if (boundsContain(bounds, cell)) found.push(cell)
+  }
+  return found
+}
+
 // Every room with at least one cell inside `bounds`, in map order.
 //
 // Touching, not containment: one cell inside the box is the whole room.

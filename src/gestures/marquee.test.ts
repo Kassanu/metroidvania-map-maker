@@ -11,6 +11,7 @@ import { ok, TEST_ICON_COLORS } from '@/core/testUtils'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { MapId, RoomId } from '@/core/ids'
 import type { MapModel } from '@/core/types'
+import type { SelectSubMode } from '@/canvas/selectTarget'
 
 // World points, where (1.5, 0.5) is the middle of cell (1, 0).
 function centre(x: number, y: number) {
@@ -49,17 +50,27 @@ describe('beginMarquee', () => {
 
   const selectedRooms = () => selection().roomsOn(firstMap().mapId)
 
+  const selectedCells = () => selection().cellsOn(firstMap().mapId)
+
   // A whole drag, the way the component runs one: press, move, release.
-  function sweep(from: [number, number], to: [number, number], additive = false): Marquee {
-    const band = beginMarquee(firstMap().mapId, centre(...from), additive, onChange)
-    expect(band).not.toBeNull()
-    band!.moveTo(centre(...to))
-    band!.commit()
-    return band!
+  function sweep(
+    from: [number, number],
+    to: [number, number],
+    additive = false,
+    subMode: SelectSubMode = 'rooms',
+  ): Marquee {
+    const band = begin(from, additive, subMode)
+    band.moveTo(centre(...to))
+    band.commit()
+    return band
   }
 
-  function begin(from: [number, number], additive = false): Marquee {
-    const band = beginMarquee(firstMap().mapId, centre(...from), additive, onChange)
+  function begin(
+    from: [number, number],
+    additive = false,
+    subMode: SelectSubMode = 'rooms',
+  ): Marquee {
+    const band = beginMarquee(firstMap().mapId, centre(...from), subMode, additive, onChange)
     expect(band).not.toBeNull()
     return band!
   }
@@ -136,6 +147,8 @@ describe('beginMarquee', () => {
       expect(selectedRooms()).toEqual([wide])
     })
 
+    // A band one cell across still covers that cell. From bare grid, which is
+    // the only place a Rooms band can start, that is nothing.
     it('selects nothing when the drag comes back to where it started', () => {
       twoRooms()
 
@@ -218,6 +231,95 @@ describe('beginMarquee', () => {
     })
   })
 
+  // The same band, one granularity over: everything about the gesture is
+  // shared, and only what release names differs.
+  describe('what it selects in the Cells granularity', () => {
+    const sweepCells = (from: [number, number], to: [number, number], additive = false) =>
+      sweep(from, to, additive, 'cells')
+
+    it('takes the owned cells it covers, and no bare grid', () => {
+      room(['0,0', '1,0'])
+
+      sweepCells([0, 0], [3, 0])
+
+      expect(selectedCells()).toEqual(['0,0', '1,0'])
+    })
+
+    // The Rooms band answers a whole room from one cell of it. This one answers
+    // the cells it actually covered, which is the difference between the two
+    // tables rather than a filter over one of them.
+    it('takes part of a room rather than the whole of it', () => {
+      room(['0,0', '1,0', '2,0'])
+
+      sweepCells([0, 0], [1, 0])
+
+      expect(selectedCells()).toEqual(['0,0', '1,0'])
+    })
+
+    it('crosses a room boundary, holding cells of both', () => {
+      room(['0,0'])
+      room(['1,0'])
+
+      sweepCells([0, 0], [1, 0])
+
+      expect(selectedCells()).toEqual(['0,0', '1,0'])
+      expect(selectedRooms()).toEqual([])
+    })
+
+    // A cell with no owner cannot be moved, cut or erased, so it is not
+    // something a selection can hold. A band over bare grid selects nothing and
+    // clears, exactly as one that touched no room does.
+    it('clears the selection when it covers bare grid alone', () => {
+      room(['0,0'])
+
+      sweepCells([0, 0], [1, 0])
+      sweepCells([5, 5], [7, 7])
+
+      expect(selection().isEmpty).toBe(true)
+    })
+
+    it('takes the cell an icon stands on, not the icon', () => {
+      const model = useModelStore()
+      const { mapId, map } = firstMap()
+      room(['0,0', '1,0'])
+      model.run('Setup', mapScope(mapId), (tx) => {
+        ok(placeIcon(tx, map, '0,0', 'save', TEST_ICON_COLORS))
+      })
+
+      sweepCells([0, 0], [1, 0])
+
+      expect(selection().selected).toEqual([
+        { kind: 'cell', id: '0,0' },
+        { kind: 'cell', id: '1,0' },
+      ])
+    })
+
+    // The case a Rooms band cannot reach, because it only ever starts on bare
+    // grid. Here the origin cell can be owned, and then coming back to it
+    // selects it: the same answer a click on that point gives.
+    it('takes its origin cell when the drag comes back to it', () => {
+      room(['0,0', '1,0'])
+
+      const band = begin([0, 0], false, 'cells')
+      band.moveTo(centre(1, 0))
+      band.moveTo(centre(0, 0))
+      band.commit()
+
+      expect(selectedCells()).toEqual(['0,0'])
+    })
+
+    it('replaces on a plain sweep and unions on a shift-sweep', () => {
+      room(['0,0', '1,0', '2,0', '3,0'])
+
+      sweepCells([0, 0], [1, 0])
+      sweepCells([2, 0], [3, 0])
+      expect(selectedCells()).toEqual(['2,0', '3,0'])
+
+      sweepCells([0, 0], [1, 0], true)
+      expect(selectedCells()).toEqual(['2,0', '3,0', '0,0', '1,0'])
+    })
+  })
+
   // The band registers in the `gesture` tier for the life of the drag. Without
   // it `Esc` would fall through to the selection tier, clear the selection the
   // user already had, and leave the band tracking the pointer.
@@ -292,6 +394,6 @@ describe('beginMarquee', () => {
   })
 
   it('starts nothing when the map is gone', () => {
-    expect(beginMarquee('map_missing' as MapId, centre(0, 0), false, onChange)).toBeNull()
+    expect(beginMarquee('map_missing' as MapId, centre(0, 0), 'rooms', false, onChange)).toBeNull()
   })
 })

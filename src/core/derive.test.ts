@@ -13,7 +13,7 @@ import {
   interiorVertices,
   resizableRuns,
 } from './derive/walls'
-import { contentBounds, areaBoundsOnMap, roomsOverlapping } from './derive/bounds'
+import { areaBoundsOnMap, contentBounds, ownedCellsIn, roomsOverlapping } from './derive/bounds'
 import { WORLD_AREA_ID } from './ids'
 import { grid, makeRoom, rect, setup, sorted } from './testUtils'
 
@@ -195,6 +195,45 @@ describe('boundary edges', () => {
 
   it('has no edges for an empty set', () => {
     expect(boundaryEdges(new Set()).size).toBe(0)
+  })
+})
+
+describe('owned cells in a box', () => {
+  // A band covering more than the map, to prove the answer is bounded by what
+  // is drawn rather than by the rectangle.
+  it('takes the cells inside the box and no bare grid', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, rect(0, 0, 2, 1))
+
+    expect(sorted(ownedCellsIn(map, { minCol: -5, minRow: -5, maxCol: 5, maxRow: 5 }))).toEqual(
+      sorted(['0,0', '1,0']),
+    )
+  })
+
+  it('takes part of a room, where the room query takes all of it', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 1))
+    const box = { minCol: 0, minRow: 0, maxCol: 1, maxRow: 0 }
+
+    expect(sorted(ownedCellsIn(map, box))).toEqual(sorted(['0,0', '1,0']))
+    expect(roomsOverlapping(map, box)).toEqual([room.id])
+  })
+
+  it('crosses room boundaries', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, rect(0, 0, 1, 1))
+    makeRoom(project, map, rect(1, 0, 1, 1))
+
+    expect(sorted(ownedCellsIn(map, { minCol: 0, minRow: 0, maxCol: 1, maxRow: 0 }))).toEqual(
+      sorted(['0,0', '1,0']),
+    )
+  })
+
+  it('is empty for a box over nothing', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, rect(0, 0, 2, 1))
+
+    expect(ownedCellsIn(map, { minCol: 8, minRow: 8, maxCol: 9, maxRow: 9 })).toEqual([])
   })
 })
 
