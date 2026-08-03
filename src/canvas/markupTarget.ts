@@ -112,10 +112,15 @@ export function armedPlacementAt(
 // every row. Erase still outranks it: the toggle governs the whole primary
 // button, so a placement cursor over a cell a click would delete from would be
 // a lie.
+// `translating` is the line-body row's second answer: a drag on a selected
+// line's body moves the line where an unselected one draws a new one over it.
+// It arrives as a flag because the selection is store state and this file is
+// pure, but it comes from the same resolver row the dispatch branches on.
 export function markupCursor(
   target: MarkupTarget,
   erasing = false,
   armed: { replace: boolean } | null = null,
+  translating = false,
 ): string | null {
   if (armed && !erasing) {
     switch (armedPlacementAt(target, armed.replace)) {
@@ -138,7 +143,8 @@ export function markupCursor(
     case 'room':
       return erasing ? null : 'crosshair'
     case 'line-body':
-      return erasing ? null : 'pointer'
+      if (erasing) return null
+      return translating ? 'move' : 'pointer'
     // Something that exists, under the pointer: select, move, extend or peel.
     case 'icon':
     case 'line-end':

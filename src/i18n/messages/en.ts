@@ -58,6 +58,7 @@ export const en = {
   'history.moveIcon': 'Move Icon',
   'history.drawLine': 'Draw Line',
   'history.extendLine': 'Extend Line',
+  'history.moveLine': 'Move Line',
   'history.deleteIcon': 'Delete Icon',
   'history.deleteLine': 'Delete Line',
   'history.deleteRoom': 'Delete Room',

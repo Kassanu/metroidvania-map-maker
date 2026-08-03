@@ -410,6 +410,44 @@ describe('Draw/Edit precedence table (Auto)', () => {
   // Cross-cutting rules
   // -------------------------------------------------------------------------
   describe('cross-cutting rules', () => {
+    // Draw's drag column is fully spent, so it does not honour the default that
+    // a drag beginning on a selected object moves it. Every press on a room
+    // cell selects that room, so a version of that rule applied above the mode
+    // dispatch would turn every stroke after the first into a room move.
+    it('a drag on the selected room still paints rather than moving it', () => {
+      const { wrapper, viewport } = mountCanvas()
+      const mapId = useTabsStore().activeTabId
+      const roomId = square3(mapId)
+
+      // Selected by the press, which is the state the rule would fire on.
+      click(viewport, at(3.5, 3.5))
+      expect(armedRoom()).toBe(roomId)
+
+      // Interior to bare grid: a grow, so the cells crossed are added and the
+      // room's own cells stay exactly where they were.
+      drag(viewport, at(3.5, 3.5), at(6.5, 3.5))
+
+      expect(room(roomId).cells.has('2,2')).toBe(true)
+      expect(room(roomId).cells.has('6,3')).toBe(true)
+      expect(undoLabel()).toBe('Paint')
+      wrapper.unmount()
+    })
+
+    // The same rule from the resize side: the second press of the touch
+    // two-step lands on a selected room and must still resize.
+    it('a drag on the selected room’s wall still resizes it', () => {
+      const { wrapper, viewport } = mountCanvas()
+      const mapId = useTabsStore().activeTabId
+      const roomId = square3(mapId)
+
+      click(viewport, at(3.5, 3.5))
+      drag(viewport, at(4.97, 3.5), at(5.5, 3.5))
+
+      expect(room(roomId).cells.size).toBe(12)
+      expect(undoLabel()).toBe('Resize Room')
+      wrapper.unmount()
+    })
+
     // Brush footprint applies to paint, grow and erase only, not resize or
     // inner-wall drawing. Negative rules like this rot silently: nothing
     // fails when they stop being true, so both halves get a direct test.

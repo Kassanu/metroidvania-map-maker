@@ -486,6 +486,27 @@ describe('Door precedence table', () => {
       wrapper.unmount()
     })
 
+    // Door's drag column is fully spent, so it does not honour the default that
+    // a drag beginning on a selected object moves it. The box still starts from
+    // a cell holding a selected transition, which is also the cell Select mode
+    // documents as dead.
+    it('a drag still starts a box from a cell whose transition is selected', () => {
+      const { wrapper, viewport } = mountCanvas()
+      fixture()
+      const selection = useSelectionStore()
+
+      click(viewport, at(...DOOR_EDGE))
+      expect(selection.selected).toHaveLength(1)
+      drag(viewport, at(...DOOR_EDGE), at(4.5, 2.5))
+
+      click(viewport, at(...TELEPORT_MARK))
+      expect(selection.selected).toHaveLength(1)
+      drag(viewport, at(...TELEPORT_MARK), at(2.5, 6.5))
+
+      expect(transitionCount()).toBe(5)
+      wrapper.unmount()
+    })
+
     // Transitions are never dragged or moved directly: they are edge- or
     // cell-anchored and follow room edits. Relocating one means deleting and
     // redrawing it.

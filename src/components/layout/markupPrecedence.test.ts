@@ -238,12 +238,16 @@ describe('Markup precedence table', () => {
       expect(undoLabel()).toBe(before)
     })
 
-    it('drag: moves the icon', async () => {
+    // Unselected, deliberately: an icon fills its whole cell, so no other
+    // gesture competes for it and requiring a select first would be a
+    // regression. This is the one row that moves without being selected.
+    it('drag: moves the icon, selected or not', async () => {
       const { viewport } = await mountCanvas()
       const { icon } = fixture()
 
       await drag(viewport, at(...ICON_CELL), at(2.5, 2.5))
 
+      expect(selection().isEmpty).toBe(true)
       expect(map().icons.get(icon)!.cell).toBe('2,2')
       expect(undoLabel()).toBe('Move Icon')
     })
@@ -273,9 +277,9 @@ describe('Markup precedence table', () => {
       expect(pickerIsOpen()).toBe(false)
     })
 
-    // Lines may overlap: a drag from the middle cannot move or extend the line
-    // it started on, so the only thing left for it to do is draw another.
-    it('drag: draws a new line rather than moving this one', async () => {
+    // Lines may overlap, so an unselected body still draws: without this there
+    // would be no way to start a line on top of one.
+    it('drag: draws a new line while the line is not selected', async () => {
       const { viewport } = await mountCanvas()
       const { line } = fixture()
 
@@ -284,6 +288,61 @@ describe('Markup precedence table', () => {
       expect(map().lines.get(line)!.points).toEqual(['0,4', '1,4', '2,4', '3,4', '4,4'])
       expect(lines()).toHaveLength(3)
       expect(undoLabel()).toBe('Draw Line')
+    })
+
+    it('drag: translates the line once it is selected', async () => {
+      const { viewport } = await mountCanvas()
+      const { line } = fixture()
+
+      await click(viewport, at(...LINE_BODY))
+      await drag(viewport, at(...LINE_BODY), at(2.5, 6.5))
+
+      // Two cells down, every point, and no new line.
+      expect(map().lines.get(line)!.points).toEqual(['0,6', '1,6', '2,6', '3,6', '4,6'])
+      expect(lines()).toHaveLength(2)
+      expect(undoLabel()).toBe('Move Line')
+    })
+
+    // The op guards the zero delta itself, so the gesture does not: guarding in
+    // the gesture is what makes the op's own guard untestable.
+    it('drag: out and back leaves no undo step', async () => {
+      const { viewport } = await mountCanvas()
+      const { line } = fixture()
+
+      await click(viewport, at(...LINE_BODY))
+      const before = undoLabel()
+
+      const from = at(...LINE_BODY)
+      viewport.dispatchEvent(press('pointerdown', from))
+      viewport.dispatchEvent(press('pointermove', at(2.5, 6.5)))
+      viewport.dispatchEvent(press('pointermove', from))
+      viewport.dispatchEvent(press('pointerup', from))
+      await nextTick()
+      await nextTick()
+
+      expect(map().lines.get(line)!.points).toEqual(['0,4', '1,4', '2,4', '3,4', '4,4'])
+      expect(undoLabel()).toBe(before)
+    })
+
+    // Dispatch and cursor read the same row and the same selection.
+    it('cursor: says move once the line is selected', async () => {
+      const { wrapper, viewport } = await mountCanvas()
+      fixture()
+      const cursor = () =>
+        (wrapper.get('.canvas-viewport').element as HTMLElement).style.cursor || null
+
+      viewport.dispatchEvent(
+        new PointerEvent('pointermove', { ...at(...LINE_BODY), bubbles: true }),
+      )
+      await nextTick()
+      expect(cursor()).toBe('pointer')
+
+      await click(viewport, at(...LINE_BODY))
+      viewport.dispatchEvent(
+        new PointerEvent('pointermove', { ...at(...LINE_BODY), bubbles: true }),
+      )
+      await nextTick()
+      expect(cursor()).toBe('move')
     })
 
     it('erase: does nothing, because peel works only from an end', async () => {

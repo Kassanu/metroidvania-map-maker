@@ -36,6 +36,7 @@ import { beginLineStroke, type LineStroke } from '@/gestures/lineStroke'
 import { beginIconDrag, type IconDrag } from '@/gestures/iconDrag'
 import { beginLinePeel } from '@/gestures/linePeel'
 import { registerIconDropTarget } from '@/gestures/iconDropTarget'
+import { movesOnDrag } from '@/gestures/moveOnDrag'
 import { deleteTransition } from '@/core/ops/doors'
 import { deleteRooms } from '@/core/ops/rooms'
 import {
@@ -46,6 +47,7 @@ import {
   peelLine,
   placeIcon,
   repositionIcon,
+  translateLine,
 } from '@/core/ops/markup'
 import { cellCentre, teleportScene } from '@/canvas/teleports'
 import { RULER_THICKNESS } from '@/canvas/renderRuler'
@@ -59,7 +61,7 @@ import { strokeActionFor, type StrokeAction } from '@/gestures/strokeAction'
 import { liveRows, visibleHandles } from '@/gestures/subMode'
 import { startPointerDrag } from '@/composables/pointerDrag'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
-import { cellKey } from '@/core/cell'
+import { cellKey, parseCell } from '@/core/cell'
 import type { GhostGesture } from '@/gestures/ghostGesture'
 import type { MapModel } from '@/core/types'
 import type { BrushPreview, HoveredHandle } from '@/canvas/renderMap'
@@ -524,6 +526,36 @@ function beginMarkupIconDrag(target: MarkupTarget): IconDrag | null {
   })
 }
 
+// The line-body row of the drag column, for a line that is already selected:
+// the drag translates the whole line rather than drawing a new one over it.
+// Unselected, the row still draws, which is what makes overlapping lines
+// drawable at all, so starting a new line from a selected body needs a deselect
+// first.
+//
+// A cell drag rather than a stroke: the quantity is the delta between the
+// origin cell and the pointer's, replaced on every move, so backtracking to the
+// origin translates by nothing. `translateLine` guards that case itself, which
+// is why the gesture does not.
+function beginMarkupLineDrag(target: MarkupTarget): IconDrag | null {
+  const tab = tabsStore.activeTab
+  const map = tab ? model.project.mapsById.get(tab.id) : undefined
+  if (!tab || !map || target.kind !== 'line-body') return null
+  if (!movesOnDrag({ kind: 'line', id: target.id })) return null
+
+  const lineId = target.id
+  const origin = parseCell(target.cell)
+  return beginIconDrag({
+    mapId: tab.id,
+    from: target.cell,
+    label: t('history.moveLine'),
+    onChange: draw,
+    apply: (tx, to) => {
+      const at = parseCell(to)
+      translateLine(tx, map, lineId, at.x - origin.x, at.y - origin.y)
+    },
+  })
+}
+
 function beginMarkupLine(target: MarkupTarget): LineStroke | null {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
@@ -662,8 +694,12 @@ function handleMarkupPress(event: PointerEvent) {
   // takes the press whatever is under it, and dragging an icon moves it, which
   // is its own gesture.
   const iconDrag = armedIcon.isArmed ? null : beginMarkupIconDrag(target)
-  const line = armedIcon.isArmed || iconDrag ? null : beginMarkupLine(target)
-  const dragging = iconDrag ?? line
+  const lineDrag = armedIcon.isArmed || iconDrag ? null : beginMarkupLineDrag(target)
+  // Both are cell-to-cell drags with identical plumbing below. Only the icon
+  // one names a dragged icon for the renderer to leave out from under itself.
+  const cellDrag = iconDrag ?? lineDrag
+  const line = armedIcon.isArmed || cellDrag ? null : beginMarkupLine(target)
+  const dragging = cellDrag ?? line
   if (dragging) gesture = dragging
   if (iconDrag && target.kind === 'icon') draggingIconId.value = target.id
 
@@ -677,18 +713,18 @@ function handleMarkupPress(event: PointerEvent) {
       const cell = cellKey(Math.floor(point.x), Math.floor(point.y))
       if (cell !== target.cell) leftCell = true
       line?.extendTo(point)
-      iconDrag?.moveTo(cell)
+      cellDrag?.moveTo(cell)
     },
     onEnd: () => {
-      if (iconDrag) {
+      if (cellDrag) {
         draggingIconId.value = null
         // Out and back is a no-op rather than an undo step: every re-apply runs
         // against the pristine model, so returning to the origin cell restores
         // it rather than reconstructing it, and the empty transaction is
         // dropped by the seam.
-        if (leftCell) iconDrag.commit()
-        else iconDrag.cancel()
-        if (gesture === iconDrag) gesture = null
+        if (leftCell) cellDrag.commit()
+        else cellDrag.cancel()
+        if (gesture === cellDrag) gesture = null
         draw()
       }
       if (line) {
@@ -1186,12 +1222,14 @@ function cursorAt(
       const placement = armedPlacementAt(target, markupDefaults.replace, draggingIconId.value)
       return placement === 'blocked' || placement === 'not-in-a-room' ? 'not-allowed' : 'grabbing'
     }
-    // The armed state changes what every row's click does, so it reaches the
-    // cursor too: one source, read by dispatch and cursor alike.
+    // The armed state changes what every row's click does, and a selected line
+    // changes what its body's drag does, so both reach the cursor: one source,
+    // read by dispatch and cursor alike.
     return markupCursor(
       target,
       tools.erase,
       armedIcon.isArmed ? { replace: markupDefaults.replace } : null,
+      target.kind === 'line-body' && movesOnDrag({ kind: 'line', id: target.id }),
     )
   }
   return cursorFor(zone)
