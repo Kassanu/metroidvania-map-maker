@@ -19,6 +19,7 @@ import { pageBounds } from '@/canvas/page'
 import { centerOn, panByScreen, wheelZoom } from '@/canvas/camera'
 import {
   doorCursor,
+  doorRefOf,
   gestureOriginCell,
   resolveDoorTarget,
   type DoorTarget,
@@ -26,6 +27,7 @@ import {
 import {
   armedPlacementAt,
   markupCursor,
+  markupRefOf,
   resolveMarkupTarget,
   type MarkupTarget,
 } from '@/canvas/markupTarget'
@@ -59,7 +61,7 @@ import { startPointerDrag } from '@/composables/pointerDrag'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
 import { cellKey } from '@/core/cell'
 import type { GhostGesture } from '@/gestures/ghostGesture'
-import type { MapModel, ObjectRef } from '@/core/types'
+import type { MapModel } from '@/core/types'
 import type { BrushPreview, HoveredHandle } from '@/canvas/renderMap'
 import type { WorldPoint } from '@/canvas/stroke'
 import type { IconId, LineId, MapId, TransitionId } from '@/core/ids'
@@ -266,22 +268,6 @@ function selectedMarkup(): ReadonlySet<string> {
   return ids
 }
 
-// Which object a click on this row selects, or null for the rows that select
-// nothing. Both line rows answer the same line: which end the pointer is near
-// changes what a drag does, never what is selected.
-function markupRefOf(target: MarkupTarget): ObjectRef | null {
-  switch (target.kind) {
-    case 'icon':
-      return { kind: 'icon', id: target.id }
-    case 'line-end':
-    case 'line-body':
-      return { kind: 'line', id: target.id }
-    case 'room':
-    case 'empty':
-      return null
-  }
-}
-
 // Pointer position within the canvas: what anchored zoom and cell tracking
 // both work from.
 function localPoint(event: MouseEvent): ScreenPoint | null {
@@ -352,6 +338,9 @@ function handleDoorPress(event: PointerEvent) {
   // pointer drifted to inside the dead-zone.
   const target = doorTargetAt(local)
   if (!target) return
+  // Read at press time with the target, so a click means the modifier the user
+  // was holding when they pressed rather than whatever they let go of first.
+  const additive = event.shiftKey
   event.preventDefault()
 
   if (action === 'erase') {
@@ -397,7 +386,7 @@ function handleDoorPress(event: PointerEvent) {
         if (gesture === box) gesture = null
         if (boxDrag === box) boxDrag = null
       }
-      if (!leftCell) handleDoorClick(target)
+      if (!leftCell) handleDoorClick(target, additive)
       draw()
     },
   })
@@ -451,7 +440,11 @@ function deleteTransitionAt(mapId: MapId, target: DoorTarget) {
 // The cost is that far-marker navigation is unavailable while a teleport is
 // pending. Switching tabs by the tab bar is still allowed and is the route that
 // stays open.
-function handleDoorClick(target: DoorTarget) {
+//
+// Below that, select beats create: every row hands its ref to the shared
+// policy, and only a plain click that found nothing goes on to start a
+// teleport. A shift-click edits the selection and starts nothing.
+function handleDoorClick(target: DoorTarget, additive: boolean) {
   const tab = tabsStore.activeTab
   if (!tab) return
 
@@ -460,27 +453,12 @@ function handleDoorClick(target: DoorTarget) {
     return
   }
 
-  switch (target.kind) {
-    // All gestures start on a room cell; starting on empty space does nothing.
-    // Clicking off everything also clears the selection, which is the one place
-    // the transition selection differs from the active room: that one has no
-    // canvas deselect, and this one does, because it is a selection.
-    case 'empty':
-      selection.clear()
-      return
-    // Select beats create: both transition rows land here, including a
-    // cross-tab teleport clicked on its far marker. The marker is derived
-    // rather than stored, but it resolves to the same transition id, and the
-    // selection store already knows a far end counts as alive.
-    case 'door':
-    case 'teleport':
-      selection.set([{ kind: 'transition', id: target.id }], tab.id)
-      return
-    // The one row that starts something: begins a pending teleport.
-    case 'room':
-      selection.clear()
-      pendingTeleport.start(tab.id, target.cell)
-  }
+  const ref = doorRefOf(target)
+  selection.clickSelect(ref, tab.id, additive)
+  if (ref || additive) return
+  // All gestures start on a room cell; clicking bare grid deselects and does
+  // nothing else.
+  if (target.kind === 'room') pendingTeleport.start(tab.id, target.cell)
 }
 
 // The far end shows a marker cell with the destination tab's first letter;
@@ -655,6 +633,9 @@ function handleMarkupPress(event: PointerEvent) {
   const local = localPoint(event)
   const target = local && markupTargetAt(local)
   if (!target) return
+  // Read at press time with the target, so a click means the modifier the user
+  // was holding when they pressed rather than whatever they let go of first.
+  const additive = event.shiftKey
   event.preventDefault()
 
   if (action === 'erase') {
@@ -723,17 +704,17 @@ function handleMarkupPress(event: PointerEvent) {
         placeIconAt(armed, target.cell)
         return
       }
-      // The selection column, which every row answers. Select beats create, the
-      // rule Door mode already follows: a click that found an object selects it
-      // rather than offering to put a new one on top of it.
+      // The selection column, which every row answers through the shared
+      // policy. Select beats create, the rule Door mode already follows: a
+      // click that found an object selects it rather than offering to put a new
+      // one on top of it.
+      if (!tab) return
       const ref = markupRefOf(target)
-      if (ref && tab) {
-        selection.set([ref], tab.id)
-        return
-      }
+      selection.clickSelect(ref, tab.id, additive)
+      if (ref || additive) return
       // Clicking off everything deselects, which the picker opening on top of
-      // is fine: the picker is about the cell, not about the selection.
-      selection.clear()
+      // is fine: the picker is about the cell, not about the selection. A
+      // shift-click edits the selection and opens nothing.
       if (target.kind !== 'room') return
       openIconPicker(target.cell)
     },

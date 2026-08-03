@@ -14,6 +14,7 @@ import { teleportEndAt, type TeleportEnd } from './teleports'
 import type { ScreenPoint } from './viewport'
 import type { CellKey } from '@/core/cell'
 import type { RoomId, TransitionId } from '@/core/ids'
+import type { ObjectRef } from '@/core/types'
 
 export type DoorTarget =
   // Bare grid, or a cell with neither a room nor a transition. No gestures start
@@ -62,6 +63,21 @@ export function resolveDoorTarget(point: ScreenPoint, scene: HitScene): DoorTarg
 
   if (roomId === null) return { kind: 'empty', cell }
   return { kind: 'room', cell, roomId }
+}
+
+// Which object a click on this row selects, or null for the rows that select
+// nothing. Both transition rows answer a transition, including a cross-tab
+// teleport clicked on its far marker: the marker is derived rather than stored,
+// but it carries the same transition id, which counts as alive from either end.
+export function doorRefOf(target: DoorTarget): ObjectRef | null {
+  switch (target.kind) {
+    case 'door':
+    case 'teleport':
+      return { kind: 'transition', id: target.id }
+    case 'room':
+    case 'empty':
+      return null
+  }
 }
 
 // The cell a gesture would start from, or null if none would start.

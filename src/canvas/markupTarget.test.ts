@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { armedPlacementAt, markupCursor, resolveMarkupTarget } from './markupTarget'
+import { armedPlacementAt, markupCursor, markupRefOf, resolveMarkupTarget } from './markupTarget'
 import { hitTest, lineEndRadius, type HitScene } from './hitTest'
 import { createProject } from '@/core/factory'
 import { Transaction } from '@/core/journal'
@@ -289,5 +289,28 @@ describe('markupCursor while armed', () => {
     expect(markupCursor(resolveMarkupTarget(centre('4,0'), scene), true, { replace: false })).toBe(
       null,
     )
+  })
+})
+
+describe('markupRefOf', () => {
+  it('answers the object on the rows that hold one, and nothing on the others', () => {
+    const { scene, icon, outside } = fixture()
+
+    expect(markupRefOf(resolveMarkupTarget(centre('1,1'), scene))).toEqual({
+      kind: 'icon',
+      id: icon.id,
+    })
+
+    // Both line rows answer the same line: which end the pointer is near
+    // changes what a drag does, never what is selected.
+    const from = centre('6,6')
+    const to = centre('7,6')
+    const body = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
+    const ref = { kind: 'line', id: outside.id }
+    expect(markupRefOf(resolveMarkupTarget(from, scene))).toEqual(ref)
+    expect(markupRefOf(resolveMarkupTarget(body, scene))).toEqual(ref)
+
+    expect(markupRefOf(resolveMarkupTarget(centre('4,1'), scene))).toBeNull()
+    expect(markupRefOf(resolveMarkupTarget(centre('9,9'), scene))).toBeNull()
   })
 })

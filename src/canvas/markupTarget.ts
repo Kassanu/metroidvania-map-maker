@@ -21,6 +21,7 @@ import { cellAt, lineAt, lineEndAt, type HitScene } from './hitTest'
 import type { ScreenPoint } from './viewport'
 import type { CellKey } from '@/core/cell'
 import type { IconId, LineId, RoomId } from '@/core/ids'
+import type { ObjectRef } from '@/core/types'
 
 export type MarkupTarget =
   // The pointer's cell holds an icon. Beats both line rows, which is the whole
@@ -56,6 +57,22 @@ export function resolveMarkupTarget(point: ScreenPoint, scene: HitScene): Markup
   // hit the same way inside a room, outside one, and lying across a wall.
   if (roomId === null) return { kind: 'empty', cell }
   return { kind: 'room', cell, roomId }
+}
+
+// Which object a click on this row selects, or null for the rows that select
+// nothing. Both line rows answer the same line: which end the pointer is near
+// changes what a drag does, never what is selected.
+export function markupRefOf(target: MarkupTarget): ObjectRef | null {
+  switch (target.kind) {
+    case 'icon':
+      return { kind: 'icon', id: target.id }
+    case 'line-end':
+    case 'line-body':
+      return { kind: 'line', id: target.id }
+    case 'room':
+    case 'empty':
+      return null
+  }
 }
 
 // What an armed icon would do with a click, which is not what the table says a

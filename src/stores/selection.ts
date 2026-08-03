@@ -59,6 +59,22 @@ export const useSelectionStore = defineStore('selection', () => {
       : [...items.value, ref]
   }
 
+  // What a click means, for every mode. A mode decides only which of its
+  // targets are selectable and hands the ref, or null for a click that found
+  // nothing; this decides the rest, so no two modes can disagree about it.
+  //
+  // `additive` is shift held. A shift-click only ever edits the selection: a
+  // miss leaves it alone rather than clearing, because a stray shift-click on
+  // bare grid would destroy the multi-selection it is being used to build.
+  function clickSelect(ref: ObjectRef | null, mapId: MapId, additive: boolean): void {
+    if (!ref) {
+      if (!additive) clear()
+      return
+    }
+    if (additive) toggle(ref, mapId)
+    else set([ref], mapId)
+  }
+
   // A selection can outlive the thing it points at: undo removes a room, a
   // delete cascades, a file is opened. Having every op that can destroy an
   // object also prune the selection is the version that eventually misses one.
@@ -86,6 +102,7 @@ export const useSelectionStore = defineStore('selection', () => {
     set,
     toggle,
     clear,
+    clickSelect,
     // The tab the current selection belongs to, so the canvas can tell whether
     // what it is drawing is the selected map's.
     mapId: computed(() => selectionMapId.value),

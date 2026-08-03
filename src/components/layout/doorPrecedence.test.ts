@@ -8,6 +8,7 @@ import { useToolsStore } from '@/stores/tools'
 import { useModeStore } from '@/stores/mode'
 import { useSelectionStore } from '@/stores/selection'
 import { usePendingTeleportStore } from '@/stores/pendingTeleport'
+import { runAction } from '@/hotkeys/actions'
 import { mapScope, PROJECT_SCOPE, useModelStore } from '@/stores/model'
 import { paintCells } from '@/core/ops/rooms'
 import { createFromBox, createTeleport } from '@/core/ops/doors'
@@ -58,6 +59,12 @@ describe('Door precedence table', () => {
   function click(viewport: HTMLElement, point: PointerEventInit, button = 0) {
     viewport.dispatchEvent(press('pointerdown', { ...point, button }))
     viewport.dispatchEvent(press('pointerup', { ...point, button }))
+  }
+
+  // The additive half of the selection policy. Shift is read at press time, so
+  // it rides on `pointerdown` and `pointerup` alike.
+  function shiftClick(viewport: HTMLElement, point: PointerEventInit) {
+    click(viewport, { ...point, shiftKey: true })
   }
 
   // One cell of travel, which clears both halves of the click-vs-drag rule at
@@ -513,6 +520,64 @@ describe('Door precedence table', () => {
       // And the reverse: clicking off everything clears rather than selects.
       click(viewport, at(...BARE_GRID))
       expect(selection.selected).toEqual([])
+      wrapper.unmount()
+    })
+
+    it('shift-click adds to the selection, and removes what is already in it', () => {
+      const { wrapper, viewport } = mountCanvas()
+      fixture()
+      const selection = useSelectionStore()
+      const door = idOf('edge')
+      const teleport = idOf('teleport')
+
+      click(viewport, at(...DOOR_EDGE))
+      shiftClick(viewport, at(...TELEPORT_MARK))
+      expect(selection.selected).toEqual([
+        { kind: 'transition', id: door },
+        { kind: 'transition', id: teleport },
+      ])
+
+      shiftClick(viewport, at(...DOOR_EDGE))
+      expect(selection.selected).toEqual([{ kind: 'transition', id: teleport }])
+      wrapper.unmount()
+    })
+
+    // A shift-click only ever edits the selection. Both halves matter: a miss
+    // must not clear what is being built, and the row's own create column must
+    // not fire underneath it, which here is a room cell starting a teleport.
+    it('a shift-click that finds nothing leaves the selection alone and starts no teleport', () => {
+      const { wrapper, viewport } = mountCanvas()
+      fixture()
+      const selection = useSelectionStore()
+      const door = idOf('edge')
+
+      click(viewport, at(...DOOR_EDGE))
+      shiftClick(viewport, at(...CLEAN_CELL))
+      shiftClick(viewport, at(...BARE_GRID))
+
+      expect(selection.selected).toEqual([{ kind: 'transition', id: door }])
+      expect(usePendingTeleportStore().isPending).toBe(false)
+      wrapper.unmount()
+    })
+
+    // Multi-delete is one transaction, and this is the first route by which a
+    // user can build the selection it acts on.
+    it('Delete removes a shift-built selection in one undo step', () => {
+      const { wrapper, viewport } = mountCanvas()
+      fixture()
+      const door = idOf('edge')
+      const teleport = idOf('teleport')
+
+      click(viewport, at(...DOOR_EDGE))
+      shiftClick(viewport, at(...TELEPORT_MARK))
+      runAction('deleteSelection')
+
+      expect(map().transitions.has(door)).toBe(false)
+      expect(map().transitions.has(teleport)).toBe(false)
+      expect(transitionCount()).toBe(1)
+
+      useModelStore().undo()
+      expect(transitionCount()).toBe(3)
       wrapper.unmount()
     })
 

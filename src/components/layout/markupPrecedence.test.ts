@@ -78,6 +78,12 @@ describe('Markup precedence table', () => {
     await nextTick()
   }
 
+  // The additive half of the selection policy. Shift is read at press time, so
+  // it rides on `pointerdown` and `pointerup` alike.
+  async function shiftClick(viewport: HTMLElement, point: PointerEventInit) {
+    await click(viewport, { ...point, shiftKey: true })
+  }
+
   // Two cells of travel, which clears both halves of the click-vs-drag rule and
   // is long enough that a line drawn from here has more than one segment.
   async function drag(
@@ -437,6 +443,44 @@ describe('Markup precedence table', () => {
       expect(map().lines.get(line)!.points).toHaveLength(6)
     })
 
+    it('shift-click adds to the selection, and removes what is already in it', async () => {
+      const { viewport } = await mountCanvas()
+      const { icon, line, sharedIcon } = fixture()
+
+      // The last press lands on a cell holding both an icon and a line, so it
+      // also pins that shift-click resolves through the same precedence a plain
+      // click does: icon beats line.
+      await click(viewport, at(...ICON_CELL))
+      await shiftClick(viewport, at(...LINE_BODY))
+      await shiftClick(viewport, at(...ICON_AND_LINE))
+      expect(selection().selected).toEqual([
+        { kind: 'icon', id: icon },
+        { kind: 'line', id: line },
+        { kind: 'icon', id: sharedIcon },
+      ])
+
+      await shiftClick(viewport, at(...LINE_BODY))
+      expect(selection().selected).toEqual([
+        { kind: 'icon', id: icon },
+        { kind: 'icon', id: sharedIcon },
+      ])
+    })
+
+    // A shift-click only ever edits the selection. Both halves matter: a miss
+    // must not clear what is being built, and the row's own create column must
+    // not fire underneath it.
+    it('a shift-click that finds nothing leaves the selection alone and opens no picker', async () => {
+      const { viewport } = await mountCanvas()
+      const { icon } = fixture()
+
+      await click(viewport, at(...ICON_CELL))
+      await shiftClick(viewport, at(...EMPTY_ROOM_CELL))
+      await shiftClick(viewport, at(...BARE_GRID))
+
+      expect(selection().selected).toEqual([{ kind: 'icon', id: icon }])
+      expect(pickerIsOpen()).toBe(false)
+    })
+
     it('the picker opens on an empty room cell and nowhere else', async () => {
       const { viewport } = await mountCanvas()
       fixture()
@@ -554,21 +598,17 @@ describe('Markup precedence table', () => {
       expect(map().lines.has(line)).toBe(false)
     })
 
-    // The one branch no gesture can reach: nothing builds a mixed selection
-    // until shift-click arrives with Select/Move, so the store is driven
-    // directly. Worth having, because it is what the label falls back to.
     it('Delete names a mixed selection generically, and empties it in one step', async () => {
       const { viewport } = await mountCanvas()
-      const { mapId, icon, line } = fixture()
-      expect(viewport).toBeDefined()
+      const { icon, line } = fixture()
 
-      selection().set(
-        [
-          { kind: 'icon', id: icon },
-          { kind: 'line', id: line },
-        ],
-        mapId,
-      )
+      await click(viewport, at(...ICON_CELL))
+      await shiftClick(viewport, at(...LINE_BODY))
+      expect(selection().selected).toEqual([
+        { kind: 'icon', id: icon },
+        { kind: 'line', id: line },
+      ])
+
       runAction('deleteSelection')
 
       expect(map().icons.has(icon)).toBe(false)

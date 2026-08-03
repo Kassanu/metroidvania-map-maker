@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { doorCursor, gestureOriginCell, resolveDoorTarget, type DoorTarget } from './doorTarget'
+import {
+  doorCursor,
+  doorRefOf,
+  gestureOriginCell,
+  resolveDoorTarget,
+  type DoorTarget,
+} from './doorTarget'
 import { GRAB_MARGIN_PX, hitTest } from './hitTest'
 import type { HitScene } from './hitTest'
 import { createProject } from '@/core/factory'
@@ -340,5 +346,26 @@ describe('doorCursor', () => {
     expect(doorCursor(target('empty'), true)).toBeNull()
     expect(doorCursor(target('door'), true)).toBe('pointer')
     expect(doorCursor(target('teleport'), true)).toBe('pointer')
+  })
+})
+
+describe('doorRefOf', () => {
+  it('answers a transition on both transition rows, and nothing on the others', () => {
+    const id = 'tr_1' as TransitionId
+    const roomId = 'room_1' as RoomId
+
+    expect(doorRefOf({ kind: 'door', cell: '0,0', roomId, id })).toEqual({
+      kind: 'transition',
+      id,
+    })
+    // The far marker of a cross-tab teleport: derived rather than stored, and
+    // still the same transition.
+    expect(doorRefOf({ kind: 'teleport', cell: '0,0', roomId, id, leadsTo: null })).toEqual({
+      kind: 'transition',
+      id,
+    })
+
+    expect(doorRefOf({ kind: 'room', cell: '0,0', roomId })).toBeNull()
+    expect(doorRefOf({ kind: 'empty', cell: '0,0' })).toBeNull()
   })
 })

@@ -70,6 +70,48 @@ describe('useSelectionStore', () => {
     })
   })
 
+  // The click policy every mode routes through, as its four cases. A mode
+  // supplies only the ref, so these four are the whole of what a click means.
+  describe('clickSelect', () => {
+    it('replaces on a plain click and clears on a plain miss', () => {
+      const selection = useSelectionStore()
+      const { mapId, room } = paintRoom(['0,0'])
+      const other = paintRoom(['5,5']).room
+
+      selection.clickSelect({ kind: 'room', id: room.id }, mapId, false)
+      selection.clickSelect({ kind: 'room', id: other.id }, mapId, false)
+      expect(selection.selected).toEqual([{ kind: 'room', id: other.id }])
+
+      selection.clickSelect(null, mapId, false)
+      expect(selection.isEmpty).toBe(true)
+    })
+
+    it('toggles on a shift-click', () => {
+      const selection = useSelectionStore()
+      const { mapId, room } = paintRoom(['0,0'])
+      const other = paintRoom(['5,5']).room
+
+      selection.clickSelect({ kind: 'room', id: room.id }, mapId, false)
+      selection.clickSelect({ kind: 'room', id: other.id }, mapId, true)
+      expect(selection.selected).toHaveLength(2)
+
+      selection.clickSelect({ kind: 'room', id: room.id }, mapId, true)
+      expect(selection.selected).toEqual([{ kind: 'room', id: other.id }])
+    })
+
+    // The one case that is not simply "toggle instead of replace": a stray
+    // shift-click on bare grid would otherwise destroy the multi-selection it
+    // is being used to build.
+    it('leaves the selection alone on a shift-click that found nothing', () => {
+      const selection = useSelectionStore()
+      const { mapId, room } = paintRoom(['0,0'])
+
+      selection.clickSelect({ kind: 'room', id: room.id }, mapId, false)
+      selection.clickSelect(null, mapId, true)
+      expect(selection.selected).toEqual([{ kind: 'room', id: room.id }])
+    })
+  })
+
   // A selection can outlive what it points at. Rather than have every op that
   // can destroy an object also remember to prune (the version that eventually
   // misses one), anything that stops resolving is dropped after any change.
