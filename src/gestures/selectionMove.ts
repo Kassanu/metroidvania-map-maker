@@ -17,7 +17,7 @@
 // draw time the destination cells belong to the moving room and look no
 // different from cells picked up off bare grid.
 
-import { beginGhostGesture, NO_CELLS, type GhostGesture } from './ghostGesture'
+import { beginGhostGesture, NO_CELLS, type CellMove } from './ghostGesture'
 import { useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
 import { moveRooms } from '@/core/ops/rooms'
@@ -26,13 +26,6 @@ import { parseCell, translate, type CellKey } from '@/core/cell'
 import { t } from '@/i18n'
 import type { MapModel } from '@/core/types'
 import type { IconId, LineId, MapId, RoomId } from '@/core/ids'
-
-export interface SelectionMove extends GhostGesture {
-  // The cell the pointer is over, which with the origin is the delta. Starts at
-  // the origin, so a drag that has not left its cell is already a no-op.
-  readonly to: CellKey
-  moveTo(cell: CellKey): void
-}
 
 // The undo entry, named after the kind when the selection holds exactly one.
 // A mixed selection has no truthful specific name and says so, the same rule
@@ -80,7 +73,7 @@ export function beginSelectionMove(
   mapId: MapId,
   from: CellKey,
   onChange: () => void,
-): SelectionMove | null {
+): CellMove | null {
   const model = useModelStore()
   const selection = useSelectionStore()
   const map = model.project.mapsById.get(mapId)

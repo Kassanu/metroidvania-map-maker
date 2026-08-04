@@ -8,6 +8,7 @@ import { cellCentre, type TeleportEnd, type TeleportScene } from './teleports'
 import { parseCell, segmentFromEdge } from '@/core/cell'
 import type { CellKey, EdgeKey } from '@/core/cell'
 import { boundaryEdges, interiorVertices, outerWalls, resizableRuns } from '@/core/derive/walls'
+import { connectedComponents } from '@/core/derive/connectivity'
 import { clamp } from '@/lib/math'
 import type { AreaId, LockTypeId, RoomId, TransitionId } from '@/core/ids'
 import type { Area, LockType, MapModel, Room, WallStyle } from '@/core/types'
@@ -230,6 +231,16 @@ export interface GhostScene {
   // lands on, so `runResize` puts in exactly those. Both collect them before
   // the apply that takes them, when the map still says who owns what.
   absorbing: ReadonlySet<CellKey>
+  // Cells the live gesture is about to turn into brand-new rooms, losing the
+  // identity, name, notes and transitions of whatever they came from.
+  //
+  // The one thing here that is not about destruction. A fragment move applies
+  // speculatively like everything else, so its new rooms draw through the
+  // ordinary path and mid-drag it looks exactly like a room move: same cells at
+  // the destination, same area colour. The two outcomes differ in a way the
+  // user cannot casually undo their way out of, so the difference has to be on
+  // screen before release.
+  becoming: ReadonlySet<CellKey>
 }
 
 // Wall weight in CSS px at zoom 1, scaled by zoom and then clamped so walls
@@ -327,6 +338,11 @@ const VERTEX_REVEAL_CELLS = 2
 const DOORWAY_STUB = 1 / 3
 
 const DOTTED_DASH = [3, 3] as const
+
+// The dash of the outline around cells about to become new rooms, in screen
+// pixels, sized against the outline's own weight: shorter and it reads as a
+// dotted wall, which already means a secret passage.
+const BECOMING_DASH = [10, 6] as const
 
 // The rubber-band box's outline weight, in screen pixels at every zoom.
 const BOX_PREVIEW_PX = 2
@@ -467,6 +483,10 @@ export function renderMap(
   if (scene.pendingTeleport) drawPendingTeleport(ctx, scene, scene.pendingTeleport)
   // Over the walls, because a run handle sits exactly on the wall it resizes.
   if (scene.handleRoom) drawHandles(ctx, scene, scene.handleRoom)
+  // With the gesture overlays rather than among the map layers, and for their
+  // reason: it is the one mark saying this drag will not preserve what it is
+  // dragging, and no layer toggle may swallow it.
+  if (scene.ghost && scene.ghost.becoming.size > 0) drawBecoming(ctx, scene, scene.ghost.becoming)
   // Last, so the aiming aid is never hidden under a wall it is about to paint
   // over. It is a cursor, not part of the map.
   if (scene.brushPreview) drawBrushPreview(ctx, scene, scene.brushPreview)
@@ -821,6 +841,39 @@ function drawGhost(ctx: CanvasRenderingContext2D, scene: MapScene, ghost: GhostS
     const [x, y, w, h] = cellRect(cell, scene)
     ctx.fillRect(x, y, w, h)
   }
+}
+
+// The cells a fragment move is about to turn into new rooms: one dashed outline
+// per connected group, over the rooms the speculative apply has already drawn
+// there.
+//
+// Dashed against the room halo's solid, in the same colour and at the same
+// weight, which is the whole of the signal: solid means this is a room and it
+// keeps being one, dashed means this is about to become one. A room move draws
+// its solid halo around the room it is dragging, so the two gestures are told
+// apart by the one property that differs between their outcomes.
+//
+// Per connected group rather than over the union, because the count is the
+// other half of what the user needs before releasing: a fragment in two pieces
+// lands as two rooms, and a single outline around both would say one.
+//
+// Over the walls, unlike every other outline here. The new rooms' own walls are
+// drawn solid on the same boundary, and an outline underneath them would be a
+// preview hidden by the thing it is previewing.
+function drawBecoming(ctx: CanvasRenderingContext2D, scene: MapScene, cells: ReadonlySet<CellKey>) {
+  ctx.strokeStyle = scene.palette.selection
+  ctx.lineWidth = wallWidth(scene.camera.zoom) + SELECTION_HALO_PX * 2
+  ctx.lineCap = 'butt'
+  ctx.setLineDash([...BECOMING_DASH])
+
+  for (const group of connectedComponents(cells)) {
+    ctx.beginPath()
+    for (const edge of boundaryEdges(group)) traceEdge(ctx, edge, scene)
+    ctx.stroke()
+  }
+
+  ctx.setLineDash([])
+  ctx.lineWidth = 1
 }
 
 function drawGrid(

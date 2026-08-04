@@ -1848,7 +1848,11 @@ describe('renderMap ghost overlay', () => {
     const { ctx, fills } = fakeContext()
     const { project, map } = twoRooms()
 
-    draw(ctx, { map, areas: project.areas, ghost: { absorbing: new Set(['2,0', '2,1']) } })
+    draw(ctx, {
+      map,
+      areas: project.areas,
+      ghost: { absorbing: new Set(['2,0', '2,1']), becoming: new Set() },
+    })
 
     const tinted = fills.filter((fill) => fill.style === '#absorb')
     expect(tinted).toHaveLength(2)
@@ -1867,7 +1871,7 @@ describe('renderMap ghost overlay', () => {
       map,
       areas: project.areas,
       showGrid: false,
-      ghost: { absorbing: new Set(['2,0']) },
+      ghost: { absorbing: new Set(['2,0']), becoming: new Set() },
     })
 
     expect(fills.at(-1)!.style).toBe('#absorb')
@@ -1883,10 +1887,106 @@ describe('renderMap ghost overlay', () => {
     const { project, map } = twoRooms()
 
     draw(withoutGhost.ctx, { map, areas: project.areas })
-    draw(withEmptyGhost.ctx, { map, areas: project.areas, ghost: { absorbing: new Set() } })
+    draw(withEmptyGhost.ctx, {
+      map,
+      areas: project.areas,
+      ghost: { absorbing: new Set(), becoming: new Set() },
+    })
 
     expect(withoutGhost.fills.map((f) => f.style)).toEqual(withEmptyGhost.fills.map((f) => f.style))
     expect(withEmptyGhost.fills.some((fill) => fill.style === '#absorb')).toBe(false)
+  })
+})
+
+// The other half of the ghost, and the only part of it that is not about
+// destruction: which cells are about to stop being part of the rooms they are
+// in and start being rooms of their own.
+describe('renderMap ghost, cells about to become rooms', () => {
+  const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
+    renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
+
+  const dashed = <T extends { style: string; dash: number[] }>(strokes: T[]) =>
+    strokes.filter((stroke) => stroke.style === '#selection' && stroke.dash.length > 0)
+
+  function oneRoom() {
+    const built = withMap((tx, project, map) => {
+      paintCells(tx, project, map, ['0,0', '1,0', '2,0', '3,0'], { areaId: WORLD_AREA_ID })
+    })
+    return { map: built.map, areas: built.project.areas }
+  }
+
+  const ghostOf = (becoming: CellKey[]) => ({
+    absorbing: new Set<CellKey>(),
+    becoming: new Set(becoming),
+  })
+
+  it('draws nothing when the gesture becomes nothing', () => {
+    const { ctx, strokes } = fakeContext()
+
+    draw(ctx, { ...oneRoom(), ghost: ghostOf([]) })
+
+    expect(dashed(strokes)).toEqual([])
+  })
+
+  it('outlines the landing cells, dashed', () => {
+    const { ctx, strokes } = fakeContext()
+
+    draw(ctx, { ...oneRoom(), ghost: ghostOf(['0,2', '1,2']) })
+
+    const drawn = dashed(strokes)
+    expect(drawn).toHaveLength(1)
+    // Six edges for a 2x1 region: the seam between the pair is interior.
+    expect(drawn[0].segments).toHaveLength(6)
+  })
+
+  // The count is half of what the user needs before releasing: a fragment in
+  // two pieces lands as two rooms, and one outline around both would say one.
+  it('outlines each connected group separately', () => {
+    const { ctx, strokes } = fakeContext()
+
+    draw(ctx, { ...oneRoom(), ghost: ghostOf(['0,2', '2,2']) })
+
+    const drawn = dashed(strokes)
+    expect(drawn).toHaveLength(2)
+    for (const outline of drawn) expect(outline.segments).toHaveLength(4)
+  })
+
+  // Solid means this is a room and stays one; dashed means this is about to
+  // become one. Same colour, same weight, so the dash is the whole signal.
+  it('matches the room halo in colour and weight, and differs only in the dash', () => {
+    const { ctx, strokes } = fakeContext()
+    const built = withMap((tx, project, map) => {
+      paintCells(tx, project, map, ['0,0'], { areaId: WORLD_AREA_ID })
+    })
+    const [room] = [...built.map.rooms.values()]
+
+    draw(ctx, {
+      map: built.map,
+      areas: built.project.areas,
+      selectedRooms: new Set([room.id]),
+      ghost: ghostOf(['0,2']),
+    })
+
+    const halo = strokes.find(
+      (stroke) => stroke.style === '#selection' && stroke.dash.length === 0,
+    )!
+    const becoming = dashed(strokes)[0]
+    expect(becoming.width).toBeCloseTo(halo.width)
+  })
+
+  // Over the walls, unlike every other outline here: the new rooms' own walls
+  // are drawn solid on the same boundary, and a preview hidden by the thing it
+  // previews says nothing.
+  it('draws over the walls', () => {
+    const { ctx, strokes } = fakeContext()
+
+    draw(ctx, { ...oneRoom(), ghost: ghostOf(['0,0', '1,0']) })
+
+    const becoming = strokes.findIndex(
+      (stroke) => stroke.style === '#selection' && stroke.dash.length > 0,
+    )
+    const wall = strokes.findIndex((stroke) => stroke.style === '#roomwall')
+    expect(wall).toBeLessThan(becoming)
   })
 })
 

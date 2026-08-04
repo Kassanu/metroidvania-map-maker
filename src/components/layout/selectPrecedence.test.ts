@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, type FakeContext2D } from '@/test-setup'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import CanvasRegion from './CanvasRegion.vue'
@@ -332,18 +332,49 @@ describe('Select precedence table', () => {
       expect([...map().rooms.get(roomC)!.cells].sort()).toEqual(['0,2', '1,2', '2,2'])
     })
 
-    // The other half of the same row, and the half that survives into the
-    // fragment move: a drag that starts on a cell already selected is not a
-    // band, whatever it goes on to do.
-    it('does not marquee from a cell that is already selected', async () => {
+    // The other half of the same row: a drag from a cell already selected moves
+    // the fragment instead of banding, and what lands is what is selected.
+    it('moves the fragment from a cell that is already selected', async () => {
       const { viewport } = await mountCanvas()
-      const { mapId } = fixture()
+      const { mapId, roomC } = fixture()
       useToolsStore().setSelectSubMode('cells')
 
       await click(viewport, at(0.5, 2.5))
-      await drag(viewport, at(0.5, 2.5), at(2.5, 2.5))
+      await drag(viewport, at(0.5, 2.5), at(0.5, 5.5))
 
-      expect(selection().cellsOn(mapId)).toEqual(['0,2'])
+      expect(selection().cellsOn(mapId)).toEqual(['0,5'])
+      // Out of the room it came from, and into a room of its own.
+      expect([...map().rooms.get(roomC)!.cells].sort()).toEqual(['1,2', '2,2'])
+      expect(map().cellOwner.get('0,5')).not.toBe(roomC)
+    })
+
+    // A cell ref names a position, so the move invalidates the refs it is
+    // moving: mid-drag the selection still names cells the fragment has left,
+    // which are bare grid by then. A tint there would mark ground nothing is
+    // on. The ghost draws the fragment where it actually is instead.
+    it('stops marking the cells the fragment came from, while it is in flight', async () => {
+      const { wrapper, viewport } = await mountCanvas()
+      fixture()
+      useToolsStore().setSelectSubMode('cells')
+      await click(viewport, at(0.5, 2.5))
+
+      const canvas = wrapper.get('.canvas').element as HTMLCanvasElement
+      const ctx = canvas.getContext('2d') as unknown as FakeContext2D
+      // The source cell's own rect, from the same mapping the presses use. The
+      // only thing that fills it once the fragment has lifted off is the
+      // selection tint: no room owns it, so there is no room fill either.
+      const corner = at(0, 2)
+      const size = useModelStore().tileSize
+      const sourceRect = [corner.clientX, corner.clientY, size, size].join(',')
+      ctx.fillRect.mockClear()
+
+      viewport.dispatchEvent(press('pointerdown', at(0.5, 2.5)))
+      viewport.dispatchEvent(press('pointermove', at(0.5, 5.5)))
+      await nextTick()
+
+      expect(ctx.fillRect.mock.calls.map((call) => call.join(','))).not.toContain(sourceRect)
+      viewport.dispatchEvent(press('pointerup', at(0.5, 5.5)))
+      await nextTick()
     })
 
     it('unions with the selection when the band is dragged with shift', async () => {

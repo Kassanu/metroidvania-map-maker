@@ -35,7 +35,9 @@ import IconPickerPopover from './IconPickerPopover.vue'
 import CanvasContextMenu from './CanvasContextMenu.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
 import { beginMarquee, type Marquee } from '@/gestures/marquee'
-import { beginSelectionMove, type SelectionMove } from '@/gestures/selectionMove'
+import { beginSelectionMove } from '@/gestures/selectionMove'
+import { beginCellFragmentMove, type CellFragmentMove } from '@/gestures/cellFragmentMove'
+import { NO_CELLS, type CellMove } from '@/gestures/ghostGesture'
 import { beginLineStroke, type LineStroke } from '@/gestures/lineStroke'
 import { beginIconDrag, type IconDrag } from '@/gestures/iconDrag'
 import { beginLinePeel } from '@/gestures/linePeel'
@@ -158,6 +160,11 @@ let gesture: GhostGesture | null = null
 // other gesture's pending result is visible in the speculative model, and this
 // one's rectangle is not.
 let boxDrag: BoxDrag | null = null
+// The same gesture again when it is a cell-fragment move, kept separately for
+// the box drag's reason: it has one thing to show that no other gesture does,
+// and putting it on `GhostGesture` would make every other gesture answer a
+// question it has no answer to.
+let fragment: CellFragmentMove | null = null
 // The live marquee, kept apart from `gesture` for a stronger reason than the
 // box drag is: this one has no ghost at all. It mutates no model, so there is
 // nothing absorbing and nothing to roll back, and the rectangle is the whole of
@@ -193,7 +200,9 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       // Cells a live gesture is about to take. Everything else about the
       // pending result is already in `map` above: a gesture applies
       // speculatively, so mid-drag the model is what release would produce.
-      ghost: gesture ? { absorbing: gesture.absorbing } : null,
+      ghost: gesture
+        ? { absorbing: gesture.absorbing, becoming: fragment?.becoming ?? NO_CELLS }
+        : null,
       brushPreview,
       boxPreview: boxDrag?.preview ?? null,
       // Asked per-map rather than read as a flag, because the pending origin
@@ -303,6 +312,12 @@ const EMPTY_CELL_SELECTION: ReadonlySet<CellKey> = new Set()
 function selectedCells(): ReadonlySet<CellKey> {
   const tab = tabsStore.activeTab
   if (!tab) return EMPTY_CELL_SELECTION
+  // A cell ref names a position, so a fragment move invalidates the very refs
+  // it is moving: mid-drag the selection still names the cells the fragment
+  // came from, which are now bare grid. The ghost draws the fragment where it
+  // actually is for the length of the drag, and the selection takes over again
+  // on release.
+  if (fragment) return EMPTY_CELL_SELECTION
   const cells = selection.cellsOn(tab.id)
   return cells.length === 0 ? EMPTY_CELL_SELECTION : new Set(cells)
 }
@@ -869,7 +884,7 @@ function handleSelectPress(event: PointerEvent) {
   marquee = band
 
   let leftCell = false
-  let move: SelectionMove | null = null
+  let move: CellMove | null = null
   // Latched separately from `move` because a drag on a transition resolves the
   // selection and then starts nothing: without this, every later move would try
   // again.
@@ -888,9 +903,12 @@ function handleSelectPress(event: PointerEvent) {
       // Begun on leaving the origin cell rather than on crossing the dead zone,
       // which makes one fact decide both halves: a press that left its cell is
       // a drag and not a click, and until it does the delta is zero anyway.
-      if (leftCell && !moveResolved && target.kind === 'object') {
+      if (leftCell && !moveResolved && !band) {
         moveResolved = true
-        move = beginObjectMove(tab.id, target, additive)
+        move =
+          subMode === 'cells'
+            ? beginFragmentMove(tab.id, target)
+            : beginObjectMove(tab.id, target, additive)
       }
       move?.moveTo(cell)
     },
@@ -901,6 +919,7 @@ function handleSelectPress(event: PointerEvent) {
         // it, leaving no undo step.
         move.commit()
         gesture = null
+        fragment = null
         move = null
         draw()
         return
@@ -976,16 +995,28 @@ function aimContextMenu(event: PointerEvent) {
 // A transition selects and then does nothing: it is anchored to the edge
 // between two rooms and has no geometry of its own, so `beginSelectionMove`
 // answers null for a selection holding nothing else.
-function beginObjectMove(
-  mapId: MapId,
-  target: SelectTarget,
-  additive: boolean,
-): SelectionMove | null {
+function beginObjectMove(mapId: MapId, target: SelectTarget, additive: boolean): CellMove | null {
   if (target.kind !== 'object') return null
   if (!movesOnDrag(target.ref)) selection.clickSelect(target.ref, mapId, additive)
 
   const started = beginSelectionMove(mapId, target.cell, draw)
   if (started) gesture = started
+  return started
+}
+
+// The Drag column's other half, one granularity over: a press on a cell that is
+// already selected drags the whole cell selection out of the rooms holding it.
+//
+// No selecting first, which is what makes this row different from the object
+// rows above. A press on an unselected cell is a band, so by the time this runs
+// the cells were selected before the press.
+function beginFragmentMove(mapId: MapId, target: SelectTarget): CellMove | null {
+  if (target.kind !== 'cell') return null
+  const started = beginCellFragmentMove(mapId, target.cell, draw)
+  if (started) {
+    gesture = started
+    fragment = started
+  }
   return started
 }
 

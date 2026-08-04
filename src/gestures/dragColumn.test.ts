@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
 import { setActivePinia } from 'pinia'
 import { createTestPinia } from '@/test-setup'
-import { beginSelectionMove, type SelectionMove } from './selectionMove'
+import { beginSelectionMove } from './selectionMove'
+import type { CellMove } from './ghostGesture'
 import { mapScope, useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
 import { resolveEscape } from '@/hotkeys/escStack'
@@ -87,7 +88,7 @@ describe('the Drag column of Select mode', () => {
     useSelectionStore().set(refs, mapId())
   }
 
-  function drag(from: CellKey): SelectionMove {
+  function drag(from: CellKey): CellMove {
     const move = beginSelectionMove(mapId(), from, onChange)
     expect(move).not.toBeNull()
     return move!

@@ -363,16 +363,21 @@ describe('the cell marquee', () => {
   })
 
   describe('a press that starts on a selected cell', () => {
-    // The fragment move is not built. The claim under test is only that the
-    // press does not fall through to the band.
+    // It moves the fragment instead, so what it does not do is sweep: no cell
+    // the rectangle passed over joins the selection on its own account.
     it('does not marquee', async () => {
       const { viewport } = await setup()
       preselect(['0,0', '0,1'])
 
       await drag(viewport, at(0.5, 0.5), at(3.5, 1.5))
 
+      // Swept, owned, and neither grabbed nor landed on: a band would have
+      // taken it.
       expect(held()).not.toContain('2,0')
-      expect(held()).not.toContain('3,1')
+      // The two grabbed cells, carried by the delta the pointer travelled. The
+      // rectangle always covers where the fragment lands, so what tells the two
+      // gestures apart is everything else it covered.
+      expect(held()).toEqual(['3,1', '3,2'])
     })
   })
 

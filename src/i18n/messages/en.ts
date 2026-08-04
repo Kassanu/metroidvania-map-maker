@@ -58,6 +58,10 @@ export const en = {
   'history.moveIcon': 'Move Icon',
   'history.moveRoom': 'Move Room',
   'history.moveSelection': 'Move Selection',
+  // Named after what it does to the map rather than after what was dragged: the
+  // cells leave their rooms and arrive as new ones, which is not a move of
+  // anything the user could point at before the drag.
+  'history.moveCells': 'Move Cells',
   'history.drawLine': 'Draw Line',
   'history.extendLine': 'Extend Line',
   'history.moveLine': 'Move Line',

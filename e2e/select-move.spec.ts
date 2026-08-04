@@ -68,4 +68,27 @@ test.describe('Select mode move', () => {
     expect(await cellAt(page, from.x, from.y)).toEqual({ col: 9, row: 3 })
     expect(errors).toEqual([])
   })
+
+  // The same press on the same cell, one granularity over, reaching a different
+  // op: the undo entry is the only place the difference is readable outside the
+  // canvas, and it is the thing that says which of the two happened.
+  test('drags a selected cell out of its room as a fragment', async ({ page }) => {
+    const { errors } = await openApp(page)
+    await page.keyboard.press('2')
+    await page
+      .getByRole('radiogroup', { name: 'Select' })
+      .getByRole('radio', { name: 'Cells' })
+      .click()
+    const grid = await gridMapping(page)
+
+    const from = grid.at(IN_A_ROOM.x, IN_A_ROOM.y)
+    await page.mouse.click(from.x, from.y)
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x + grid.cellPx * 6, from.y + grid.cellPx * 4, { steps: 10 })
+    await page.mouse.up()
+
+    expect(await undoLabel(page)).toBe('Undo Move Cells')
+    expect(errors).toEqual([])
+  })
 })
