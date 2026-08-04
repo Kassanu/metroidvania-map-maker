@@ -73,11 +73,13 @@ describe('HierarchyPanel', () => {
     return wrapper
   }
 
+  // The label comes off `aria-label` rather than the rendered span, because a
+  // row being renamed shows an input in its place and the row is still a row.
   function rows(panel: VueWrapper) {
     return panel.findAll('[role="treeitem"]').map((row) => ({
       kind: row.attributes('data-row-kind'),
       id: row.attributes('data-row-id'),
-      label: row.get('.hierarchy-label').text(),
+      label: row.attributes('aria-label'),
       selected: row.attributes('aria-selected') === 'true',
       level: row.attributes('aria-level'),
     }))
@@ -689,6 +691,155 @@ describe('HierarchyPanel', () => {
       await nextTick()
 
       expect(selection.roomsOn(mapId)).toEqual([landing])
+    })
+  })
+
+  describe('inline rename', () => {
+    function treeitems(panel: VueWrapper) {
+      return panel.findAll('[role="treeitem"]')
+    }
+
+    function rename(panel: VueWrapper) {
+      return panel.get('.hierarchy-rename')
+    }
+
+    it('renames a room on double-click, committing on Enter', async () => {
+      const { mapId, landing } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[3].trigger('dblclick')
+      await rename(panel).setValue('Ship')
+      await rename(panel).trigger('keydown.enter')
+
+      expect(useModelStore().project.mapsById.get(mapId)!.rooms.get(landing)!.name).toBe('Ship')
+      expect(useModelStore().status.undoLabel).toBe('Rename Room')
+      expect(panel.find('.hierarchy-rename').exists()).toBe(false)
+    })
+
+    it('renames an area, through the project scope', async () => {
+      const { crateria } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[2].trigger('dblclick')
+      await rename(panel).setValue('Norfair')
+      await rename(panel).trigger('keydown.enter')
+
+      expect(useModelStore().project.areas.get(crateria)!.name).toBe('Norfair')
+      expect(useModelStore().status.undoLabel).toBe('Rename Area')
+    })
+
+    it('commits on blur too', async () => {
+      const { crateria } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[2].trigger('dblclick')
+      await rename(panel).setValue('Maridia')
+      await rename(panel).trigger('blur')
+
+      expect(useModelStore().project.areas.get(crateria)!.name).toBe('Maridia')
+    })
+
+    it('abandons on Escape, leaving the name alone', async () => {
+      const { crateria } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[2].trigger('dblclick')
+      await rename(panel).setValue('Discarded')
+      await rename(panel).trigger('keydown.esc')
+
+      expect(useModelStore().project.areas.get(crateria)!.name).toBe('Crateria')
+      expect(panel.find('.hierarchy-rename').exists()).toBe(false)
+    })
+
+    it('refuses a blank name', async () => {
+      const { crateria } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[2].trigger('dblclick')
+      await rename(panel).setValue('   ')
+      await rename(panel).trigger('keydown.enter')
+
+      expect(useModelStore().project.areas.get(crateria)!.name).toBe('Crateria')
+    })
+
+    // The row shows a positional fallback for an unnamed room, and seeding the
+    // editor with it would turn the display text into the room's actual name.
+    it('starts an unnamed room’s editor empty, not from its fallback label', async () => {
+      const model = useModelStore()
+      const mapId = useTabsStore().activeTabId
+      model.run('Rooms', mapScope(mapId), (tx) => {
+        paintCells(tx, model.project, model.project.mapsById.get(mapId)!, ['4,2'], {
+          areaId: WORLD_AREA_ID,
+        })
+      })
+      const panel = mountTree()
+      expect(rows(panel)[1].label).toBe('Room at 4,2')
+
+      await treeitems(panel)[1].trigger('dblclick')
+
+      expect((rename(panel).element as HTMLInputElement).value).toBe('')
+    })
+
+    it('World offers no editor at all', async () => {
+      setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[0].trigger('dblclick')
+
+      expect(panel.find('.hierarchy-rename').exists()).toBe(false)
+      expect(useModelStore().project.areas.get(WORLD_AREA_ID)!.name).toBe('World')
+    })
+
+    it('opens from F2 as well as the pointer', async () => {
+      setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[3].trigger('keydown', { key: 'F2' })
+
+      expect(panel.find('.hierarchy-rename').exists()).toBe(true)
+    })
+
+    // The row's own arrow keys would otherwise move focus out from under the
+    // caret while typing.
+    it('keeps the arrow keys inside the editor', async () => {
+      setup()
+      const panel = mountTree()
+      await treeitems(panel)[3].trigger('dblclick')
+
+      await rename(panel).trigger('keydown', { key: 'ArrowDown' })
+
+      expect(panel.find('.hierarchy-rename').exists()).toBe(true)
+      expect(rows(panel)).toHaveLength(5)
+    })
+
+    it('clicking in the editor does not re-select the row', async () => {
+      const { mapId, landing } = setup()
+      const panel = mountTree()
+      await treeitems(panel)[3].trigger('click')
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([landing])
+
+      await treeitems(panel)[3].trigger('dblclick')
+      await rename(panel).trigger('click')
+
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([landing])
+    })
+
+    it('the + button creates an area and opens its editor', async () => {
+      setup()
+      const panel = mountTree()
+
+      await panel.get('.hierarchy-add').trigger('click')
+      await nextTick()
+
+      const editor = rename(panel)
+      expect(editor.attributes('data-row-id')).toBe(
+        [...useModelStore().project.areas.values()].at(-1)!.id,
+      )
+      expect((editor.element as HTMLInputElement).value).toBe('Area 1')
+
+      await editor.setValue('Tourian')
+      await editor.trigger('keydown.enter')
+      expect([...useModelStore().project.areas.values()].at(-1)!.name).toBe('Tourian')
     })
   })
 })

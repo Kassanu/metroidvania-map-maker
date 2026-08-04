@@ -156,4 +156,51 @@ test.describe('Hierarchy', () => {
     await expect(inspector.getByText(/World cannot be renamed/)).toBeVisible()
     expect(errors).toEqual([])
   })
+
+  test('renames a room from the tree, and the Inspector follows', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    const row = tree.getByRole('treeitem', { name: 'Landing Site' })
+    await row.click()
+    await row.dblclick()
+
+    const editor = tree.locator('.hierarchy-rename')
+    await editor.fill('Ship Deck')
+    await editor.press('Enter')
+
+    expect(await undoLabel(page)).toBe('Undo Rename Room')
+    await expect(tree.getByRole('treeitem', { name: 'Ship Deck' })).toBeVisible()
+    await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Ship Deck')
+    expect(errors).toEqual([])
+  })
+
+  test('the + button creates an area already waiting to be named', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    await page.locator('[data-panel-id="hierarchy"] .hierarchy-add').click()
+
+    const editor = tree.locator('.hierarchy-rename')
+    await expect(editor).toBeFocused()
+    await editor.fill('Tourian')
+    await editor.press('Enter')
+
+    await expect(tree.getByRole('treeitem', { name: 'Tourian' })).toBeVisible()
+    // The Draw toolbar lists it under its chosen name, not the default.
+    await page.keyboard.press('1')
+    await expect(page.locator('#draw-area')).toContainText('Tourian')
+    expect(errors).toEqual([])
+  })
+
+  test('World cannot be renamed from the tree', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    await tree.getByRole('treeitem', { name: 'World' }).dblclick()
+
+    await expect(tree.locator('.hierarchy-rename')).toHaveCount(0)
+    expect(errors).toEqual([])
+  })
 })

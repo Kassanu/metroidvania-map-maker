@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import HierarchyIcon from './HierarchyIcon.vue'
 import { PROJECT_SCOPE, dependOn, useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
 import { useTabsStore } from '@/stores/tabs'
-import { createNewArea } from '@/core/ops/project'
+import { createNewArea, isImmutableArea, renameArea } from '@/core/ops/project'
+import { renameRoom } from '@/core/ops/rooms'
+import { mapScope } from '@/stores/model'
+import { useInlineEdit } from '@/composables/useInlineEdit'
 import { freshAreaName, roomLabel } from '@/i18n/naming'
 import { t } from '@/i18n'
 import type { AreaId, RoomId } from '@/core/ids'
@@ -36,6 +39,10 @@ interface AreaRow {
   kind: 'area'
   id: AreaId
   label: string
+  // What a rename starts from, which is not always what the row shows: an
+  // unnamed room displays a positional fallback, and seeding the editor with
+  // that would turn "Room at 4,2" into the room's actual name on commit.
+  name: string
   level: 1
   selected: boolean
   childCount: number
@@ -45,6 +52,7 @@ interface RoomRow {
   kind: 'room'
   id: RoomId
   label: string
+  name: string
   level: 2
   selected: boolean
 }
@@ -126,6 +134,7 @@ const rows = computed<Row[]>(() => {
       kind: 'area',
       id: area.id,
       label: area.name,
+      name: area.name,
       level: 1,
       selected: selectedAreas.value.has(area.id),
       childCount: rooms.length,
@@ -137,6 +146,7 @@ const rows = computed<Row[]>(() => {
         kind: 'room',
         id: room.id,
         label: roomLabel(room),
+        name: room.name,
         level: 2,
         selected: selectedRooms.value.has(room.id),
       })
@@ -176,12 +186,19 @@ function isCollapsed(id: AreaId): boolean {
   return query.value === '' && collapsed.value.has(id)
 }
 
+// Created, then immediately renamed. An area named by a default and left that
+// way is the state nobody wants, and the row does not exist to edit until the
+// tree has re-rendered around it.
 function addArea() {
   const existing = [...model.project.areas.values()].map((area) => area.name)
   const palette = NEW_AREA_COLORS[model.project.areas.size % NEW_AREA_COLORS.length]
-  model.run(t('history.addArea'), PROJECT_SCOPE, (tx) =>
+  const area = model.run(t('history.addArea'), PROJECT_SCOPE, (tx) =>
     createNewArea(tx, model.project, freshAreaName(existing), palette.cell, palette.wall),
   )
+  nextTick(() => {
+    const index = rows.value.findIndex((row) => row.kind === 'area' && row.id === area.id)
+    if (index >= 0) beginRename(rows.value[index], index)
+  })
 }
 
 function toggle(id: AreaId) {
@@ -231,6 +248,71 @@ watch(
   { flush: 'post' },
 )
 
+function keyOf(row: Row): string {
+  return `${row.kind}:${row.id}`
+}
+
+// Inline rename, the third home of the pattern the project title and the tab
+// names already use. One editor for the whole tree: only one row is ever being
+// renamed, so the row being edited is a key rather than per-row state.
+const editingKey = ref<string | null>(null)
+
+function editingRow(): Row | null {
+  return rows.value.find((row) => keyOf(row) === editingKey.value) ?? null
+}
+
+const {
+  editing,
+  draft,
+  setInputRef,
+  start: startEdit,
+  commit: commitEdit,
+  cancel: cancelEdit,
+} = useInlineEdit(
+  () => editingRow()?.name ?? '',
+  (value) => applyRename(value),
+)
+
+// World is the guaranteed fallback for every room, so it cannot be renamed.
+// Refused here as well as in the op, which is the same question asked once:
+// a row that opened an editor and then discarded the result would be worse
+// than one that never opened it.
+function canRename(row: Row): boolean {
+  return row.kind === 'room' || !isImmutableArea(row.id)
+}
+
+function beginRename(row: Row, index: number) {
+  if (!canRename(row)) return
+  focusedIndex.value = index
+  editingKey.value = keyOf(row)
+  startEdit()
+}
+
+function applyRename(value: string) {
+  const row = editingRow()
+  if (!row) return
+  if (row.kind === 'area') {
+    model.run(t('history.renameArea'), PROJECT_SCOPE, (tx) =>
+      renameArea(tx, model.project, row.id, value),
+    )
+    return
+  }
+  const mapId = tabsStore.activeTabId
+  const map = model.project.mapsById.get(mapId)
+  if (!map) return
+  model.run(t('history.renameRoom'), mapScope(mapId), (tx) => renameRoom(tx, map, row.id, value))
+}
+
+function finishRename() {
+  commitEdit()
+  editingKey.value = null
+}
+
+function abandonRename() {
+  cancelEdit()
+  editingKey.value = null
+}
+
 function focusRow(index: number) {
   const clamped = Math.max(0, Math.min(index, rows.value.length - 1))
   focusedIndex.value = clamped
@@ -267,6 +349,12 @@ function handleKeydown(event: KeyboardEvent, index: number) {
         if (isCollapsed(row.id)) toggle(row.id)
         else focusRow(index + 1)
       }
+      return
+    // The tree-standard rename key, and the only route to it without a pointer
+    // until the row menu lands.
+    case 'F2':
+      event.preventDefault()
+      beginRename(row, index)
       return
     // The keyboard's own way to select the focused row, matching the click.
     case 'Enter':
@@ -337,6 +425,7 @@ function handleKeydown(event: KeyboardEvent, index: number) {
       :tabindex="index === focusedIndex ? 0 : -1"
       @focus="focusedIndex = index"
       @click="selectRow(row, index, $event.shiftKey)"
+      @dblclick="beginRename(row, index)"
       @keydown="handleKeydown($event, index)"
     >
       <button
@@ -355,7 +444,20 @@ function handleKeydown(event: KeyboardEvent, index: number) {
       </button>
       <span v-else class="hierarchy-twisty-spacer" aria-hidden="true" />
       <HierarchyIcon :kind="row.kind" />
-      <span class="hierarchy-label">{{ row.label }}</span>
+      <input
+        v-if="editing && editingKey === keyOf(row)"
+        :ref="setInputRef"
+        v-model="draft"
+        class="hierarchy-rename"
+        :data-row-id="row.id"
+        @click.stop
+        @dblclick.stop
+        @keydown.stop
+        @keydown.enter="finishRename"
+        @keydown.esc="abandonRename"
+        @blur="finishRename"
+      />
+      <span v-else class="hierarchy-label">{{ row.label }}</span>
     </li>
   </ul>
 </template>
@@ -479,6 +581,21 @@ function handleKeydown(event: KeyboardEvent, index: number) {
   font-size: 0.6875rem;
   cursor: pointer;
   padding: 0;
+}
+
+.hierarchy-rename {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  border-radius: 0.1875rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  padding: 0 0.125rem;
+}
+.hierarchy-rename:focus {
+  outline: none;
 }
 
 .hierarchy-label {
