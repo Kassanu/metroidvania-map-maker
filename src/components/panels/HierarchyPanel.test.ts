@@ -6,9 +6,10 @@ import { nextTick } from 'vue'
 import HierarchyPanel from './HierarchyPanel.vue'
 import { useTabsStore } from '@/stores/tabs'
 import { useSelectionStore } from '@/stores/selection'
+import { useModeStore } from '@/stores/mode'
 import { mapScope, useModelStore, PROJECT_SCOPE } from '@/stores/model'
 import { assignRoomArea, paintCells, renameRoom, reorderRoom } from '@/core/ops/rooms'
-import { createNewArea, renameArea } from '@/core/ops/project'
+import { createNewArea, deleteArea, renameArea } from '@/core/ops/project'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { AreaId, MapId, RoomId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
@@ -536,6 +537,158 @@ describe('HierarchyPanel', () => {
       expect(area.get('.tree-icon').attributes('aria-hidden')).toBe('true')
       expect(area.attributes('aria-label')).toBe('World')
       expect(room.attributes('aria-label')).toBe('Vault')
+    })
+  })
+
+  describe('selecting from the tree', () => {
+    function treeitems(panel: VueWrapper) {
+      return panel.findAll('[role="treeitem"]')
+    }
+
+    it('clicking a room selects it in the one store', async () => {
+      const { mapId, landing } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[3].trigger('click')
+
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([landing])
+      expect(rows(panel)[3].selected).toBe(true)
+    })
+
+    // Areas reach the selection from here and from nowhere else: they have no
+    // canvas body beyond their bbox border.
+    it('clicking an area selects it, which no other surface can do', async () => {
+      const { mapId, crateria } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[2].trigger('click')
+
+      const selection = useSelectionStore()
+      expect(selection.selected).toEqual([{ kind: 'area', id: crateria }])
+      expect(selection.mapId).toBe(mapId)
+    })
+
+    it('replaces on click and toggles on shift-click', async () => {
+      const { mapId, landing, corridor } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[3].trigger('click')
+      await treeitems(panel)[4].trigger('click')
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([corridor])
+
+      await treeitems(panel)[3].trigger('click', { shiftKey: true })
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([corridor, landing])
+
+      await treeitems(panel)[3].trigger('click', { shiftKey: true })
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([corridor])
+    })
+
+    it('mixes an area and a room in one selection', async () => {
+      const { crateria, landing } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[2].trigger('click')
+      await treeitems(panel)[3].trigger('click', { shiftKey: true })
+
+      expect(useSelectionStore().selected).toEqual([
+        { kind: 'area', id: crateria },
+        { kind: 'room', id: landing },
+      ])
+    })
+
+    it('does not change the mode', async () => {
+      setup()
+      const mode = useModeStore()
+      mode.setMode('draw')
+      const panel = mountTree()
+
+      await treeitems(panel)[3].trigger('click')
+
+      expect(mode.active).toBe('draw')
+    })
+
+    it('leaves no undo entry: selecting is never an edit', async () => {
+      setup()
+      const model = useModelStore()
+      const panel = mountTree()
+      const before = model.status.undoLabel
+
+      await treeitems(panel)[3].trigger('click')
+
+      expect(model.status.undoLabel).toBe(before)
+    })
+
+    it('clicking the twisty toggles without selecting', async () => {
+      setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[2].get('.hierarchy-twisty').trigger('click')
+
+      expect(useSelectionStore().isEmpty).toBe(true)
+      expect(rows(panel)).toHaveLength(3)
+    })
+
+    it('selects the focused row from the keyboard', async () => {
+      const { mapId, landing } = setup()
+      const panel = mountTree()
+
+      await treeitems(panel)[3].trigger('keydown', { key: 'Enter' })
+
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([landing])
+    })
+  })
+
+  describe('an area in the selection', () => {
+    it('drops out when the area is deleted', async () => {
+      const { mapId, crateria } = setup()
+      const model = useModelStore()
+      const selection = useSelectionStore()
+      mountTree()
+      selection.set([{ kind: 'area', id: crateria }], mapId)
+      expect(selection.isEmpty).toBe(false)
+
+      model.run('Delete', PROJECT_SCOPE, (tx) => deleteArea(tx, model.project, crateria))
+      await nextTick()
+
+      expect(selection.isEmpty).toBe(true)
+    })
+
+    // Adding an area bumps `structureRev` and nothing else, so undoing it is
+    // the case a prune watching `rev` alone would sleep through.
+    it('drops out when the step that added the area is undone', async () => {
+      const { mapId } = setup()
+      const model = useModelStore()
+      const selection = useSelectionStore()
+      const panel = mountTree()
+
+      await panel.get('.hierarchy-add').trigger('click')
+      const added = [...model.project.areas.values()].at(-1)!
+      selection.set([{ kind: 'area', id: added.id }], mapId)
+      expect(selection.isEmpty).toBe(false)
+
+      model.undo()
+      await nextTick()
+
+      expect(selection.isEmpty).toBe(true)
+    })
+
+    it('leaves a room in the same selection alone', async () => {
+      const { mapId, crateria, landing } = setup()
+      const model = useModelStore()
+      const selection = useSelectionStore()
+      mountTree()
+      selection.set(
+        [
+          { kind: 'area', id: crateria },
+          { kind: 'room', id: landing },
+        ],
+        mapId,
+      )
+
+      model.run('Delete', PROJECT_SCOPE, (tx) => deleteArea(tx, model.project, crateria))
+      await nextTick()
+
+      expect(selection.roomsOn(mapId)).toEqual([landing])
     })
   })
 })

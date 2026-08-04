@@ -21,8 +21,11 @@ const props = withDefaults(
     label: string
     value: string
     allowEmpty?: boolean
+    // A field that cannot be edited says why, rather than looking broken.
+    disabled?: boolean
+    reason?: string
   }>(),
-  { allowEmpty: false },
+  { allowEmpty: false, disabled: false, reason: '' },
 )
 
 const emit = defineEmits<{ commit: [value: string] }>()
@@ -61,6 +64,8 @@ function cancel() {
       class="field-input"
       type="text"
       :value="display"
+      :disabled="disabled"
+      :title="disabled ? reason : undefined"
       @input="handleInput"
       @keydown.enter="commit"
       @keydown.esc="cancel"

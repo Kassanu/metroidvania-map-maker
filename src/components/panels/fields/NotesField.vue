@@ -9,11 +9,16 @@ import { computed, ref } from 'vue'
 // there is no `allowEmpty` to set. The draft is trimmed at the edges only,
 // which keeps interior blank lines the user typed on purpose.
 
-const props = defineProps<{
-  id: string
-  label: string
-  value: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    id: string
+    label: string
+    value: string
+    disabled?: boolean
+    reason?: string
+  }>(),
+  { disabled: false, reason: '' },
+)
 
 const emit = defineEmits<{ commit: [value: string] }>()
 
@@ -48,6 +53,8 @@ function cancel() {
       class="field-textarea"
       rows="3"
       :value="display"
+      :disabled="disabled"
+      :title="disabled ? reason : undefined"
       @input="handleInput"
       @keydown.esc="cancel"
       @blur="commit"

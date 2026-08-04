@@ -8,7 +8,7 @@ import { useTabsStore } from '@/stores/tabs'
 import { useSelectionStore } from '@/stores/selection'
 import { mapScope, useModelStore } from '@/stores/model'
 import { assignRoomArea, paintCells, renameRoom, setRoomNotes } from '@/core/ops/rooms'
-import { createNewArea } from '@/core/ops/project'
+import { createNewArea, renameArea } from '@/core/ops/project'
 import { createLine, placeIcon, setIconColors, setIconLabel, setLineStyle } from '@/core/ops/markup'
 import { createFromBox, createTeleport, setLock } from '@/core/ops/doors'
 import { ok } from '@/core/testUtils'
@@ -19,6 +19,7 @@ import type { AreaId, IconId, LineId, LockTypeId, MapId, RoomId, TransitionId } 
 // The one editable lock type the project ships with.
 const LOCKED_LOCK_ID = 'locked' as LockTypeId
 import type { CellKey } from '@/core/cell'
+import type { ObjectRef } from '@/core/types'
 
 // The Inspector's four states and the Room panel's three fields.
 //
@@ -151,12 +152,36 @@ describe('InspectorPanel', () => {
       expect(panel.text()).toContain('2 selected')
     })
 
-    it('renders nothing for a single object of a kind with no panel yet', async () => {
-      const { mapId, brinstar } = setup()
+    // Every kind the selection can hold now answers with something: five have
+    // a panel and cells have a count. A kind that rendered nothing would be
+    // indistinguishable from an empty selection.
+    it('shows something for every kind a selection can hold', async () => {
+      const { mapId, roomA, icon, line, brinstar } = setup()
+      const model = useModelStore()
+      let door!: TransitionId
+      model.run('Door', mapScope(mapId), (tx) => {
+        const map = model.project.mapsById.get(mapId)!
+        paintCells(tx, model.project, map, ['2,0'], { areaId: WORLD_AREA_ID })
+        door = ok(createFromBox(tx, model.project, map, '1,0', '2,0'))[0].id
+      })
       const panel = mountPanel()
-      useSelectionStore().set([{ kind: 'area', id: brinstar }], mapId)
+
+      const kinds: ObjectRef[] = [
+        { kind: 'room', id: roomA },
+        { kind: 'icon', id: icon },
+        { kind: 'line', id: line },
+        { kind: 'transition', id: door },
+        { kind: 'area', id: brinstar },
+      ]
+      for (const ref of kinds) {
+        useSelectionStore().set([ref], mapId)
+        await nextTick()
+        expect(panel.find('.inspector-fields').exists()).toBe(true)
+      }
+
+      useSelectionStore().set([{ kind: 'cell', id: '0,0' }], mapId)
       await nextTick()
-      expect(panel.text()).toBe('')
+      expect(panel.text()).toContain('1 cell selected')
     })
   })
 
@@ -785,6 +810,108 @@ describe('InspectorPanel', () => {
         expect(stored.direction).toBe('bToA')
         expect(stored.kind === 'teleport' && stored.a.mapId).toBe(originId)
       })
+    })
+  })
+
+  describe('the Area panel', () => {
+    function areaOf(areaId: AreaId) {
+      return useModelStore().project.areas.get(areaId)!
+    }
+
+    // `which` names the area to select rather than taking an id, because the
+    // fixture has to be built before either id exists.
+    async function mountWithArea(which: 'brinstar' | 'world') {
+      const fixture = setup()
+      const areaId = which === 'world' ? WORLD_AREA_ID : fixture.brinstar
+      const panel = mountPanel()
+      useSelectionStore().set([{ kind: 'area', id: areaId }], fixture.mapId)
+      await nextTick()
+      return { ...fixture, areaId, panel }
+    }
+
+    it('shows the name, both colours and the notes', async () => {
+      const { panel } = await mountWithArea('brinstar')
+      expect(panel.find('#inspector-area-name').exists()).toBe(true)
+      expect(panel.find('#inspector-area-cell').exists()).toBe(true)
+      expect(panel.find('#inspector-area-wall').exists()).toBe(true)
+      expect(panel.find('#inspector-area-notes').exists()).toBe(true)
+    })
+
+    it('renames on Enter', async () => {
+      const { panel, areaId } = await mountWithArea('brinstar')
+
+      const name = panel.get('#inspector-area-name')
+      await name.setValue('Norfair')
+      await name.trigger('keydown.enter')
+
+      expect(areaOf(areaId).name).toBe('Norfair')
+      expect(useModelStore().status.undoLabel).toBe('Rename Area')
+    })
+
+    it('recolours one fill without disturbing the other', async () => {
+      const { panel, areaId } = await mountWithArea('brinstar')
+      const wallBefore = areaOf(areaId).wallColor
+
+      const field = panel.get('#inspector-area-cell')
+      ;(field.element as HTMLInputElement).value = '#abcdef'
+      await field.trigger('change')
+
+      expect(areaOf(areaId).cellColor).toBe('#abcdef')
+      expect(areaOf(areaId).wallColor).toBe(wallBefore)
+      expect(useModelStore().status.undoLabel).toBe('Recolor Area')
+    })
+
+    it('commits notes on blur', async () => {
+      const { panel, areaId } = await mountWithArea('brinstar')
+      const notes = panel.get('#inspector-area-notes')
+      await notes.setValue('The green one')
+      await notes.trigger('blur')
+      expect(areaOf(areaId).notes).toBe('The green one')
+    })
+
+    // World is the guaranteed fallback for every room, so it is unchangeable by
+    // construction rather than by the panel choosing to refuse.
+    it('locks every World field, and says why', async () => {
+      const { panel } = await mountWithArea('world')
+
+      for (const id of [
+        '#inspector-area-name',
+        '#inspector-area-cell',
+        '#inspector-area-wall',
+        '#inspector-area-notes',
+      ]) {
+        const field = panel.get(id).element as HTMLInputElement
+        expect(field.disabled).toBe(true)
+        expect(field.title).toContain('World')
+      }
+      expect(panel.get('.inspector-note').text()).toContain('World')
+    })
+
+    // The disabled control and the op's own guard have to be one question. This
+    // reaches past the control to check the second half is really there.
+    it('refuses a World rename even when the control is bypassed', async () => {
+      const { panel } = await mountWithArea('world')
+      const before = areaOf(WORLD_AREA_ID).name
+
+      const name = panel.get('#inspector-area-name')
+      await name.setValue('Overworld')
+      await name.trigger('keydown.enter')
+
+      expect(areaOf(WORLD_AREA_ID).name).toBe(before)
+    })
+
+    it('shows a rename made anywhere else', async () => {
+      const { panel, areaId } = await mountWithArea('brinstar')
+      const model = useModelStore()
+
+      model.run('Elsewhere', PROJECT_SCOPE, (tx) =>
+        renameArea(tx, model.project, areaId, 'From elsewhere'),
+      )
+      await nextTick()
+
+      expect((panel.get('#inspector-area-name').element as HTMLInputElement).value).toBe(
+        'From elsewhere',
+      )
     })
   })
 })

@@ -17,7 +17,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { useModelStore } from './model'
 import { farEndsOnMap } from '@/core/farEnds'
 import type { CellKey } from '@/core/cell'
-import type { MapModel, ObjectRef } from '@/core/types'
+import type { MapModel, ObjectRef, ProjectModel } from '@/core/types'
 import type { IconId, LineId, MapId, RoomId, TransitionId } from '@/core/ids'
 
 function sameRef(a: ObjectRef, b: ObjectRef): boolean {
@@ -217,11 +217,17 @@ export const useSelectionStore = defineStore('selection', () => {
     }
     // One pass over the selection, one hash lookup each: a cell selection can
     // be large, and asking the map about each item must not walk the map.
-    const alive = items.value.filter((item) => exists(item, map))
+    const alive = items.value.filter((item) => exists(item, map, model.project))
     if (alive.length !== items.value.length) replace(alive)
   }
 
-  watch([() => model.project, () => model.rev], prune, { flush: 'sync' })
+  // Both counters, because the selection holds two scopes. Map content moves
+  // `rev`; an area is project structure and moves `structureRev` alone, so
+  // watching `rev` would leave a deleted area selected until something else
+  // happened to change a map.
+  watch([() => model.project, () => model.rev, () => model.structureRev], prune, {
+    flush: 'sync',
+  })
 
   return {
     selected,
@@ -245,7 +251,7 @@ export const useSelectionStore = defineStore('selection', () => {
   }
 })
 
-function exists(ref: ObjectRef, map: MapModel): boolean {
+function exists(ref: ObjectRef, map: MapModel, project: ProjectModel): boolean {
   switch (ref.kind) {
     case 'room':
       return map.rooms.has(ref.id)
@@ -262,10 +268,11 @@ function exists(ref: ObjectRef, map: MapModel): boolean {
     // under its origin, so it is alive if either end knows it.
     case 'transition':
       return map.transitions.has(ref.id) || isFarEndOn(map, ref.id)
-    // Areas are project-scope and selected through the Hierarchy, never from
-    // the canvas. They cannot go stale with a map.
+    // Areas are project-scope and reached only through the Hierarchy, so they
+    // outlive any one map. They still go stale: deleting an area, or undoing
+    // the step that added one, removes it from the project.
     case 'area':
-      return true
+      return project.areas.has(ref.id)
   }
 }
 

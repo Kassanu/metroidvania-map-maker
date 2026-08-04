@@ -4,6 +4,7 @@ import RoomInspector from './inspectors/RoomInspector.vue'
 import IconInspector from './inspectors/IconInspector.vue'
 import LineInspector from './inspectors/LineInspector.vue'
 import TransitionInspector from './inspectors/TransitionInspector.vue'
+import AreaInspector from './inspectors/AreaInspector.vue'
 import { useSelectionStore } from '@/stores/selection'
 import { useTabsStore } from '@/stores/tabs'
 import { t } from '@/i18n'
@@ -68,6 +69,14 @@ const binding = computed(() => {
         key: `${ref.kind}:${ref.id}`,
         is: TransitionInspector,
         props: { mapId: tabsStore.activeTabId, transitionId: ref.id },
+      }
+    // The one kind with no map in its props: an area is project-wide, and its
+    // rooms may be on tabs this one is not showing.
+    case 'area':
+      return {
+        key: `${ref.kind}:${ref.id}`,
+        is: AreaInspector,
+        props: { areaId: ref.id },
       }
     default:
       return null

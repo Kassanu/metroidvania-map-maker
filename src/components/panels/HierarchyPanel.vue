@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import HierarchyIcon from './HierarchyIcon.vue'
 import { PROJECT_SCOPE, dependOn, useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
@@ -8,7 +8,7 @@ import { createNewArea } from '@/core/ops/project'
 import { freshAreaName, roomLabel } from '@/i18n/naming'
 import { t } from '@/i18n'
 import type { AreaId, RoomId } from '@/core/ids'
-import type { Room } from '@/core/types'
+import type { ObjectRef, Room } from '@/core/types'
 
 // Areas and the rooms in them, for the tab in front of you.
 //
@@ -23,6 +23,10 @@ import type { Room } from '@/core/types'
 //
 // Cells have no row here. A cell selection highlights nothing, because the room
 // that owns it is not what is selected and marking it would say otherwise.
+//
+// The tree reads and writes the one selection store and keeps no idea of its
+// own about what is selected. That is the whole of the two-way sync: a second
+// copy is what would drift from the canvas.
 //
 // Each row names itself with `aria-label` rather than letting the name be
 // computed from its contents, which would fold the twisty's own label into it
@@ -187,6 +191,46 @@ function toggle(id: AreaId) {
   collapsed.value = next
 }
 
+// Which `ObjectRef` a row stands for. Rooms and areas are the two kinds the
+// tree can reach, and areas are reachable from nowhere else.
+function refOf(row: Row): ObjectRef {
+  return row.kind === 'area' ? { kind: 'area', id: row.id } : { kind: 'room', id: row.id }
+}
+
+// A press on a row selects through the shared policy, so the tree cannot
+// disagree with the four dispatches that already use it: click replaces,
+// shift-click toggles.
+//
+// Selecting here never changes the mode. Reaching a room from the tree is a
+// way of pointing at it, not of deciding what to do to it next.
+//
+// A click on the panel's own dead space does nothing. "A click on nothing
+// clears" is the canvas's rule, where empty space is a real target; in a list
+// the space below the last row is layout, and clearing there would make
+// scrollback a selection hazard.
+function selectRow(row: Row, index: number, additive: boolean) {
+  focusedIndex.value = index
+  fromTree = true
+  selection.clickSelect(refOf(row), tabsStore.activeTabId, additive)
+}
+
+// A selection made on the canvas scrolls its row into view; one made here moves
+// no camera and needs no scroll, since the row was already under the pointer.
+let fromTree = false
+
+watch(
+  () => selection.selected,
+  () => {
+    if (fromTree) {
+      fromTree = false
+      return
+    }
+    const first = rows.value.findIndex((row) => row.selected)
+    if (first >= 0) rowRefs.value[first]?.scrollIntoView({ block: 'nearest' })
+  },
+  { flush: 'post' },
+)
+
 function focusRow(index: number) {
   const clamped = Math.max(0, Math.min(index, rows.value.length - 1))
   focusedIndex.value = clamped
@@ -223,6 +267,12 @@ function handleKeydown(event: KeyboardEvent, index: number) {
         if (isCollapsed(row.id)) toggle(row.id)
         else focusRow(index + 1)
       }
+      return
+    // The keyboard's own way to select the focused row, matching the click.
+    case 'Enter':
+    case ' ':
+      event.preventDefault()
+      selectRow(row, index, event.shiftKey)
       return
     case 'ArrowLeft': {
       event.preventDefault()
@@ -286,6 +336,7 @@ function handleKeydown(event: KeyboardEvent, index: number) {
       :aria-expanded="row.kind === 'area' && row.childCount > 0 ? !isCollapsed(row.id) : undefined"
       :tabindex="index === focusedIndex ? 0 : -1"
       @focus="focusedIndex = index"
+      @click="selectRow(row, index, $event.shiftKey)"
       @keydown="handleKeydown($event, index)"
     >
       <button

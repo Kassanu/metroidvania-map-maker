@@ -100,4 +100,60 @@ test.describe('Hierarchy', () => {
     await expect(page.locator('#draw-area')).toContainText('Area 1')
     expect(errors).toEqual([])
   })
+
+  test('selects a room from the tree, and the canvas and Inspector follow', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await tree.getByRole('treeitem', { name: 'Landing Site' }).click()
+
+    await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Landing Site')
+    // Selecting from the tree never changes the mode: Draw is still Draw.
+    await expect(page.locator('.activity-bar .mode-button.active')).toHaveAttribute('title', /Draw/)
+    expect(errors).toEqual([])
+  })
+
+  test('shift-click in the tree builds a multi-selection', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await tree.getByRole('treeitem', { name: 'Landing Site' }).click()
+    await tree.getByRole('treeitem', { name: 'West Wing' }).click({ modifiers: ['Shift'] })
+
+    await expect(inspector.getByText('2 selected')).toBeVisible()
+    await expect(tree.getByRole('treeitem', { name: 'Landing Site' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(errors).toEqual([])
+  })
+
+  // Areas have no canvas body beyond their bbox border, so the tree is the only
+  // surface that can put one in the selection.
+  test('selects an area, which opens its own inspector', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await tree.getByRole('treeitem', { name: 'Crateria' }).click()
+
+    await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Crateria')
+    await expect(inspector.getByLabel('Cell color', { exact: true })).toBeVisible()
+    expect(errors).toEqual([])
+  })
+
+  test('locks World, and says why', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await tree.getByRole('treeitem', { name: 'World' }).click()
+
+    await expect(inspector.getByLabel('Name', { exact: true })).toBeDisabled()
+    await expect(inspector.getByLabel('Cell color', { exact: true })).toBeDisabled()
+    await expect(inspector.getByText(/World cannot be renamed/)).toBeVisible()
+    expect(errors).toEqual([])
+  })
 })

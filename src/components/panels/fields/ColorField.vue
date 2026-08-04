@@ -10,11 +10,16 @@
 // The Markup toolbar's swatches do use `input`, correctly: they write to a
 // defaults store that has no undo stack behind it.
 
-defineProps<{
-  id: string
-  label: string
-  value: string
-}>()
+withDefaults(
+  defineProps<{
+    id: string
+    label: string
+    value: string
+    disabled?: boolean
+    reason?: string
+  }>(),
+  { disabled: false, reason: '' },
+)
 
 const emit = defineEmits<{ commit: [value: string] }>()
 </script>
@@ -27,6 +32,8 @@ const emit = defineEmits<{ commit: [value: string] }>()
       class="field-color"
       type="color"
       :value="value"
+      :disabled="disabled"
+      :title="disabled ? reason : undefined"
       @change="emit('commit', ($event.target as HTMLInputElement).value)"
     />
   </div>
