@@ -23,6 +23,8 @@ import { PANEL_REGISTRY } from '@/panels/registry'
 import { useThemeStore, type ThemeMode } from '@/stores/theme'
 import { useCanvasViewStore, type RulerUnits } from '@/stores/canvasView'
 import { useSelectionStore } from '@/stores/selection'
+import { useClipboardStore } from '@/stores/clipboard'
+import { useModeStore } from '@/stores/mode'
 import { useTabsStore } from '@/stores/tabs'
 import { hasAction, runAction } from '@/hotkeys/actions'
 import type { ActionId } from '@/hotkeys/keymap'
@@ -36,6 +38,8 @@ const panelsStore = usePanelsStore()
 const themeStore = useThemeStore()
 const canvasView = useCanvasViewStore()
 const selection = useSelectionStore()
+const clipboard = useClipboardStore()
+const modeStore = useModeStore()
 const tabsStore = useTabsStore()
 
 // Destructured so the template gets plain (auto-unwrapped) bindings, and so
@@ -118,23 +122,29 @@ const redoLabel = computed(() =>
 // id the keyboard runs, so a menu item and its shortcut cannot come to mean
 // different things.
 //
-// `payload` marks the three that need something a clipboard can hold:
-// transitions are never copied and an icon travels as content on a cell, so a
-// selection of only those has nothing to offer them. `selection` marks the ones
-// that need only something selected. Paste and Select All need neither.
+// Each `needs` names what the action behind the item would refuse without, so
+// an item is enabled exactly when its action would do something:
+//
+//   payload    something a clipboard can hold, in the mode that holds one
+//   clipboard  a payload to land, in the mode that can land it
+//   deletable  a selection this mode has an op for
+//   selectAll  the mode with a granularity to select everything at
+//   selection  anything selected on this tab
 const EDIT_ITEMS = [
   { action: 'cut', label: 'menu.edit.cut', needs: 'payload' },
   { action: 'copy', label: 'menu.edit.copy', needs: 'payload' },
-  { action: 'paste', label: 'menu.edit.paste', needs: 'none' },
+  { action: 'paste', label: 'menu.edit.paste', needs: 'clipboard' },
   { action: 'duplicate', label: 'menu.edit.duplicate', needs: 'payload' },
-  { action: 'deleteSelection', label: 'menu.edit.delete', needs: 'selection' },
-  { action: 'selectAll', label: 'menu.edit.selectAll', needs: 'none' },
+  { action: 'deleteSelection', label: 'menu.edit.delete', needs: 'deletable' },
+  { action: 'selectAll', label: 'menu.edit.selectAll', needs: 'selectAll' },
   { action: 'deselect', label: 'menu.edit.deselect', needs: 'selection' },
 ] as const satisfies readonly {
   action: ActionId
   label: MessageKey
-  needs: 'payload' | 'selection' | 'none'
+  needs: EditNeed
 }[]
+
+type EditNeed = 'payload' | 'clipboard' | 'deletable' | 'selectAll' | 'selection'
 
 const editItems = computed(() =>
   EDIT_ITEMS.map((item) => ({
@@ -146,12 +156,30 @@ const editItems = computed(() =>
   })),
 )
 
-function meetsNeed(need: 'payload' | 'selection' | 'none'): boolean {
+function meetsNeed(need: EditNeed): boolean {
   const mapId = tabsStore.activeTabId
-  if (need === 'payload') return selection.hasCopyableOn(mapId)
-  if (need === 'selection') return !selection.isEmpty && selection.mapId === mapId
-  return true
+  const selected = !selection.isEmpty && selection.mapId === mapId
+  switch (need) {
+    case 'payload':
+      return inSelect.value && selection.hasCopyableOn(mapId)
+    case 'clipboard':
+      return inSelect.value && !clipboard.isEmpty
+    // Cells are the one kind no other mode has an op for: `Del` there names
+    // objects, and a cell selection carried out of Select mode holds none.
+    case 'deletable':
+      return selected && (inSelect.value || selection.selected.some((ref) => ref.kind !== 'cell'))
+    case 'selectAll':
+      return inSelect.value
+    case 'selection':
+      return selected
+  }
 }
+
+// The four clipboard verbs and Select All belong to Select mode alone, so the
+// items for them are live there alone: the other three modes spend their
+// gestures on authoring, and the selection they carry is there to hold resize
+// handles rather than to be copied.
+const inSelect = computed(() => modeStore.active === 'select')
 
 // The dirty marker is `History.isDirty` directly: measured against the last
 // entry that changed the model, so browsing tabs after a save does not claim

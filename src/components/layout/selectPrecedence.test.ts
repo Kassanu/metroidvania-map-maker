@@ -377,6 +377,48 @@ describe('Select precedence table', () => {
       await nextTick()
     })
 
+    // Shift belongs to the band and to the click, and a press on a selected
+    // cell is neither: it moves the fragment, and the modifier changes nothing.
+    // Adding to a selection the same press is about to relocate has no meaning.
+    it('moves the fragment on a shift-drag from a selected cell, shift and all', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId, roomC } = fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await click(viewport, at(0.5, 2.5))
+      await shiftClick(viewport, at(1.5, 2.5))
+      await drag(viewport, at(0.5, 2.5), at(0.5, 5.5), true)
+
+      expect([...selection().cellsOn(mapId)].sort()).toEqual(['0,5', '1,5'])
+      expect([...map().rooms.get(roomC)!.cells].sort()).toEqual(['2,2'])
+    })
+
+    // The secondary button aims the menu at the granularity in use, so what it
+    // selects is a cell and the menu's verbs act on cells.
+    it('selects the cell under a right-click, where Rooms takes the icon on it', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId, icon } = fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await click(viewport, at(1.5, 2.5), 2)
+
+      expect(selection().selected).toEqual([{ kind: 'cell', id: '1,2' }])
+      expect(map().icons.has(icon)).toBe(true)
+      expect(selection().iconsOn(mapId)).toEqual([])
+    })
+
+    it('leaves a multi-cell selection alone when the right-click lands inside it', async () => {
+      const { viewport } = await mountCanvas()
+      const { mapId } = fixture()
+      useToolsStore().setSelectSubMode('cells')
+
+      await click(viewport, at(0.5, 2.5))
+      await shiftClick(viewport, at(1.5, 2.5))
+      await click(viewport, at(0.5, 2.5), 2)
+
+      expect(selection().cellsOn(mapId)).toEqual(['0,2', '1,2'])
+    })
+
     it('unions with the selection when the band is dragged with shift', async () => {
       const { viewport } = await mountCanvas()
       const { mapId } = fixture()

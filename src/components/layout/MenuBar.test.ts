@@ -11,6 +11,7 @@ import { useCanvasViewStore } from '@/stores/canvasView'
 import { mapScope, PROJECT_SCOPE, useModelStore } from '@/stores/model'
 import { useTabsStore } from '@/stores/tabs'
 import { useSelectionStore } from '@/stores/selection'
+import { useModeStore } from '@/stores/mode'
 import { registerAction } from '@/hotkeys/actions'
 import { renameProject } from '@/core/ops/project'
 import { paintCells } from '@/core/ops/rooms'
@@ -174,6 +175,13 @@ describe('MenuBar', () => {
   }
 
   describe('Edit menu', () => {
+    // The clipboard verbs and Select All are Select mode's, so the mode is part
+    // of what enables them. What this block is about is the other half of the
+    // rule, the handler and the selection, which needs the mode out of the way.
+    beforeEach(() => {
+      useModeStore().setMode('select')
+    })
+
     async function openEditMenu() {
       const trigger = wrapper.findAll('.menu-item').find((el) => el.text() === 'Edit')!
       await trigger.trigger('click')

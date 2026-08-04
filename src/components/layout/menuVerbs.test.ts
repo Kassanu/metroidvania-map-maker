@@ -13,6 +13,8 @@ import { useSelectionStore } from '@/stores/selection'
 import { useTabsStore } from '@/stores/tabs'
 import { mapScope, useModelStore } from '@/stores/model'
 import { paintCells } from '@/core/ops/rooms'
+import { copyCells } from '@/core/ops/clipboard'
+import { useClipboardStore } from '@/stores/clipboard'
 import { createLine, placeIcon } from '@/core/ops/markup'
 import { createTeleport } from '@/core/ops/doors'
 import { WORLD_AREA_ID } from '@/core/ids'
@@ -129,6 +131,15 @@ function addTeleport(from: CellKey, to: CellKey, mapId: MapId = activeMapId()) {
       createTeleport(tx, model.project, { mapId, cell: from }, { mapId, cell: to }),
     ),
   )
+}
+
+// Something for Paste to land, since the item is live only when the clipboard
+// holds a payload. The cells need not exist: what the menu asks is whether the
+// payload is empty.
+function fillClipboard(): void {
+  const model = useModelStore()
+  paint(['8,8'])
+  useClipboardStore().put(copyCells(model.project.mapsById.get(activeMapId())!, ['8,8']))
 }
 
 async function setMode(mode: Mode): Promise<void> {
@@ -503,6 +514,7 @@ describe('Edit menu', () => {
   it('offers only Paste and Select All when nothing is selected', async () => {
     await mountMenuBar()
     registerVerbHandlers()
+    fillClipboard()
 
     expect(enabledState(await openEditMenu(), EDIT_VERBS)).toEqual({
       Cut: false,
@@ -518,6 +530,7 @@ describe('Edit menu', () => {
   it('enables every verb for a room selection', async () => {
     await mountMenuBar()
     registerVerbHandlers()
+    fillClipboard()
     const room = paint(['0,0', '1,0'])
     useSelectionStore().set([{ kind: 'room', id: room.id }], activeMapId())
 
@@ -535,6 +548,7 @@ describe('Edit menu', () => {
   it('withholds the clipboard verbs from a selection of icons and transitions', async () => {
     await mountMenuBar()
     registerVerbHandlers()
+    fillClipboard()
     paint(['0,0'])
     paint(['4,0'])
     const icon = addIcon('0,0')
@@ -561,6 +575,7 @@ describe('Edit menu', () => {
   it('enables the clipboard verbs for a cell selection', async () => {
     await mountMenuBar()
     registerVerbHandlers()
+    fillClipboard()
     paint(['0,0', '1,0'])
     useToolsStore().setSelectSubMode('cells')
     useSelectionStore().set([{ kind: 'cell', id: '0,0' }], activeMapId())
@@ -579,6 +594,7 @@ describe('Edit menu', () => {
   it('enables the clipboard verbs for a line selection', async () => {
     await mountMenuBar()
     registerVerbHandlers()
+    fillClipboard()
     const line = addLine(['3,3', '4,3'])
     useSelectionStore().set([{ kind: 'line', id: line.id }], activeMapId())
 
@@ -602,6 +618,7 @@ describe('Edit menu', () => {
     const other = tabs.activeTabId
     const room = paint(['0,0'], other)
     tabs.activate(home)
+    fillClipboard()
     useSelectionStore().set([{ kind: 'room', id: room.id }], other)
 
     expect(enabledState(await openEditMenu(), EDIT_VERBS)).toEqual({
@@ -615,29 +632,57 @@ describe('Edit menu', () => {
     })
   })
 
-  // Enablement asks two questions, a registered handler and a selection that
-  // can support the verb. The active mode is not one of them.
-  it('enables the same verbs outside Select mode', async () => {
+  it('disables Paste while the clipboard is empty', async () => {
+    await mountMenuBar()
+    registerVerbHandlers()
+
+    expect(isEnabled(await openEditMenu(), 'Paste')).toBe(false)
+  })
+
+  // The clipboard and Select All are Select mode's, so the items for them go
+  // dark in the other three. Delete and Deselect stay: a room selection made in
+  // Select is still deletable from Draw, which is where the same click arms the
+  // resize handles.
+  it('withholds the verbs the other modes have nothing behind, outside Select', async () => {
     await setMode('draw')
     await mountMenuBar()
     registerVerbHandlers()
+    fillClipboard()
     const room = paint(['0,0'])
     useSelectionStore().set([{ kind: 'room', id: room.id }], activeMapId())
 
     expect(enabledState(await openEditMenu(), EDIT_VERBS)).toEqual({
-      Cut: true,
-      Copy: true,
-      Paste: true,
-      Duplicate: true,
+      Cut: false,
+      Copy: false,
+      Paste: false,
+      Duplicate: false,
       Delete: true,
-      'Select All': true,
+      'Select All': false,
       Deselect: true,
     })
+  })
+
+  // A cell selection survives the mode being changed, and `Del` outside Select
+  // names objects: there is no op behind Delete for a selection holding cells
+  // alone. Deselect is the one verb that still means something, since clearing
+  // a selection is not a mode's business.
+  it('withholds Delete from a cell selection carried out of Select mode', async () => {
+    paint(['0,0', '1,0'])
+    useToolsStore().setSelectSubMode('cells')
+    useSelectionStore().set([{ kind: 'cell', id: '0,0' }], activeMapId())
+    await setMode('markup')
+    await mountMenuBar()
+    registerVerbHandlers()
+
+    const menu = await openEditMenu()
+    expect(isEnabled(menu, 'Delete')).toBe(false)
+    expect(isEnabled(menu, 'Deselect')).toBe(true)
   })
 
   it('runs the action behind an enabled item', async () => {
     await mountMenuBar()
     registerVerbHandlers()
+    fillClipboard()
     itemNamed(await openEditMenu(), 'Paste').click()
     await nextTick()
     expect(handlerFor('paste')).toHaveBeenCalledTimes(1)
@@ -672,9 +717,6 @@ describe('the deleteSelection action', () => {
     expect(model.project.mapsById.get(activeMapId())!.rooms.size).toBe(0)
   })
 
-  // In the Cells sub-mode the key means "erase the selected cells", which does
-  // not exist yet. Falling through to the room delete would destroy whole rooms
-  // the user never selected.
   // Two granularities, one key, two ops. Erasing takes the cells back to bare
   // grid and leaves the room holding whatever is left of it, where the same key
   // one granularity over would delete the room outright.
@@ -691,6 +733,37 @@ describe('the deleteSelection action', () => {
     const map = model.project.mapsById.get(activeMapId())!
     expect(map.rooms.get(room.id)?.cells.has('0,0')).toBe(false)
     expect(map.rooms.get(room.id)?.cells.has('1,0')).toBe(true)
+  })
+
+  // Draw's own destructive gesture erases cells; the key removes the whole
+  // room, which is the only way to delete one from the mode that paints it.
+  it('deletes the selected room in Draw mode', async () => {
+    await mountCanvas()
+    await setMode('draw')
+    const room = paint(['0,0', '1,0'])
+    const model = useModelStore()
+    useSelectionStore().set([{ kind: 'room', id: room.id }], activeMapId())
+
+    expect(runAction('deleteSelection')).toBe(true)
+    await nextTick()
+    expect(model.project.mapsById.get(activeMapId())!.rooms.size).toBe(0)
+  })
+
+  // The other side of the same branch: erasing belongs to the Cells sub-mode,
+  // so a cell selection carried into another mode has no op behind the key. The
+  // menu item for it is disabled there for this reason.
+  it('leaves a cell selection alone outside Select mode', async () => {
+    await mountCanvas()
+    await setMode('select')
+    useToolsStore().setSelectSubMode('cells')
+    const room = paint(['0,0', '1,0'])
+    const model = useModelStore()
+    useSelectionStore().set([{ kind: 'cell', id: '0,0' }], activeMapId())
+    await setMode('draw')
+
+    runAction('deleteSelection')
+    await nextTick()
+    expect(model.project.mapsById.get(activeMapId())!.rooms.get(room.id)?.cells.size).toBe(2)
   })
 
   it('deletes selected icons and lines in Markup mode', async () => {
