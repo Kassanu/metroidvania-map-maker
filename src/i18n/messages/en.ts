@@ -61,6 +61,9 @@ export const en = {
   'history.placeIcon': 'Place Icon',
   'history.moveIcon': 'Move Icon',
   'history.moveRoom': 'Move Room',
+  'history.renameRoom': 'Rename Room',
+  'history.roomNotes': 'Edit Room Notes',
+  'history.assignArea': 'Change Area',
   'history.moveSelection': 'Move Selection',
   // Named after what it does to the map rather than after what was dragged: the
   // cells leave their rooms and arrive as new ones, which is not a move of
@@ -246,6 +249,16 @@ export const en = {
   'panel.hierarchy': 'Hierarchy',
   'panel.iconLibrary': 'Icon Library',
   'panel.inspector': 'Inspector',
+
+  // The two counts are separate keys rather than one plural, because this
+  // catalogue interpolates and does not decline.
+  'inspector.selected': '{n} selected',
+  'inspector.cellSelected': '1 cell selected',
+  'inspector.cellsSelected': '{n} cells selected',
+  'inspector.name': 'Name',
+  'inspector.notes': 'Notes',
+  'inspector.area': 'Area',
+  'inspector.areaColorHint': 'Room colors come from the area',
 
   'toolbar.markup.label': 'Markup options',
   'toolbar.markup.plate': 'Plate',
