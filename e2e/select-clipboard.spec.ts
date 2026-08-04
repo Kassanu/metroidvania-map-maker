@@ -82,4 +82,47 @@ test.describe('Select mode clipboard', () => {
     expect(await undoLabel(page)).toBe('Undo Duplicate')
     expect(errors).toEqual([])
   })
+
+  // The same four keys one granularity over, reaching different ops. The undo
+  // entry is where the difference is readable outside the canvas.
+  test('cuts and pastes a cell fragment', async ({ page }) => {
+    const { errors } = await openApp(page)
+    await page.keyboard.press('2')
+    await page
+      .getByRole('radiogroup', { name: 'Select' })
+      .getByRole('radio', { name: 'Cells' })
+      .click()
+    const grid = await gridMapping(page)
+
+    const cell = grid.at(IN_A_ROOM.x, IN_A_ROOM.y)
+    await page.mouse.click(cell.x, cell.y)
+    await page.keyboard.press('ControlOrMeta+x')
+    expect(await undoLabel(page)).toBe('Undo Cut')
+
+    const bare = grid.at(BARE_GRID.x, BARE_GRID.y)
+    await page.mouse.move(bare.x, bare.y)
+    await page.keyboard.press('ControlOrMeta+v')
+    expect(await undoLabel(page)).toBe('Undo Paste')
+    expect(errors).toEqual([])
+  })
+
+  // Two granularities, one key, two ops, and the undo entry says which ran.
+  test('Delete erases cells where it deletes rooms', async ({ page }) => {
+    const { errors } = await openApp(page)
+    await page.keyboard.press('2')
+    const grid = await gridMapping(page)
+    const granularity = page.getByRole('radiogroup', { name: 'Select' })
+
+    const at = grid.at(IN_A_ROOM.x, IN_A_ROOM.y)
+    await page.mouse.click(at.x, at.y)
+    await page.keyboard.press('Delete')
+    expect(await undoLabel(page)).toBe('Undo Delete Room')
+    await page.keyboard.press('ControlOrMeta+z')
+
+    await granularity.getByRole('radio', { name: 'Cells' }).click()
+    await page.mouse.click(at.x, at.y)
+    await page.keyboard.press('Delete')
+    expect(await undoLabel(page)).toBe('Undo Erase Cells')
+    expect(errors).toEqual([])
+  })
 })

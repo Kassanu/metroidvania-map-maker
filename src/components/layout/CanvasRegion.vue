@@ -44,16 +44,19 @@ import { beginLinePeel } from '@/gestures/linePeel'
 import { registerIconDropTarget } from '@/gestures/iconDropTarget'
 import { movesOnDrag } from '@/gestures/moveOnDrag'
 import { deleteTransition } from '@/core/ops/doors'
-import { deleteRooms } from '@/core/ops/rooms'
+import { deleteRooms, eraseCells } from '@/core/ops/rooms'
 import {
+  copyCells,
   copySelection,
+  cutCells,
   cutSelection,
   defaultPasteAt,
+  duplicateCells,
   duplicateSelection,
   paste,
   type ClipboardPayload,
 } from '@/core/ops/clipboard'
-import { copyName } from '@/i18n/naming'
+import { copyName, freshRoomName } from '@/i18n/naming'
 import {
   createLine,
   deleteIcon,
@@ -1859,11 +1862,18 @@ useHotkeyAction('deleteSelection', () => {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
   if (!tab || !map) return
-  // Two granularities, one key. In the Cells sub-mode `Del` erases the selected
-  // cells back to bare grid, which is a different op on a different kind, so
-  // this branch answers for objects alone rather than deleting the rooms those
-  // cells happen to belong to.
-  if (deletesCells()) return
+  // Two granularities, one key, two different ops. In the Cells sub-mode `Del`
+  // erases the selected cells back to bare grid, which can split or destroy a
+  // room through the ordinary cascade; it never deletes the rooms those cells
+  // belong to.
+  if (deletesCells()) {
+    const cells = selection.cellsOn(tab.id)
+    if (cells.length === 0) return
+    model.run(t('history.eraseCells'), mapScope(tab.id), (tx) => {
+      eraseCells(tx, model.project, map, cells)
+    })
+    return
+  }
 
   // The selectors answer for this tab only, so a selection left on another tab
   // deletes nothing here.
@@ -1943,13 +1953,14 @@ function clipboardScope() {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
   if (modeStore.active !== 'select' || !tab || !map) return null
-  // Rooms only, for now. A cell selection carries no room or line, so every
-  // verb below would act on an empty pair of lists, and copy would replace a
-  // useful clipboard with a payload a paste does nothing with.
-  if (tools.selectSubMode !== 'rooms') return null
+  // At most one of these is ever non-empty: the granularity decides which kinds
+  // the selection can hold, and switching it clears. `cells` being non-empty is
+  // therefore the whole of "this is a fragment operation".
+  const cells = tools.selectSubMode === 'cells' ? selection.cellsOn(tab.id) : []
   return {
     tab,
     map,
+    cells,
     ids: { rooms: selection.roomsOn(tab.id), lines: selection.linesOn(tab.id) },
   }
 }
@@ -1960,14 +1971,22 @@ useHotkeyAction('copy', () => {
   // copy that quietly emptied the clipboard would be worse than one that
   // refused.
   if (!scope || !selection.hasCopyableOn(scope.tab.id)) return
-  clipboard.put(copySelection(scope.map, scope.ids))
+  clipboard.put(
+    scope.cells.length > 0
+      ? copyCells(scope.map, scope.cells)
+      : copySelection(scope.map, scope.ids),
+  )
 })
 
 useHotkeyAction('cut', () => {
   const scope = clipboardScope()
   if (!scope || !selection.hasCopyableOn(scope.tab.id)) return
   model.run(t('history.cut'), mapScope(scope.tab.id), (tx) => {
-    clipboard.put(cutSelection(tx, model.project, scope.map, scope.ids))
+    clipboard.put(
+      scope.cells.length > 0
+        ? cutCells(tx, model.project, scope.map, scope.cells)
+        : cutSelection(tx, model.project, scope.map, scope.ids),
+    )
   })
 })
 
@@ -1978,7 +1997,7 @@ useHotkeyAction('paste', () => {
   const landed = model.run(t('history.paste'), mapScope(scope.tab.id), (tx) =>
     paste(tx, model.project, scope.map, payload, {
       at: pasteAnchor(payload),
-      nameFor: roomNamer(scope.map),
+      nameFor: roomNamer(scope.map, !payload.fromRooms),
     }),
   )
   selectPasted(scope.tab.id, landed)
@@ -1987,11 +2006,17 @@ useHotkeyAction('paste', () => {
 useHotkeyAction('duplicate', () => {
   const scope = clipboardScope()
   if (!scope || !selection.hasCopyableOn(scope.tab.id)) return
-  const landed = model.run(t('history.duplicate'), mapScope(scope.tab.id), (tx) =>
-    duplicateSelection(tx, model.project, scope.map, scope.ids, {
-      nameFor: roomNamer(scope.map),
-    }),
-  )
+  const fragment = scope.cells.length > 0
+  const landed = model.run(t('history.duplicate'), mapScope(scope.tab.id), (tx) => {
+    const nameFor = roomNamer(scope.map, fragment)
+    if (!fragment) {
+      return duplicateSelection(tx, model.project, scope.map, scope.ids, { nameFor })
+    }
+    return {
+      rooms: duplicateCells(tx, model.project, scope.map, scope.cells, { nameFor }),
+      lines: [],
+    }
+  })
   selectPasted(scope.tab.id, landed)
 })
 
@@ -2006,16 +2031,22 @@ function pasteAnchor(payload: ClipboardPayload): { x: number; y: number } {
   return { x: Math.floor(hoverWorld.x), y: Math.floor(hoverWorld.y) }
 }
 
-// The locked "<name> copy" / "copy 2" convention, against the names already on
-// the destination map.
+// What the rooms a paste lands are called, against the names already on the
+// destination map.
+//
+// Two conventions, chosen by what was copied rather than by the granularity in
+// use when pasting: a whole-room payload derives "<name> copy" from the name it
+// carries, and a fragment has no name to derive one from, so it gets the lowest
+// free "Room N". A fragment copied in Cells and pasted after switching to Rooms
+// still carries no identity.
 //
 // The accumulator matters when one paste lands several rooms: each name has to
 // avoid the ones the same paste just used, and the map cannot be asked, because
 // nothing has been added to it yet at the moment `paste` asks.
-function roomNamer(map: MapModel) {
+function roomNamer(map: MapModel, fragment: boolean) {
   const taken = [...map.rooms.values()].map((room) => room.name)
   return ({ name }: { name: string; index: number }) => {
-    const next = copyName(name, taken)
+    const next = fragment ? freshRoomName(taken) : copyName(name, taken)
     taken.push(next)
     return next
   }
@@ -2023,11 +2054,19 @@ function roomNamer(map: MapModel) {
 
 // What landed is what is selected, which is what makes a paste followed by a
 // drag move the copy rather than whatever was selected before it.
+//
+// At the granularity in use, which for cells means the cells that landed rather
+// than the rooms holding them: a room ref is not something any press in that
+// sub-mode can produce, and leaving one selected there would point `Del` at a
+// kind the user cannot see they have.
 function selectPasted(mapId: MapId, landed: { rooms: Room[]; lines: LineObject[] }): void {
-  const refs: ObjectRef[] = [
-    ...landed.rooms.map((room) => ({ kind: 'room', id: room.id }) as const),
-    ...landed.lines.map((line) => ({ kind: 'line', id: line.id }) as const),
-  ]
+  const refs: ObjectRef[] =
+    tools.selectSubMode === 'cells'
+      ? landed.rooms.flatMap((room) => [...room.cells].map((id) => ({ kind: 'cell', id }) as const))
+      : [
+          ...landed.rooms.map((room) => ({ kind: 'room', id: room.id }) as const),
+          ...landed.lines.map((line) => ({ kind: 'line', id: line.id }) as const),
+        ]
   if (refs.length > 0) selection.set(refs, mapId)
 }
 

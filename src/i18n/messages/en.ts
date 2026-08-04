@@ -15,6 +15,7 @@ export const en = {
 
   'name.project': 'Untitled Project',
   'name.map': 'Map {n}',
+  'name.room': 'Room {n}',
   'name.copy': '{base} copy',
   'name.copyNth': '{base} copy {n}',
   // The two immutable fallbacks and the one shipped editable lock type. Core
@@ -39,6 +40,9 @@ export const en = {
   'history.resize': 'Resize Room',
   'history.innerWall': 'Draw Inner Wall',
   'history.eraseInnerWall': 'Erase Inner Wall',
+  // Erasing a cell selection back to bare grid, which is what Delete means at
+  // the cell granularity. Distinct from `history.erase`, the brush stroke.
+  'history.eraseCells': 'Erase Cells',
   // One label for the box drag, whichever kind it turns out to have made: the
   // undo entry is named when the gesture opens, and Door mode is
   // context-inferred, so at that moment nobody knows yet.

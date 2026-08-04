@@ -11,13 +11,15 @@ import { useClipboardStore } from '@/stores/clipboard'
 import { useTabsStore } from '@/stores/tabs'
 import { mapScope, PROJECT_SCOPE, useModelStore } from '@/stores/model'
 import { runAction } from '@/hotkeys/actions'
-import { paintCells } from '@/core/ops/rooms'
+import { paintCells, renameRoom } from '@/core/ops/rooms'
 import { addMap } from '@/core/ops/maps'
 import { createFromBox } from '@/core/ops/doors'
 import { createLine, placeIcon } from '@/core/ops/markup'
+import { createNewArea } from '@/core/ops/project'
 import { ok, TEST_ICON_COLORS } from '@/core/testUtils'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { LineId, MapId, RoomId } from '@/core/ids'
+import type { CellKey } from '@/core/cell'
 import type { MapModel } from '@/core/types'
 
 // Copy, cut, paste and duplicate through the keys, which is where the payload
@@ -147,22 +149,19 @@ describe('the clipboard verbs', () => {
       expect(clipboard().isEmpty).toBe(true)
     })
 
-    // A cell selection carries no room and no line, so every verb here would
-    // act on two empty lists. Refusing keeps the clipboard the user filled in
-    // the other granularity, rather than replacing it with a payload a paste
-    // does nothing with.
-    it('leaves the clipboard alone in the Cells sub-mode', async () => {
+    // The other granularity's payload: the cells themselves, carrying no room
+    // identity, so what a later paste lands is new rooms rather than copies.
+    it('takes the cells in the Cells sub-mode, without the room holding them', async () => {
       await mountCanvas()
-      const a = room(['0,0'])
-      selection().set([{ kind: 'room', id: a }], mapId())
-      runAction('copy')
-      const kept = clipboard().payload
-
+      room(['0,0', '1,0'])
       useToolsStore().setSelectSubMode('cells')
       selection().set([{ kind: 'cell', id: '0,0' }], mapId())
+
       runAction('copy')
 
-      expect(clipboard().payload).toBe(kept)
+      const payload = clipboard().payload
+      expect(payload.cells).toEqual(['0,0'])
+      expect(payload.fromRooms).toBe(false)
     })
   })
 
@@ -380,6 +379,142 @@ describe('the clipboard verbs', () => {
       runAction('paste')
 
       expect(map().iconAtCell.has('8,8')).toBe(true)
+    })
+  })
+
+  // The same four verbs, one granularity over. What differs is the payload:
+  // cells carrying content but no identity, so a paste lands new rooms rather
+  // than copies of anything.
+  describe('a cell selection', () => {
+    async function inCells(cells: CellKey[]) {
+      const mounted = await mountCanvas()
+      useToolsStore().setSelectSubMode('cells')
+      selection().set(
+        cells.map((id) => ({ kind: 'cell', id }) as const),
+        mapId(),
+      )
+      return mounted
+    }
+
+    it('round-trips through paste as new rooms at the pointer', async () => {
+      await mountCanvas()
+      room(['0,0', '1,0', '2,0'])
+      useToolsStore().setSelectSubMode('cells')
+      const { viewport } = await inCells(['0,0', '1,0'])
+
+      runAction('copy')
+      await movePointerTo(viewport, 8.5, 8.5)
+      runAction('paste')
+
+      const landed = roomsOn().find((entry) => entry.cells.has('8,8'))!
+      expect([...landed.cells].sort()).toEqual(['8,8', '9,8'])
+      // The source is untouched: a copy takes nothing away.
+      expect(map().cellOwner.has('0,0')).toBe(true)
+    })
+
+    // A fragment carries no source identity, so its rooms are named from the
+    // lowest free number rather than derived from anything.
+    it('names what it lands with a fresh number, not a copy of a name', async () => {
+      await mountCanvas()
+      const source = room(['0,0', '1,0'])
+      useModelStore().run('Name', mapScope(mapId()), (tx) =>
+        renameRoom(tx, map(), source, 'Engine Room'),
+      )
+      const { viewport } = await inCells(['0,0'])
+
+      runAction('copy')
+      await movePointerTo(viewport, 8.5, 8.5)
+      runAction('paste')
+
+      const landed = roomsOn().find((entry) => entry.cells.has('8,8'))!
+      expect(landed.name).toBe('Room 1')
+    })
+
+    it('numbers past the names already on the map', async () => {
+      await mountCanvas()
+      room(['0,0'])
+      const { viewport } = await inCells(['0,0'])
+
+      runAction('copy')
+      await movePointerTo(viewport, 8.5, 8.5)
+      runAction('paste')
+      await movePointerTo(viewport, 12.5, 8.5)
+      runAction('paste')
+
+      const names = roomsOn()
+        .map((entry) => entry.name)
+        .filter(Boolean)
+        .sort()
+      expect(names).toEqual(['Room 1', 'Room 2'])
+    })
+
+    // Already in `paste`; what this pins is that the wiring does not override
+    // it with the destination's default.
+    it('keeps the source area', async () => {
+      await mountCanvas()
+      const model = useModelStore()
+      const area = model.run('Area', PROJECT_SCOPE, (tx) =>
+        createNewArea(tx, model.project, 'Brinstar', '#223344', '#556677'),
+      )
+      model.run('Paint', mapScope(mapId()), (tx) =>
+        paintCells(tx, model.project, map(), ['0,0', '1,0'], { areaId: area.id }),
+      )
+      const { viewport } = await inCells(['0,0'])
+
+      runAction('copy')
+      await movePointerTo(viewport, 8.5, 8.5)
+      runAction('paste')
+
+      expect(roomsOn().find((entry) => entry.cells.has('8,8'))!.areaId).toBe(area.id)
+    })
+
+    it('cuts the cells away in one undo step, keeping the room they left', async () => {
+      const model = useModelStore()
+      await mountCanvas()
+      const source = room(['0,0', '1,0', '2,0'])
+      const { viewport } = await inCells(['0,0'])
+
+      runAction('cut')
+
+      expect([...map().rooms.get(source)!.cells].sort()).toEqual(['1,0', '2,0'])
+      expect(model.status.undoLabel).toBe('Cut')
+      model.undo()
+      expect([...map().rooms.get(source)!.cells].sort()).toEqual(['0,0', '1,0', '2,0'])
+
+      // And what it took is on the clipboard, ready to land elsewhere.
+      model.redo()
+      await movePointerTo(viewport, 8.5, 8.5)
+      runAction('paste')
+      expect(map().cellOwner.has('8,8')).toBe(true)
+    })
+
+    it('duplicates clear of the source, without touching the clipboard', async () => {
+      await mountCanvas()
+      room(['0,0', '1,0'])
+      await inCells(['0,0', '1,0'])
+
+      runAction('duplicate')
+
+      expect(clipboard().isEmpty).toBe(true)
+      // Its own width plus a gap to the right of where it came from.
+      expect(map().cellOwner.has('3,0')).toBe(true)
+      expect(map().cellOwner.has('0,0')).toBe(true)
+    })
+
+    // A cell ref names a position and a room ref names a thing, so a paste in
+    // this granularity has to hand back cells: a room ref is not something any
+    // press here could have produced.
+    it('selects the cells that landed, not the rooms holding them', async () => {
+      await mountCanvas()
+      room(['0,0', '1,0'])
+      const { viewport } = await inCells(['0,0', '1,0'])
+
+      runAction('copy')
+      await movePointerTo(viewport, 8.5, 8.5)
+      runAction('paste')
+
+      expect([...selection().cellsOn(mapId())].sort()).toEqual(['8,8', '9,8'])
+      expect(selection().roomsOn(mapId())).toEqual([])
     })
   })
 })

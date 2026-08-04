@@ -388,10 +388,10 @@ describe('Select precedence table', () => {
       expect(selection().cellsOn(mapId)).toEqual(['3,0', '0,2', '1,2'])
     })
 
-    // Two granularities, one key. Erasing cells is a different op on a
-    // different kind, so this arm answers for nothing yet rather than deleting
-    // the room the selected cells belong to.
-    it('deletes nothing on Del, where Rooms would delete the room', async () => {
+    // Two granularities, one key, two ops. The same press on the same pixel
+    // erases one cell on one side of the toggle and deletes the whole room on
+    // the other.
+    it('erases the cell on Del, where Rooms deletes the room', async () => {
       const { viewport } = await mountCanvas()
       const { mapId, roomC } = fixture()
       const tools = useToolsStore()
@@ -401,10 +401,13 @@ describe('Select precedence table', () => {
       expect(selection().selected).toEqual([{ kind: 'cell', id: '0,2' }])
       runAction('deleteSelection')
       expect(map().rooms.has(roomC)).toBe(true)
+      expect([...map().rooms.get(roomC)!.cells].sort()).toEqual(['1,2', '2,2'])
 
-      // The same key on the same pixel, one sub-mode over.
+      // The same key on the same room, one sub-mode over. A cell of it that
+      // carries no icon, so the press reaches the room rather than the icon
+      // standing on it.
       tools.setSelectSubMode('rooms')
-      await click(viewport, at(0.5, 2.5))
+      await click(viewport, at(2.5, 2.5))
       runAction('deleteSelection')
       expect(map().rooms.has(roomC)).toBe(false)
       expect(selection().roomsOn(mapId)).toEqual([])

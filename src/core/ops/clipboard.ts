@@ -513,6 +513,27 @@ export function duplicateSelection(
   return paste(tx, project, map, payload, { at, nameFor: options.nameFor })
 }
 
+// The cell granularity's duplicate: the same copy-then-paste in one
+// transaction, over a cell fragment rather than over whole objects.
+//
+// Its own entry point rather than a flag on the one above, because the payload
+// the two build is different in kind: a fragment carries no identity, so what
+// lands is new rooms however the cells were grouped at the source.
+export function duplicateCells(
+  tx: Transaction,
+  project: ProjectModel,
+  map: MapModel,
+  cells: Iterable<CellKey>,
+  options: DuplicateOptions = {},
+): Room[] {
+  const payload = copyCells(map, cells)
+  if (isClipboardEmpty(payload)) return []
+  const at = options.offset
+    ? { x: payload.sourceOrigin.x + options.offset.x, y: payload.sourceOrigin.y + options.offset.y }
+    : defaultPasteAt(payload)
+  return paste(tx, project, map, payload, { at, nameFor: options.nameFor }).rooms
+}
+
 // Rooms alone, for callers that have no lines to offer.
 export function duplicateRooms(
   tx: Transaction,

@@ -9,13 +9,14 @@ import {
   cutCells,
   cutSelection,
   defaultPasteAt,
+  duplicateCells,
   duplicateRooms,
   isClipboardEmpty,
   paste,
 } from './clipboard'
 import { createFromBox } from './doors'
 import { createLine, placeIcon } from './markup'
-import { drawInnerWall, moveRooms, paintCells } from './rooms'
+import { drawInnerWall, moveRooms, paintCells, renameRoom } from './rooms'
 import { cellsOf, checkInvariants, grid, makeRoom, ok, rect, setup, sorted, tx } from '../testUtils'
 
 const LINE_DEFAULTS = { color: '#ffcc00', arrowStart: false, arrowEnd: true }
@@ -285,6 +286,60 @@ describe('duplicate', () => {
     history.undo()
     expect(map.rooms.size).toBe(1)
     expect(checkInvariants(project)).toEqual([])
+  })
+
+  // The cell granularity's duplicate: a fragment of a room, landing clear of it
+  // as a room of its own while the source keeps every cell it had.
+  describe('of a cell fragment', () => {
+    it('lands the fragment clear of the room it came from', () => {
+      const { project, map } = setup()
+      const room = makeRoom(project, map, rect(0, 0, 3, 1))
+
+      const transaction = tx(map)
+      const created = duplicateCells(transaction, project, map, ['0,0', '1,0'])
+
+      expect(created).toHaveLength(1)
+      // Its own width plus a one-cell gap, measured from the fragment's origin
+      // rather than the room's: what it clears is what was copied.
+      expect(cellsOf(created[0])).toEqual(sorted(rect(3, 0, 2, 1)))
+      expect(cellsOf(room)).toEqual(sorted(rect(0, 0, 3, 1)))
+      expect(checkInvariants(project)).toEqual([])
+    })
+
+    it('carries no identity from the room the cells were in', () => {
+      const { project, map } = setup()
+      const room = makeRoom(project, map, rect(0, 0, 2, 1))
+      const name = tx(map)
+      renameRoom(name, map, room.id, 'Engine Room')
+      name.commit()
+
+      const transaction = tx(map)
+      const [created] = duplicateCells(transaction, project, map, ['0,0'])
+
+      expect(created.name).toBe('')
+      expect(created.notes).toBe('')
+      expect(created.id).not.toBe(room.id)
+    })
+
+    it('makes one room per connected group of the fragment', () => {
+      const { project, map } = setup()
+      makeRoom(project, map, rect(0, 0, 5, 1))
+
+      const transaction = tx(map)
+      const created = duplicateCells(transaction, project, map, ['0,0', '2,0'])
+
+      expect(created).toHaveLength(2)
+      expect(checkInvariants(project)).toEqual([])
+    })
+
+    it('makes nothing from cells no room owns', () => {
+      const { project, map } = setup()
+      makeRoom(project, map, rect(0, 0, 1, 1))
+
+      const transaction = tx(map)
+      expect(duplicateCells(transaction, project, map, ['9,9'])).toEqual([])
+      expect(checkInvariants(project)).toEqual([])
+    })
   })
 })
 

@@ -16,7 +16,7 @@ import { paintCells } from '@/core/ops/rooms'
 import { createLine, placeIcon } from '@/core/ops/markup'
 import { createTeleport } from '@/core/ops/doors'
 import { WORLD_AREA_ID } from '@/core/ids'
-import { TEST_ICON_COLORS, ok, snapshot } from '@/core/testUtils'
+import { TEST_ICON_COLORS, ok } from '@/core/testUtils'
 import type { ActionId } from '@/hotkeys/keymap'
 import type { CellKey } from '@/core/cell'
 import type { MapId } from '@/core/ids'
@@ -675,18 +675,22 @@ describe('the deleteSelection action', () => {
   // In the Cells sub-mode the key means "erase the selected cells", which does
   // not exist yet. Falling through to the room delete would destroy whole rooms
   // the user never selected.
-  it('leaves the model untouched in the Cells sub-mode', async () => {
+  // Two granularities, one key, two ops. Erasing takes the cells back to bare
+  // grid and leaves the room holding whatever is left of it, where the same key
+  // one granularity over would delete the room outright.
+  it('erases the cells rather than deleting their room, in the Cells sub-mode', async () => {
     await mountCanvas()
     await setMode('select')
     useToolsStore().setSelectSubMode('cells')
-    paint(['0,0', '1,0'])
+    const room = paint(['0,0', '1,0'])
     const model = useModelStore()
-    const before = snapshot(model.project)
     useSelectionStore().set([{ kind: 'cell', id: '0,0' }], activeMapId())
 
     expect(runAction('deleteSelection')).toBe(true)
     await nextTick()
-    expect(snapshot(model.project)).toEqual(before)
+    const map = model.project.mapsById.get(activeMapId())!
+    expect(map.rooms.get(room.id)?.cells.has('0,0')).toBe(false)
+    expect(map.rooms.get(room.id)?.cells.has('1,0')).toBe(true)
   })
 
   it('deletes selected icons and lines in Markup mode', async () => {
