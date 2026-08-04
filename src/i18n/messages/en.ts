@@ -73,6 +73,8 @@ export const en = {
   'history.renameArea': 'Rename Area',
   'history.recolorArea': 'Recolor Area',
   'history.areaNotes': 'Edit Area Notes',
+  'history.deleteArea': 'Delete Area',
+  'history.areaFromRoom': 'New Area From Room',
   'history.iconColors': 'Change Icon Colors',
   'history.iconLabel': 'Edit Icon Label',
   'history.iconNotes': 'Edit Icon Notes',
@@ -275,6 +277,13 @@ export const en = {
   'hierarchy.filter': 'Filter',
   'hierarchy.addArea': 'New area',
   'hierarchy.noMatches': 'Nothing matches "{query}"',
+  'hierarchy.menu.rename': 'Rename',
+  'hierarchy.menu.duplicate': 'Duplicate',
+  'hierarchy.menu.areaFromRoom': 'New area from this room',
+  'hierarchy.menu.delete': 'Delete',
+  'hierarchy.deleteAreaTitle': 'Delete "{name}"?',
+  'hierarchy.deleteAreaRooms': 'Its {count} room(s) move to World.',
+  'hierarchy.deleteAreaEmpty': 'It has no rooms.',
 
   // The two counts are separate keys rather than one plural, because this
   // catalogue interpolates and does not decline.

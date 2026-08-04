@@ -56,7 +56,7 @@ import {
   paste,
   type ClipboardPayload,
 } from '@/core/ops/clipboard'
-import { copyName, freshRoomName } from '@/i18n/naming'
+import { copyNamer, freshRoomName } from '@/i18n/naming'
 import {
   createLine,
   deleteIcon,
@@ -2045,8 +2045,9 @@ function pasteAnchor(payload: ClipboardPayload): { x: number; y: number } {
 // nothing has been added to it yet at the moment `paste` asks.
 function roomNamer(map: MapModel, fragment: boolean) {
   const taken = [...map.rooms.values()].map((room) => room.name)
-  return ({ name }: { name: string; index: number }) => {
-    const next = fragment ? freshRoomName(taken) : copyName(name, taken)
+  if (!fragment) return copyNamer(taken)
+  return () => {
+    const next = freshRoomName(taken)
     taken.push(next)
     return next
   }

@@ -203,4 +203,75 @@ test.describe('Hierarchy', () => {
     await expect(tree.locator('.hierarchy-rename')).toHaveCount(0)
     expect(errors).toEqual([])
   })
+
+  test('duplicates a room from the row menu, in Draw mode', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    // Draw, not Select: the tree is mode-independent, unlike the canvas
+    // clipboard verbs.
+    await page.keyboard.press('1')
+    await tree.getByRole('treeitem', { name: 'Landing Site' }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Duplicate' }).click()
+
+    await expect(tree.getByRole('treeitem', { name: 'Landing Site copy' })).toBeVisible()
+    expect(await undoLabel(page)).toBe('Undo Duplicate')
+    expect(errors).toEqual([])
+  })
+
+  test('renames from the row menu without the menu closing it again', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    await tree.getByRole('treeitem', { name: 'Corridor' }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Rename' }).click()
+
+    const editor = tree.locator('.hierarchy-rename')
+    await expect(editor).toBeFocused()
+    await editor.fill('Hallway')
+    await editor.press('Enter')
+
+    await expect(tree.getByRole('treeitem', { name: 'Hallway' })).toBeVisible()
+    expect(await undoLabel(page)).toBe('Undo Rename Room')
+    expect(errors).toEqual([])
+  })
+
+  test('makes a new area from a room, ready to name', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    await tree.getByRole('treeitem', { name: 'Corridor' }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'New area from this room' }).click()
+
+    const editor = tree.locator('.hierarchy-rename')
+    await expect(editor).toBeFocused()
+    await editor.fill('Brinstar')
+    await editor.press('Enter')
+
+    // The room moved into it, so it sits under the new area rather than World.
+    const rows = tree.getByRole('treeitem')
+    const labels = await rows.evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+    expect(labels.indexOf('Corridor')).toBe(labels.indexOf('Brinstar') + 1)
+    expect(errors).toEqual([])
+  })
+
+  test('deleting an area asks first, and moves its rooms to World', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    await tree.getByRole('treeitem', { name: 'Crateria' }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Delete' }).click()
+
+    const dialog = page.getByRole('alertdialog')
+    await expect(dialog).toContainText('Crateria')
+    // Four, not three: `roomsInArea` counts project-wide, and Crateria has a
+    // room on the other tab. That reach is exactly why the delete asks first.
+    await expect(dialog).toContainText('4')
+    await dialog.getByRole('button', { name: 'Delete' }).click()
+
+    await expect(tree.getByRole('treeitem', { name: 'Crateria' })).toHaveCount(0)
+    await expect(tree.getByRole('treeitem', { name: 'Landing Site' })).toBeVisible()
+    expect(await undoLabel(page)).toBe('Undo Delete Area')
+    expect(errors).toEqual([])
+  })
 })

@@ -1,14 +1,38 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import {
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+  AlertDialogRoot,
+  AlertDialogTitle,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuPortal,
+  ContextMenuRoot,
+  ContextMenuTrigger,
+} from 'reka-ui'
 import HierarchyIcon from './HierarchyIcon.vue'
 import { PROJECT_SCOPE, dependOn, useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
 import { useTabsStore } from '@/stores/tabs'
-import { createNewArea, isImmutableArea, renameArea } from '@/core/ops/project'
-import { renameRoom } from '@/core/ops/rooms'
+import {
+  createAreaFromRoom,
+  createNewArea,
+  deleteArea,
+  isImmutableArea,
+  renameArea,
+  roomsInArea,
+} from '@/core/ops/project'
+import { deleteRooms, renameRoom } from '@/core/ops/rooms'
+import { duplicateRooms } from '@/core/ops/clipboard'
+import { useDialogEscTier } from '@/hotkeys/useDialogEscTier'
 import { mapScope } from '@/stores/model'
 import { useInlineEdit } from '@/composables/useInlineEdit'
-import { freshAreaName, roomLabel } from '@/i18n/naming'
+import { copyNamer, freshAreaName, roomLabel } from '@/i18n/naming'
 import { t } from '@/i18n'
 import type { AreaId, RoomId } from '@/core/ids'
 import type { ObjectRef, Room } from '@/core/types'
@@ -195,10 +219,7 @@ function addArea() {
   const area = model.run(t('history.addArea'), PROJECT_SCOPE, (tx) =>
     createNewArea(tx, model.project, freshAreaName(existing), palette.cell, palette.wall),
   )
-  nextTick(() => {
-    const index = rows.value.findIndex((row) => row.kind === 'area' && row.id === area.id)
-    if (index >= 0) beginRename(rows.value[index], index)
-  })
+  requestRenameOf(`area:${area.id}`)
 }
 
 function toggle(id: AreaId) {
@@ -313,6 +334,176 @@ function abandonRename() {
   editingKey.value = null
 }
 
+// The row menu: one menu for the whole tree, acting on the row that was
+// right-clicked, in the shape the canvas menu already uses. One per row would
+// mount a Reka root per room.
+//
+// A right-click aims. An unselected row is selected alone first, so the verbs
+// act on what was pointed at; a right-click inside a multi-selection leaves it
+// whole. Both are the canvas's rules, and the tree has no reason to differ.
+const menuRow = ref<Row | null>(null)
+const confirmingDelete = ref(false)
+
+useDialogEscTier(confirmingDelete)
+
+function aimAt(row: Row, index: number) {
+  menuRow.value = row
+  focusedIndex.value = index
+  if (!row.selected) selectRow(row, index, false)
+}
+
+// One predicate per verb, read by the item's disabled state and by the handler
+// both. Two conditions that agree today are how the two drift tomorrow.
+function canDuplicate(row: Row | null): row is RoomRow {
+  return row?.kind === 'room'
+}
+
+function canDelete(row: Row | null): boolean {
+  if (!row) return false
+  return row.kind === 'room' || !isImmutableArea(row.id)
+}
+
+function canAreaFromRoom(row: Row | null): row is RoomRow {
+  return row?.kind === 'room'
+}
+
+const menuItems = computed(() => {
+  const row = menuRow.value
+  return [
+    { id: 'rename', label: t('hierarchy.menu.rename'), enabled: !!row && canRename(row) },
+    { id: 'duplicate', label: t('hierarchy.menu.duplicate'), enabled: canDuplicate(row) },
+    { id: 'areaFromRoom', label: t('hierarchy.menu.areaFromRoom'), enabled: canAreaFromRoom(row) },
+    { id: 'delete', label: t('hierarchy.menu.delete'), enabled: canDelete(row) },
+  ]
+})
+
+// A rename asked for from the menu waits for the menu to close.
+//
+// Reka returns focus to the trigger as it closes, and the trigger here is the
+// whole tree: an editor opened before that lands is focused and then instantly
+// blurred, which commits an edit the user never typed.
+const pendingRename = ref<string | null>(null)
+
+// Reka hands focus back to the trigger as the menu unmounts. When the item
+// picked was Rename, that focus lands on the tree and blurs the editor the
+// same frame it opens, committing an edit nobody typed. Refusing the restore
+// leaves focus for the editor to claim.
+// Either state means an editor is coming or already here, and the two cover
+// both orderings: the restore can land before the deferred open or after it.
+function onMenuCloseAutoFocus(event: Event) {
+  if (pendingRename.value || editing.value) event.preventDefault()
+}
+
+// Opens an editor on a row named by key, a tick later.
+//
+// The tick is what lets a row that does not exist yet be renamed: creating an
+// area and naming it are one gesture, and the row only appears once the tree
+// has re-rendered. It is also long enough for a menu to be on its way out.
+//
+// Not driven off the menu's close event: a real browser closes the menu before
+// running the item that was picked, so a flag set from the item arrives after
+// the close and nothing would ever read it.
+function requestRenameOf(key: string) {
+  pendingRename.value = key
+  nextTick(() => {
+    pendingRename.value = null
+    const index = rows.value.findIndex((each) => keyOf(each) === key)
+    if (index >= 0) beginRename(rows.value[index], index)
+  })
+}
+
+function runMenuItem(id: string) {
+  const row = menuRow.value
+  if (!row) return
+  switch (id) {
+    case 'rename':
+      if (canRename(row)) requestRenameOf(keyOf(row))
+      return
+    case 'duplicate':
+      if (canDuplicate(row)) duplicateRoom(row)
+      return
+    case 'areaFromRoom':
+      if (canAreaFromRoom(row)) areaFromRoom(row)
+      return
+    case 'delete':
+      if (canDelete(row)) deleteRow(row)
+      return
+  }
+}
+
+// The same op and the same locked naming the canvas menu and Ctrl+D run, but
+// not routed through that action: the clipboard verbs belong to Select mode
+// alone, and the tree is mode-independent by design.
+function duplicateRoom(row: RoomRow) {
+  const mapId = tabsStore.activeTabId
+  const map = model.project.mapsById.get(mapId)
+  if (!map) return
+  const copies = model.run(t('history.duplicate'), mapScope(mapId), (tx) =>
+    duplicateRooms(tx, model.project, map, [row.id], {
+      nameFor: copyNamer([...map.rooms.values()].map((room) => room.name)),
+    }),
+  )
+  fromTree = true
+  selection.set(
+    copies.map((room) => ({ kind: 'room', id: room.id }) as const),
+    mapId,
+  )
+}
+
+// The deferred "I just want to colour one room" fast path. It lives here and
+// nowhere else: creation belongs in one surface, which is why Draw's area
+// picker only picks.
+function areaFromRoom(row: RoomRow) {
+  const mapId = tabsStore.activeTabId
+  const existing = [...model.project.areas.values()].map((area) => area.name)
+  const palette = NEW_AREA_COLORS[model.project.areas.size % NEW_AREA_COLORS.length]
+  const area = model.run(t('history.areaFromRoom'), PROJECT_SCOPE, (tx) =>
+    createAreaFromRoom(
+      tx,
+      model.project,
+      mapId,
+      row.id,
+      freshAreaName(existing),
+      palette.cell,
+      palette.wall,
+    ),
+  )
+  requestRenameOf(`area:${area.id}`)
+}
+
+// A room goes straight away: undoable, and visibly gone from a tab you are
+// looking at. An area asks first, because its rooms are project-wide and the
+// ones it reassigns may be on tabs you are not.
+function deleteRow(row: Row) {
+  if (row.kind === 'area') {
+    confirmingDelete.value = true
+    return
+  }
+  const mapId = tabsStore.activeTabId
+  const map = model.project.mapsById.get(mapId)
+  if (!map) return
+  model.run(t('history.deleteRoom'), mapScope(mapId), (tx) =>
+    deleteRooms(tx, model.project, map, [row.id]),
+  )
+}
+
+// What the delete will actually move, asked ahead of the action rather than
+// returned by it, and computed only while the dialog is open: it walks every
+// map's rooms, which is not work to do on every render.
+const deleteImpact = computed(() => {
+  if (!confirmingDelete.value) return null
+  dependOn(model.rev, model.structureRev)
+  const row = menuRow.value
+  if (row?.kind !== 'area') return null
+  return { name: row.label, rooms: roomsInArea(model.project, row.id) }
+})
+
+function confirmDeleteArea() {
+  const row = menuRow.value
+  if (row?.kind !== 'area' || !canDelete(row)) return
+  model.run(t('history.deleteArea'), PROJECT_SCOPE, (tx) => deleteArea(tx, model.project, row.id))
+}
+
 function focusRow(index: number) {
   const clamped = Math.max(0, Math.min(index, rows.value.length - 1))
   focusedIndex.value = clamped
@@ -405,61 +596,115 @@ function handleKeydown(event: KeyboardEvent, index: number) {
     {{ t('hierarchy.noMatches', { query: filter.trim() }) }}
   </p>
 
-  <ul class="hierarchy-tree" role="tree" :aria-label="t('hierarchy.tree')">
-    <li
-      v-for="(row, index) in rows"
-      :key="`${row.kind}:${row.id}`"
-      :ref="(el) => setRowRef(el as Element | null, index)"
-      role="treeitem"
-      class="hierarchy-row"
-      :class="{ selected: row.selected, area: row.kind === 'area' }"
-      :style="{ '--depth': row.level - 1 }"
-      :data-row-kind="row.kind"
-      :data-row-id="row.id"
-      :aria-label="row.label"
-      :aria-level="row.level"
-      :aria-posinset="positions[index].posInSet"
-      :aria-setsize="positions[index].setSize"
-      :aria-selected="row.selected"
-      :aria-expanded="row.kind === 'area' && row.childCount > 0 ? !isCollapsed(row.id) : undefined"
-      :tabindex="index === focusedIndex ? 0 : -1"
-      @focus="focusedIndex = index"
-      @click="selectRow(row, index, $event.shiftKey)"
-      @dblclick="beginRename(row, index)"
-      @keydown="handleKeydown($event, index)"
-    >
-      <button
-        v-if="row.kind === 'area' && row.childCount > 0"
-        type="button"
-        class="hierarchy-twisty"
-        :aria-label="
-          isCollapsed(row.id)
-            ? t('hierarchy.expandArea', { name: row.label })
-            : t('hierarchy.collapseArea', { name: row.label })
-        "
-        tabindex="-1"
-        @click.stop="toggle(row.id)"
+  <ContextMenuRoot>
+    <ContextMenuTrigger as-child>
+      <ul class="hierarchy-tree" role="tree" :aria-label="t('hierarchy.tree')">
+        <li
+          v-for="(row, index) in rows"
+          :key="`${row.kind}:${row.id}`"
+          :ref="(el) => setRowRef(el as Element | null, index)"
+          role="treeitem"
+          class="hierarchy-row"
+          :class="{ selected: row.selected, area: row.kind === 'area' }"
+          :style="{ '--depth': row.level - 1 }"
+          :data-row-kind="row.kind"
+          :data-row-id="row.id"
+          :aria-label="row.label"
+          :aria-level="row.level"
+          :aria-posinset="positions[index].posInSet"
+          :aria-setsize="positions[index].setSize"
+          :aria-selected="row.selected"
+          :aria-expanded="
+            row.kind === 'area' && row.childCount > 0 ? !isCollapsed(row.id) : undefined
+          "
+          :tabindex="index === focusedIndex ? 0 : -1"
+          @focus="focusedIndex = index"
+          @click="selectRow(row, index, $event.shiftKey)"
+          @dblclick="beginRename(row, index)"
+          @contextmenu="aimAt(row, index)"
+          @keydown="handleKeydown($event, index)"
+        >
+          <button
+            v-if="row.kind === 'area' && row.childCount > 0"
+            type="button"
+            class="hierarchy-twisty"
+            :aria-label="
+              isCollapsed(row.id)
+                ? t('hierarchy.expandArea', { name: row.label })
+                : t('hierarchy.collapseArea', { name: row.label })
+            "
+            tabindex="-1"
+            @click.stop="toggle(row.id)"
+          >
+            {{ isCollapsed(row.id) ? '▸' : '▾' }}
+          </button>
+          <span v-else class="hierarchy-twisty-spacer" aria-hidden="true" />
+          <HierarchyIcon :kind="row.kind" />
+          <input
+            v-if="editing && editingKey === keyOf(row)"
+            :ref="setInputRef"
+            v-model="draft"
+            class="hierarchy-rename"
+            :data-row-id="row.id"
+            @click.stop
+            @dblclick.stop
+            @keydown.stop
+            @keydown.enter="finishRename"
+            @keydown.esc="abandonRename"
+            @blur="finishRename"
+          />
+          <span v-else class="hierarchy-label">{{ row.label }}</span>
+        </li>
+      </ul>
+    </ContextMenuTrigger>
+
+    <ContextMenuPortal>
+      <ContextMenuContent
+        class="popover-surface"
+        style="--popover-min-width: 11rem"
+        @close-auto-focus="onMenuCloseAutoFocus"
       >
-        {{ isCollapsed(row.id) ? '▸' : '▾' }}
-      </button>
-      <span v-else class="hierarchy-twisty-spacer" aria-hidden="true" />
-      <HierarchyIcon :kind="row.kind" />
-      <input
-        v-if="editing && editingKey === keyOf(row)"
-        :ref="setInputRef"
-        v-model="draft"
-        class="hierarchy-rename"
-        :data-row-id="row.id"
-        @click.stop
-        @dblclick.stop
-        @keydown.stop
-        @keydown.enter="finishRename"
-        @keydown.esc="abandonRename"
-        @blur="finishRename"
-      />
-      <span v-else class="hierarchy-label">{{ row.label }}</span>
-    </li>
-  </ul>
+        <ContextMenuItem
+          v-for="item in menuItems"
+          :key="item.id"
+          class="popover-item"
+          :disabled="!item.enabled"
+          @select="runMenuItem(item.id)"
+        >
+          {{ item.label }}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenuPortal>
+  </ContextMenuRoot>
+
+  <AlertDialogRoot v-model:open="confirmingDelete">
+    <AlertDialogPortal>
+      <AlertDialogOverlay class="modal-overlay" />
+      <AlertDialogContent class="modal-content" style="--modal-width: 22rem">
+        <AlertDialogTitle class="hierarchy-delete-title">
+          {{ t('hierarchy.deleteAreaTitle', { name: deleteImpact?.name ?? '' }) }}
+        </AlertDialogTitle>
+        <AlertDialogDescription class="hierarchy-delete-description">
+          <span>
+            {{
+              deleteImpact?.rooms
+                ? t('hierarchy.deleteAreaRooms', { count: deleteImpact.rooms })
+                : t('hierarchy.deleteAreaEmpty')
+            }}
+          </span>
+          <span class="hierarchy-delete-note">{{ t('tab.deleteUndoable') }}</span>
+        </AlertDialogDescription>
+        <div class="hierarchy-delete-actions">
+          <AlertDialogCancel class="hierarchy-delete-cancel">
+            {{ t('common.cancel') }}
+          </AlertDialogCancel>
+          <AlertDialogAction class="hierarchy-delete-confirm" @click="confirmDeleteArea">
+            {{ t('hierarchy.menu.delete') }}
+          </AlertDialogAction>
+        </div>
+      </AlertDialogContent>
+    </AlertDialogPortal>
+  </AlertDialogRoot>
 </template>
 
 <style scoped>
@@ -581,6 +826,58 @@ function handleKeydown(event: KeyboardEvent, index: number) {
   font-size: 0.6875rem;
   cursor: pointer;
   padding: 0;
+}
+
+.hierarchy-delete-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+.hierarchy-delete-description {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  opacity: 0.8;
+  margin: 0 0 1rem;
+}
+
+.hierarchy-delete-note {
+  opacity: 0.85;
+}
+
+.hierarchy-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.hierarchy-delete-cancel,
+.hierarchy-delete-confirm {
+  border-radius: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.hierarchy-delete-cancel {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+}
+.hierarchy-delete-cancel:hover {
+  background: var(--surface-active);
+}
+
+.hierarchy-delete-confirm {
+  border: none;
+  background: #d64545;
+  color: #fff;
+}
+.hierarchy-delete-confirm:hover {
+  background: #b83a3a;
 }
 
 .hierarchy-rename {

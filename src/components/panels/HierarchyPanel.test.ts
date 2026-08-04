@@ -842,4 +842,265 @@ describe('HierarchyPanel', () => {
       expect([...useModelStore().project.areas.values()].at(-1)!.name).toBe('Tourian')
     })
   })
+
+  describe('the row menu', () => {
+    function treeitems(panel: VueWrapper) {
+      return panel.findAll('[role="treeitem"]')
+    }
+
+    async function openMenuOn(panel: VueWrapper, index: number) {
+      await treeitems(panel)[index].trigger('contextmenu')
+      await nextTick()
+      return document.querySelectorAll('[role="menuitem"]')
+    }
+
+    function itemNamed(items: NodeListOf<Element>, label: string) {
+      return Array.from(items).find((item) => item.textContent?.trim() === label)!
+    }
+
+    it('offers all four verbs on a room', async () => {
+      setup()
+      const panel = mountTree()
+      const items = await openMenuOn(panel, 3)
+
+      expect(Array.from(items).map((item) => item.textContent?.trim())).toEqual([
+        'Rename',
+        'Duplicate',
+        'New area from this room',
+        'Delete',
+      ])
+      for (const item of items) {
+        expect(item.getAttribute('aria-disabled')).not.toBe('true')
+      }
+    })
+
+    // An area is not a room: it cannot be duplicated and it is not the subject
+    // of "new area from this room".
+    it('disables the room-only verbs on an area', async () => {
+      setup()
+      const panel = mountTree()
+      const items = await openMenuOn(panel, 2)
+
+      expect(itemNamed(items, 'Rename').getAttribute('aria-disabled')).not.toBe('true')
+      expect(itemNamed(items, 'Delete').getAttribute('aria-disabled')).not.toBe('true')
+      expect(itemNamed(items, 'Duplicate').getAttribute('aria-disabled')).toBe('true')
+      expect(itemNamed(items, 'New area from this room').getAttribute('aria-disabled')).toBe('true')
+    })
+
+    it('offers World neither of its two', async () => {
+      setup()
+      const panel = mountTree()
+      const items = await openMenuOn(panel, 0)
+
+      expect(itemNamed(items, 'Rename').getAttribute('aria-disabled')).toBe('true')
+      expect(itemNamed(items, 'Delete').getAttribute('aria-disabled')).toBe('true')
+    })
+
+    // Pass 6's canvas rule, and the tree has no reason to differ.
+    it('right-clicking an unselected row selects it alone first', async () => {
+      const { mapId, landing, vault } = setup()
+      const panel = mountTree()
+      useSelectionStore().set([{ kind: 'room', id: vault }], mapId)
+      await nextTick()
+
+      await treeitems(panel)[3].trigger('contextmenu')
+
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([landing])
+    })
+
+    it('right-clicking inside a multi-selection leaves it whole', async () => {
+      const { mapId, landing, vault } = setup()
+      const panel = mountTree()
+      useSelectionStore().set(
+        [
+          { kind: 'room', id: vault },
+          { kind: 'room', id: landing },
+        ],
+        mapId,
+      )
+      await nextTick()
+
+      await treeitems(panel)[3].trigger('contextmenu')
+
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([vault, landing])
+    })
+  })
+
+  describe('the menu verbs', () => {
+    function treeitems(panel: VueWrapper) {
+      return panel.findAll('[role="treeitem"]')
+    }
+
+    async function run(panel: VueWrapper, index: number, label: string) {
+      await treeitems(panel)[index].trigger('contextmenu')
+      await nextTick()
+      const item = Array.from(document.querySelectorAll('[role="menuitem"]')).find(
+        (each) => each.textContent?.trim() === label,
+      )!
+      item.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await nextTick()
+    }
+
+    // Deferred until the menu has closed: Reka returns focus to the trigger on
+    // the way out, and an editor opened before that is blurred straight back
+    // shut, committing an edit nobody typed.
+    it('Rename opens the editor, and it stays open', async () => {
+      setup()
+      const panel = mountTree()
+      await run(panel, 3, 'Rename')
+      await nextTick()
+      await nextTick()
+      expect(panel.find('.hierarchy-rename').exists()).toBe(true)
+      expect((panel.get('.hierarchy-rename').element as HTMLInputElement).value).toBe(
+        'Landing Site',
+      )
+    })
+
+    it('Duplicate copies the room with the locked suffix, and selects the copy', async () => {
+      const { mapId } = setup()
+      const panel = mountTree()
+
+      await run(panel, 3, 'Duplicate')
+
+      const model = useModelStore()
+      const names = [...model.project.mapsById.get(mapId)!.rooms.values()].map((room) => room.name)
+      expect(names).toContain('Landing Site copy')
+      expect(model.status.undoLabel).toBe('Duplicate')
+
+      const copy = [...model.project.mapsById.get(mapId)!.rooms.values()].find(
+        (room) => room.name === 'Landing Site copy',
+      )!
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([copy.id])
+    })
+
+    // Works in every mode, unlike the canvas clipboard verbs: the tree is
+    // mode-independent, so it owns the op rather than routing through the
+    // Select-only action.
+    it('Duplicate works outside Select mode', async () => {
+      const { mapId } = setup()
+      useModeStore().setMode('draw')
+      const panel = mountTree()
+
+      await run(panel, 3, 'Duplicate')
+
+      const names = [...useModelStore().project.mapsById.get(mapId)!.rooms.values()].map(
+        (room) => room.name,
+      )
+      expect(names).toContain('Landing Site copy')
+    })
+
+    it('Delete removes a room with no confirmation', async () => {
+      const { mapId, landing } = setup()
+      const panel = mountTree()
+
+      await run(panel, 3, 'Delete')
+
+      expect(useModelStore().project.mapsById.get(mapId)!.rooms.has(landing)).toBe(false)
+      expect(useModelStore().status.undoLabel).toBe('Delete Room')
+    })
+
+    it('New area from this room creates one, moves the room in, and names it', async () => {
+      const { mapId, landing } = setup()
+      const panel = mountTree()
+
+      await run(panel, 3, 'New area from this room')
+      await nextTick()
+
+      const model = useModelStore()
+      const area = [...model.project.areas.values()].at(-1)!
+      expect(model.project.mapsById.get(mapId)!.rooms.get(landing)!.areaId).toBe(area.id)
+      expect(model.status.undoLabel).toBe('New Area From Room')
+      // Fresh and unnamed is the state nobody wants, so its editor is already open.
+      expect(panel.find('.hierarchy-rename').exists()).toBe(true)
+    })
+
+    it('is one undo step, area and room together', async () => {
+      const { mapId, landing } = setup()
+      const panel = mountTree()
+      const before = useModelStore().project.mapsById.get(mapId)!.rooms.get(landing)!.areaId
+
+      await run(panel, 3, 'New area from this room')
+      const model = useModelStore()
+      const created = model.project.areas.size
+
+      model.undo()
+
+      expect(model.project.areas.size).toBe(created - 1)
+      expect(model.project.mapsById.get(mapId)!.rooms.get(landing)!.areaId).toBe(before)
+    })
+  })
+
+  describe('deleting an area', () => {
+    function treeitems(panel: VueWrapper) {
+      return panel.findAll('[role="treeitem"]')
+    }
+
+    async function openDeleteDialog(panel: VueWrapper, index: number) {
+      await treeitems(panel)[index].trigger('contextmenu')
+      await nextTick()
+      const item = Array.from(document.querySelectorAll('[role="menuitem"]')).find(
+        (each) => each.textContent?.trim() === 'Delete',
+      )!
+      item.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await nextTick()
+      await nextTick()
+    }
+
+    // A pre-action query, never something the op returns: the confirmation is
+    // asked ahead of the action.
+    it('asks first, counting the rooms that move to World', async () => {
+      setup()
+      const panel = mountTree()
+
+      await openDeleteDialog(panel, 2)
+
+      const dialog = document.querySelector('[role="alertdialog"]')!
+      expect(dialog.textContent).toContain('Crateria')
+      expect(dialog.textContent).toContain('2')
+    })
+
+    it('reassigns its rooms to World on confirm, as one undo step', async () => {
+      const { mapId, crateria, landing } = setup()
+      const panel = mountTree()
+      await openDeleteDialog(panel, 2)
+
+      const confirm = document.querySelector('.hierarchy-delete-confirm') as HTMLElement
+      confirm.click()
+      await nextTick()
+
+      const model = useModelStore()
+      expect(model.project.areas.has(crateria)).toBe(false)
+      expect(model.project.mapsById.get(mapId)!.rooms.get(landing)!.areaId).toBe(WORLD_AREA_ID)
+      expect(model.status.undoLabel).toBe('Delete Area')
+
+      model.undo()
+      expect(model.project.areas.has(crateria)).toBe(true)
+      expect(model.project.mapsById.get(mapId)!.rooms.get(landing)!.areaId).toBe(crateria)
+    })
+
+    it('leaves the selection empty afterwards', async () => {
+      const { mapId, crateria } = setup()
+      const panel = mountTree()
+      useSelectionStore().set([{ kind: 'area', id: crateria }], mapId)
+      await openDeleteDialog(panel, 2)
+
+      const confirm = document.querySelector('.hierarchy-delete-confirm') as HTMLElement
+      confirm.click()
+      await nextTick()
+
+      expect(useSelectionStore().isEmpty).toBe(true)
+    })
+
+    it('changes nothing on cancel', async () => {
+      const { crateria } = setup()
+      const panel = mountTree()
+      await openDeleteDialog(panel, 2)
+
+      const cancel = document.querySelector('.hierarchy-delete-cancel') as HTMLElement
+      cancel.click()
+      await nextTick()
+
+      expect(useModelStore().project.areas.has(crateria)).toBe(true)
+    })
+  })
 })

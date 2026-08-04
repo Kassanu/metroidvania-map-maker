@@ -77,3 +77,15 @@ export function copyName(originalName: string, existingNames: readonly string[])
   while (existingNames.includes(t('name.copyNth', { base, n }))) n++
   return t('name.copyNth', { base, n })
 }
+
+// The `nameFor` a whole-object duplicate or paste passes down. Stateful across
+// the batch on purpose: duplicating three rooms at once has to avoid the names
+// the first two just took, which a pure function of the original name cannot.
+export function copyNamer(existingNames: readonly string[]) {
+  const taken = [...existingNames]
+  return ({ name }: { name: string; index: number }) => {
+    const next = copyName(name, taken)
+    taken.push(next)
+    return next
+  }
+}
