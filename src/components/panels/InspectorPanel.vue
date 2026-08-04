@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import RoomInspector from './inspectors/RoomInspector.vue'
 import IconInspector from './inspectors/IconInspector.vue'
 import LineInspector from './inspectors/LineInspector.vue'
+import TransitionInspector from './inspectors/TransitionInspector.vue'
 import { useSelectionStore } from '@/stores/selection'
 import { useTabsStore } from '@/stores/tabs'
 import { t } from '@/i18n'
@@ -61,6 +62,12 @@ const binding = computed(() => {
         key: `${ref.kind}:${ref.id}`,
         is: LineInspector,
         props: { mapId: tabsStore.activeTabId, lineId: ref.id },
+      }
+    case 'transition':
+      return {
+        key: `${ref.kind}:${ref.id}`,
+        is: TransitionInspector,
+        props: { mapId: tabsStore.activeTabId, transitionId: ref.id },
       }
     default:
       return null

@@ -8,6 +8,25 @@
 // first still round-trips: the matcher is built from the same string.
 
 import { t, templateMatcher } from './index'
+import { parseCell } from '@/core/cell'
+import type { Room } from '@/core/types'
+
+// What to call a room in a list. Rooms start unnamed, so every surface that
+// shows one needs the same answer, and a positional fallback is the only one
+// that distinguishes two unnamed rooms from each other.
+//
+// The cell is the room's row-major first: topmost, then leftmost, which is the
+// tiebreak the rest of the app uses. Its bounding-box corner would be simpler
+// and wrong, since an L-shaped room need not own it.
+export function roomLabel(room: Room): string {
+  if (room.name) return room.name
+  let first: { x: number; y: number } | null = null
+  for (const key of room.cells) {
+    const cell = parseCell(key)
+    if (!first || cell.y < first.y || (cell.y === first.y && cell.x < first.x)) first = cell
+  }
+  return first ? t('name.roomAt', { cell: `${first.x},${first.y}` }) : t('name.roomUnplaced')
+}
 
 // The name a room gets when there is no source name to derive one from: a
 // pasted cell fragment carries geometry and content but no identity.

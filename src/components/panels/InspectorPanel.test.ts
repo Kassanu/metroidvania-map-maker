@@ -10,10 +10,14 @@ import { mapScope, useModelStore } from '@/stores/model'
 import { assignRoomArea, paintCells, renameRoom, setRoomNotes } from '@/core/ops/rooms'
 import { createNewArea } from '@/core/ops/project'
 import { createLine, placeIcon, setIconColors, setIconLabel, setLineStyle } from '@/core/ops/markup'
+import { createFromBox, createTeleport, setLock } from '@/core/ops/doors'
 import { ok } from '@/core/testUtils'
 import { PROJECT_SCOPE } from '@/core/journal'
-import { WORLD_AREA_ID } from '@/core/ids'
-import type { AreaId, IconId, LineId, MapId, RoomId } from '@/core/ids'
+import { OPEN_LOCK_ID, WORLD_AREA_ID } from '@/core/ids'
+import type { AreaId, IconId, LineId, LockTypeId, MapId, RoomId, TransitionId } from '@/core/ids'
+
+// The one editable lock type the project ships with.
+const LOCKED_LOCK_ID = 'locked' as LockTypeId
 import type { CellKey } from '@/core/cell'
 
 // The Inspector's four states and the Room panel's three fields.
@@ -563,6 +567,224 @@ describe('InspectorPanel', () => {
       expect((panel.get('#inspector-line-arrow-end').element as HTMLInputElement).checked).toBe(
         true,
       )
+    })
+  })
+
+  describe('the Transition panel', () => {
+    function twoRooms() {
+      const model = useModelStore()
+      const mapId = useTabsStore().activeTabId
+      model.run('Rooms', mapScope(mapId), (tx) => {
+        const map = model.project.mapsById.get(mapId)!
+        const paint = (cells: CellKey[], name: string) => {
+          const room = paintCells(tx, model.project, map, cells, { areaId: WORLD_AREA_ID })
+          renameRoom(tx, map, room.id, name)
+          return room
+        }
+        paint(['0,0', '0,1'], 'West')
+        paint(['1,0', '1,1'], 'East')
+      })
+      return mapId
+    }
+
+    function select(mapId: MapId, id: TransitionId) {
+      useSelectionStore().set([{ kind: 'transition', id }], mapId)
+    }
+
+    async function mountWithDoor() {
+      const mapId = twoRooms()
+      const model = useModelStore()
+      let door!: TransitionId
+      model.run('Door', mapScope(mapId), (tx) => {
+        const map = model.project.mapsById.get(mapId)!
+        door = ok(createFromBox(tx, model.project, map, '0,0', '1,0'))[0].id
+      })
+      const panel = mountPanel()
+      select(mapId, door)
+      await nextTick()
+      return { mapId, door, panel }
+    }
+
+    function transitionOf(mapId: MapId, id: TransitionId) {
+      return useModelStore().project.mapsById.get(mapId)!.transitions.get(id)!
+    }
+
+    it('names the kind read-only, with no control to change it', async () => {
+      const { panel } = await mountWithDoor()
+      expect(panel.get('[data-testid="transition-kind"]').text()).toBe('Door')
+      expect(panel.find('#inspector-transition-kind').exists()).toBe(false)
+    })
+
+    it('names both rooms, A first', async () => {
+      const { panel } = await mountWithDoor()
+      // A is the room the box drag started in.
+      expect(panel.get('[data-testid="transition-end-a"]').text()).toBe('West')
+      expect(panel.get('[data-testid="transition-end-b"]').text()).toBe('East')
+    })
+
+    it('carries no label field, unlike an icon or a line', async () => {
+      const { panel } = await mountWithDoor()
+      expect(panel.find('#inspector-transition-label').exists()).toBe(false)
+    })
+
+    it('starts synced, and sets both ends from one dropdown', async () => {
+      const { panel, mapId, door } = await mountWithDoor()
+      expect(
+        (panel.get('#inspector-transition-lock-sync').element as HTMLInputElement).checked,
+      ).toBe(true)
+
+      await panel.get('#inspector-transition-lock').setValue(LOCKED_LOCK_ID)
+
+      expect(transitionOf(mapId, door).locks).toEqual({ a: LOCKED_LOCK_ID, b: LOCKED_LOCK_ID })
+      expect(useModelStore().status.undoLabel).toBe('Change Lock')
+    })
+
+    it('unsyncing offers a dropdown per end, and each sets only its own', async () => {
+      const { panel, mapId, door } = await mountWithDoor()
+      await panel.get('#inspector-transition-lock-sync').setValue(false)
+
+      expect(panel.find('#inspector-transition-lock').exists()).toBe(false)
+      await panel.get('#inspector-transition-lock-a').setValue(LOCKED_LOCK_ID)
+
+      expect(transitionOf(mapId, door).locks).toEqual({ a: LOCKED_LOCK_ID, b: OPEN_LOCK_ID })
+    })
+
+    // The toggle makes its claim true rather than displaying it: one dropdown
+    // over two different locks would show a value neither end has.
+    it('re-syncing copies A onto B', async () => {
+      const { panel, mapId, door } = await mountWithDoor()
+      await panel.get('#inspector-transition-lock-sync').setValue(false)
+      await panel.get('#inspector-transition-lock-b').setValue(LOCKED_LOCK_ID)
+      expect(transitionOf(mapId, door).locks).toEqual({ a: OPEN_LOCK_ID, b: LOCKED_LOCK_ID })
+
+      await panel.get('#inspector-transition-lock-sync').setValue(true)
+
+      expect(transitionOf(mapId, door).locks).toEqual({ a: OPEN_LOCK_ID, b: OPEN_LOCK_ID })
+    })
+
+    it('opens unsynced when the two ends already differ', async () => {
+      const { mapId, door } = await mountWithDoor()
+      const model = useModelStore()
+      model.run('Asymmetric', mapScope(mapId), (tx) =>
+        setLock(tx, model.project, model.project.mapsById.get(mapId)!, door, 'b', LOCKED_LOCK_ID),
+      )
+
+      // A fresh mount, which is what selecting it again produces.
+      wrapper?.unmount()
+      const panel = mountPanel()
+      select(mapId, door)
+      await nextTick()
+
+      expect(
+        (panel.get('#inspector-transition-lock-sync').element as HTMLInputElement).checked,
+      ).toBe(false)
+      expect(panel.find('#inspector-transition-lock-a').exists()).toBe(true)
+    })
+
+    // The whole point of chunk 3's stored direction: picking B to A leaves A
+    // and B exactly where they were.
+    it('offers all three directions, and reversing moves nothing else', async () => {
+      const { panel, mapId, door } = await mountWithDoor()
+      const before = panel.get('[data-testid="transition-end-a"]').text()
+      const field = panel.get('#inspector-transition-direction')
+      expect(field.findAll('option').map((option) => option.element.value)).toEqual([
+        'both',
+        'aToB',
+        'bToA',
+      ])
+
+      await field.setValue('bToA')
+
+      expect(transitionOf(mapId, door).direction).toBe('bToA')
+      expect((field.element as HTMLSelectElement).value).toBe('bToA')
+      expect(panel.get('[data-testid="transition-end-a"]').text()).toBe(before)
+      expect(useModelStore().status.undoLabel).toBe('Change Direction')
+    })
+
+    it('commits notes on blur', async () => {
+      const { panel, mapId, door } = await mountWithDoor()
+      const notes = panel.get('#inspector-transition-notes')
+      await notes.setValue('Needs the ice beam')
+      await notes.trigger('blur')
+      expect(transitionOf(mapId, door).notes).toBe('Needs the ice beam')
+    })
+
+    it('falls back to a positional label for an unnamed room', async () => {
+      const mapId = useTabsStore().activeTabId
+      const model = useModelStore()
+      let door!: TransitionId
+      model.run('Rooms', mapScope(mapId), (tx) => {
+        const map = model.project.mapsById.get(mapId)!
+        paintCells(tx, model.project, map, ['0,0'], { areaId: WORLD_AREA_ID })
+        paintCells(tx, model.project, map, ['1,0'], { areaId: WORLD_AREA_ID })
+        door = ok(createFromBox(tx, model.project, map, '0,0', '1,0'))[0].id
+      })
+      const panel = mountPanel()
+      select(mapId, door)
+      await nextTick()
+
+      expect(panel.get('[data-testid="transition-end-a"]').text()).toBe('Room at 0,0')
+      expect(panel.get('[data-testid="transition-end-b"]').text()).toBe('Room at 1,0')
+    })
+
+    describe('a cross-tab teleport', () => {
+      async function mountWithTeleport(from: 'origin' | 'destination') {
+        const model = useModelStore()
+        const tabs = useTabsStore()
+        const originId = tabs.activeTabId
+        tabs.addTab()
+        const farId = tabs.activeTabId
+        tabs.activate(originId)
+
+        let teleport!: TransitionId
+        model.run('Setup', mapScope(originId), (tx) => {
+          const origin = model.project.mapsById.get(originId)!
+          const far = model.project.mapsById.get(farId)!
+          const here = paintCells(tx, model.project, origin, ['0,0'], { areaId: WORLD_AREA_ID })
+          const there = paintCells(tx, model.project, far, ['5,5'], { areaId: WORLD_AREA_ID })
+          renameRoom(tx, origin, here.id, 'Elevator Room')
+          renameRoom(tx, far, there.id, 'Deep Cave')
+          teleport = ok(
+            createTeleport(
+              tx,
+              model.project,
+              { mapId: originId, cell: '0,0' },
+              { mapId: farId, cell: '5,5' },
+            ),
+          ).id
+        })
+
+        const viewing = from === 'origin' ? originId : farId
+        tabs.activate(viewing)
+        const panel = mountPanel()
+        select(viewing, teleport)
+        await nextTick()
+        return { originId, farId, teleport, panel }
+      }
+
+      it('names the far end with the map it is on', async () => {
+        const { panel } = await mountWithTeleport('origin')
+        expect(panel.get('[data-testid="transition-end-a"]').text()).toBe('Elevator Room')
+        expect(panel.get('[data-testid="transition-end-b"]').text()).toContain('Deep Cave')
+        expect(panel.get('[data-testid="transition-end-b"]').text()).toContain('Map 2')
+      })
+
+      // The destination tab draws a marker rebuilt from the far-end index and
+      // never holds the object, so every op here has to reach through
+      // `resolveTransition` to the map that stores it.
+      it('inspects and edits identically from the destination tab', async () => {
+        const { panel, originId, teleport } = await mountWithTeleport('destination')
+
+        expect(panel.get('[data-testid="transition-kind"]').text()).toBe('Teleport')
+        // A stays A whichever tab is looking.
+        expect(panel.get('[data-testid="transition-end-a"]').text()).toContain('Elevator Room')
+
+        await panel.get('#inspector-transition-direction').setValue('bToA')
+
+        const stored = useModelStore().project.mapsById.get(originId)!.transitions.get(teleport)!
+        expect(stored.direction).toBe('bToA')
+        expect(stored.kind === 'teleport' && stored.a.mapId).toBe(originId)
+      })
     })
   })
 })

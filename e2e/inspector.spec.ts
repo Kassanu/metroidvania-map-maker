@@ -166,4 +166,81 @@ test.describe('Inspector', () => {
     expect(await undoLabel(page)).toBe('Undo Change Line Arrows')
     expect(errors).toEqual([])
   })
+
+  test('inspects a door, names both rooms, and reverses it', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const grid = await gridMapping(page)
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    // The seed's two-segment door on the seam at x = 3, between "Landing Site"
+    // and "Corridor". Door mode selects a transition on click.
+    await page.keyboard.press('3')
+    const seam = grid.at(3, 0.5)
+    await page.mouse.click(seam.x, seam.y)
+
+    await expect(inspector.getByTestId('transition-kind')).toHaveText('Door')
+    await expect(inspector.getByTestId('transition-end-a')).toHaveText('Landing Site')
+    await expect(inspector.getByTestId('transition-end-b')).toHaveText('Corridor')
+
+    const direction = inspector.getByLabel('Direction', { exact: true })
+    await expect(direction).toHaveValue('both')
+    await direction.selectOption('bToA')
+
+    expect(await undoLabel(page)).toBe('Undo Change Direction')
+    // A stays A: the whole reason direction is stored rather than encoded as
+    // endpoint order.
+    await expect(inspector.getByTestId('transition-end-a')).toHaveText('Landing Site')
+    expect(errors).toEqual([])
+  })
+
+  test('edits a cross-tab teleport from the tab that only draws its far end', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    // The seed's teleport runs Surface (0,2) -> Caves (1,1). Selecting it from
+    // Caves reaches an object that map does not store.
+    await page.getByRole('tab', { name: 'Caves' }).click()
+    const grid = await gridMapping(page)
+    await page.keyboard.press('3')
+    const farEnd = grid.at(1.5, 1.5)
+    await page.mouse.click(farEnd.x, farEnd.y)
+
+    await expect(inspector.getByTestId('transition-kind')).toHaveText('Teleport')
+    // The near end is on Surface, so it names the map as well as the room.
+    await expect(inspector.getByTestId('transition-end-a')).toContainText('Surface')
+
+    await inspector.getByLabel('Direction', { exact: true }).selectOption('aToB')
+    expect(await undoLabel(page)).toBe('Undo Change Direction')
+    expect(errors).toEqual([])
+  })
+
+  test('opens a door with differing ends unsynced, and re-syncing copies A onto B', async ({
+    page,
+  }) => {
+    const { errors } = await openApp(page)
+    const grid = await gridMapping(page)
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await page.keyboard.press('3')
+    const seam = grid.at(3, 0.5)
+    await page.mouse.click(seam.x, seam.y)
+
+    // The seed's door is deliberately asymmetric: a missile door on the A side,
+    // open on the B side. One dropdown over two different locks would show a
+    // value neither end has, so the panel opens with the pair split.
+    const sync = inspector.getByLabel('Same lock at both ends', { exact: true })
+    await expect(sync).not.toBeChecked()
+    await expect(inspector.getByLabel('Lock at A', { exact: true })).toHaveValue('lock_01')
+    await expect(inspector.getByLabel('Lock at B', { exact: true })).toHaveValue('open')
+    await expect(inspector.getByLabel('Lock', { exact: true })).toBeHidden()
+
+    // Turning it on makes the claim true rather than just displaying it.
+    await sync.check()
+
+    expect(await undoLabel(page)).toBe('Undo Change Lock')
+    const single = inspector.getByLabel('Lock', { exact: true })
+    await expect(single).toBeVisible()
+    await expect(single).toHaveValue('lock_01')
+    expect(errors).toEqual([])
+  })
 })

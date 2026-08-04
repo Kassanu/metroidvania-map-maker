@@ -74,9 +74,9 @@ export function teleportScene(project: ProjectModel, mapId: MapId): TeleportScen
       continue
     }
 
-    // Cross-tab, seen from its origin: this map holds the A end, and B is the
-    // other tab. (B is the one on this map only if the ends were swapped, in
-    // which case the transition was re-homed to that map: see `setDirection`.)
+    // Cross-tab, seen from its origin: this map holds one end and the other
+    // tab holds the other. Which of A and B is here is fixed at creation and
+    // never changes, direction included.
     const here = transition.a.mapId === mapId ? 'a' : 'b'
     const there = here === 'a' ? transition.b : transition.a
     scene.ends.push(end(transition, here, leadsTo(project, there)))

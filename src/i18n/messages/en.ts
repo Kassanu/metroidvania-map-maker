@@ -16,6 +16,10 @@ export const en = {
   'name.project': 'Untitled Project',
   'name.map': 'Map {n}',
   'name.room': 'Room {n}',
+  // What an unnamed room is called wherever one has to be listed. Rooms start
+  // unnamed, and two of them need telling apart.
+  'name.roomAt': 'Room at {cell}',
+  'name.roomUnplaced': 'Empty room',
   'name.copy': '{base} copy',
   'name.copyNth': '{base} copy {n}',
   // The two immutable fallbacks and the one shipped editable lock type. Core
@@ -71,6 +75,9 @@ export const en = {
   'history.lineArrow': 'Change Line Arrows',
   'history.lineLabel': 'Edit Line Label',
   'history.lineNotes': 'Edit Line Notes',
+  'history.setLock': 'Change Lock',
+  'history.setDirection': 'Change Direction',
+  'history.transitionNotes': 'Edit Transition Notes',
   'history.moveSelection': 'Move Selection',
   // Named after what it does to the map rather than after what was dragged: the
   // cells leave their rooms and arrive as new ones, which is not a move of
@@ -272,6 +279,24 @@ export const en = {
   'inspector.color': 'Color',
   'inspector.arrowStart': 'Arrow at start',
   'inspector.arrowEnd': 'Arrow at end',
+  'inspector.type': 'Type',
+  'inspector.typeEdge': 'Door',
+  'inspector.typeElevator': 'Elevator',
+  'inspector.typeTeleport': 'Teleport',
+  'inspector.endA': 'End A',
+  'inspector.endB': 'End B',
+  // A cross-tab teleport's far end is on another map, and the room name alone
+  // would not say which.
+  'inspector.endOnMap': '{room} ({map})',
+  'inspector.endMissing': 'No room',
+  'inspector.lock': 'Lock',
+  'inspector.lockA': 'Lock at A',
+  'inspector.lockB': 'Lock at B',
+  'inspector.lockSync': 'Same lock at both ends',
+  'inspector.direction': 'Direction',
+  'inspector.directionBoth': 'Both ways',
+  'inspector.directionAToB': 'A to B',
+  'inspector.directionBToA': 'B to A',
 
   'toolbar.markup.label': 'Markup options',
   'toolbar.markup.plate': 'Plate',
