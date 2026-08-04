@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import RoomInspector from './inspectors/RoomInspector.vue'
+import IconInspector from './inspectors/IconInspector.vue'
+import LineInspector from './inspectors/LineInspector.vue'
 import { useSelectionStore } from '@/stores/selection'
 import { useTabsStore } from '@/stores/tabs'
 import { t } from '@/i18n'
@@ -47,6 +49,18 @@ const binding = computed(() => {
         key: `${ref.kind}:${ref.id}`,
         is: RoomInspector,
         props: { mapId: tabsStore.activeTabId, roomId: ref.id },
+      }
+    case 'icon':
+      return {
+        key: `${ref.kind}:${ref.id}`,
+        is: IconInspector,
+        props: { mapId: tabsStore.activeTabId, iconId: ref.id },
+      }
+    case 'line':
+      return {
+        key: `${ref.kind}:${ref.id}`,
+        is: LineInspector,
+        props: { mapId: tabsStore.activeTabId, lineId: ref.id },
       }
     default:
       return null

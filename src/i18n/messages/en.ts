@@ -64,6 +64,13 @@ export const en = {
   'history.renameRoom': 'Rename Room',
   'history.roomNotes': 'Edit Room Notes',
   'history.assignArea': 'Change Area',
+  'history.iconColors': 'Change Icon Colors',
+  'history.iconLabel': 'Edit Icon Label',
+  'history.iconNotes': 'Edit Icon Notes',
+  'history.lineColor': 'Change Line Color',
+  'history.lineArrow': 'Change Line Arrows',
+  'history.lineLabel': 'Edit Line Label',
+  'history.lineNotes': 'Edit Line Notes',
   'history.moveSelection': 'Move Selection',
   // Named after what it does to the map rather than after what was dragged: the
   // cells leave their rooms and arrive as new ones, which is not a move of
@@ -259,6 +266,12 @@ export const en = {
   'inspector.notes': 'Notes',
   'inspector.area': 'Area',
   'inspector.areaColorHint': 'Room colors come from the area',
+  'inspector.plate': 'Plate',
+  'inspector.glyph': 'Glyph',
+  'inspector.label': 'Label',
+  'inspector.color': 'Color',
+  'inspector.arrowStart': 'Arrow at start',
+  'inspector.arrowEnd': 'Arrow at end',
 
   'toolbar.markup.label': 'Markup options',
   'toolbar.markup.plate': 'Plate',

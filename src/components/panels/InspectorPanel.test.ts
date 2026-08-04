@@ -9,11 +9,11 @@ import { useSelectionStore } from '@/stores/selection'
 import { mapScope, useModelStore } from '@/stores/model'
 import { assignRoomArea, paintCells, renameRoom, setRoomNotes } from '@/core/ops/rooms'
 import { createNewArea } from '@/core/ops/project'
-import { createLine } from '@/core/ops/markup'
+import { createLine, placeIcon, setIconColors, setIconLabel, setLineStyle } from '@/core/ops/markup'
 import { ok } from '@/core/testUtils'
 import { PROJECT_SCOPE } from '@/core/journal'
 import { WORLD_AREA_ID } from '@/core/ids'
-import type { AreaId, LineId, MapId, RoomId } from '@/core/ids'
+import type { AreaId, IconId, LineId, MapId, RoomId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 
 // The Inspector's four states and the Room panel's three fields.
@@ -40,6 +40,7 @@ describe('InspectorPanel', () => {
     roomA: RoomId
     roomB: RoomId
     line: LineId
+    icon: IconId
     brinstar: AreaId
   }
 
@@ -49,6 +50,7 @@ describe('InspectorPanel', () => {
     let roomA!: RoomId
     let roomB!: RoomId
     let line!: LineId
+    let icon!: IconId
     let brinstar!: AreaId
 
     model.run('Setup', mapScope(mapId), (tx) => {
@@ -68,12 +70,15 @@ describe('InspectorPanel', () => {
           arrowEnd: false,
         }),
       ).id
+      icon = ok(
+        placeIcon(tx, map, '0,0', 'save', { plateColor: '#111111', glyphColor: '#222222' }),
+      ).id
     })
     model.run('Area', PROJECT_SCOPE, (tx) => {
       brinstar = createNewArea(tx, model.project, 'Brinstar', '#3355aa', '#112244').id
     })
 
-    return { mapId, roomA, roomB, line, brinstar }
+    return { mapId, roomA, roomB, line, icon, brinstar }
   }
 
   function mountPanel() {
@@ -87,6 +92,14 @@ describe('InspectorPanel', () => {
 
   function room(mapId: MapId, roomId: RoomId) {
     return useModelStore().project.mapsById.get(mapId)!.rooms.get(roomId)!
+  }
+
+  function iconOf(mapId: MapId, iconId: IconId) {
+    return useModelStore().project.mapsById.get(mapId)!.icons.get(iconId)!
+  }
+
+  function lineOf(mapId: MapId, lineId: LineId) {
+    return useModelStore().project.mapsById.get(mapId)!.lines.get(lineId)!
   }
 
   describe('the four states', () => {
@@ -135,9 +148,9 @@ describe('InspectorPanel', () => {
     })
 
     it('renders nothing for a single object of a kind with no panel yet', async () => {
-      const { mapId, line } = setup()
+      const { mapId, brinstar } = setup()
       const panel = mountPanel()
-      useSelectionStore().set([{ kind: 'line', id: line }], mapId)
+      useSelectionStore().set([{ kind: 'area', id: brinstar }], mapId)
       await nextTick()
       expect(panel.text()).toBe('')
     })
@@ -382,6 +395,174 @@ describe('InspectorPanel', () => {
       const reseeded = panel.get('#inspector-room-name').element as HTMLInputElement
       expect(reseeded.value).toBe(room(mapId, roomB).name)
       expect(room(mapId, roomA).name).not.toBe('Half typed')
+    })
+  })
+
+  describe('the Icon panel', () => {
+    async function mountWithIcon() {
+      const fixture = setup()
+      const panel = mountPanel()
+      useSelectionStore().set([{ kind: 'icon', id: fixture.icon }], fixture.mapId)
+      await nextTick()
+      return { ...fixture, panel }
+    }
+
+    it("shows both of the icon's own fills", async () => {
+      const { panel, mapId, icon } = await mountWithIcon()
+      expect((panel.get('#inspector-icon-plate').element as HTMLInputElement).value).toBe(
+        iconOf(mapId, icon).plateColor,
+      )
+      expect((panel.get('#inspector-icon-glyph').element as HTMLInputElement).value).toBe(
+        iconOf(mapId, icon).glyphColor,
+      )
+    })
+
+    it('recolours one fill without disturbing the other', async () => {
+      const { panel, mapId, icon } = await mountWithIcon()
+      const glyphBefore = iconOf(mapId, icon).glyphColor
+      const field = panel.get('#inspector-icon-plate')
+
+      ;(field.element as HTMLInputElement).value = '#abcdef'
+      await field.trigger('change')
+
+      expect(iconOf(mapId, icon).plateColor).toBe('#abcdef')
+      expect(iconOf(mapId, icon).glyphColor).toBe(glyphBefore)
+      expect(useModelStore().status.undoLabel).toBe('Change Icon Colors')
+    })
+
+    // The same rule ColorField exists for, asserted on the icon's swatches too:
+    // dragging through the gamut must not fill the undo stack.
+    it('ignores `input` from either swatch', async () => {
+      const { panel, mapId, icon } = await mountWithIcon()
+      const before = iconOf(mapId, icon).glyphColor
+      const field = panel.get('#inspector-icon-glyph')
+
+      ;(field.element as HTMLInputElement).value = '#654321'
+      await field.trigger('input')
+
+      expect(iconOf(mapId, icon).glyphColor).toBe(before)
+    })
+
+    it('shows a recolour made anywhere else', async () => {
+      const { panel, mapId, icon } = await mountWithIcon()
+      const model = useModelStore()
+
+      model.run('Elsewhere', mapScope(mapId), (tx) =>
+        setIconColors(tx, model.project.mapsById.get(mapId)!, icon, {
+          plateColor: '#0f0f0f',
+          glyphColor: '#f0f0f0',
+        }),
+      )
+      await nextTick()
+
+      expect((panel.get('#inspector-icon-plate').element as HTMLInputElement).value).toBe('#0f0f0f')
+      expect((panel.get('#inspector-icon-glyph').element as HTMLInputElement).value).toBe('#f0f0f0')
+    })
+
+    it('writes a label, and clears one', async () => {
+      const { panel, mapId, icon } = await mountWithIcon()
+      const field = panel.get('#inspector-icon-label')
+
+      await field.setValue('Missile')
+      await field.trigger('blur')
+      expect(iconOf(mapId, icon).label).toBe('Missile')
+
+      await field.setValue('')
+      await field.trigger('blur')
+      expect(iconOf(mapId, icon).label).toBe('')
+    })
+
+    it('shows a label written anywhere else', async () => {
+      const { panel, mapId, icon } = await mountWithIcon()
+      const model = useModelStore()
+
+      model.run('Elsewhere', mapScope(mapId), (tx) =>
+        setIconLabel(tx, model.project.mapsById.get(mapId)!, icon, 'From elsewhere'),
+      )
+      await nextTick()
+
+      expect((panel.get('#inspector-icon-label').element as HTMLInputElement).value).toBe(
+        'From elsewhere',
+      )
+    })
+  })
+
+  describe('the Line panel', () => {
+    async function mountWithLine() {
+      const fixture = setup()
+      const panel = mountPanel()
+      useSelectionStore().set([{ kind: 'line', id: fixture.line }], fixture.mapId)
+      await nextTick()
+      return { ...fixture, panel }
+    }
+
+    it('shows the stored colour, arrows and label', async () => {
+      const { panel, mapId, line } = await mountWithLine()
+      expect((panel.get('#inspector-line-color').element as HTMLInputElement).value).toBe(
+        lineOf(mapId, line).color,
+      )
+      expect((panel.get('#inspector-line-arrow-start').element as HTMLInputElement).checked).toBe(
+        false,
+      )
+    })
+
+    // The whole reason ColorField exists. A native picker fires `input` per
+    // pixel of a drag through the gamut, and one undo entry per pixel is the
+    // failure mode this rules out.
+    it('ignores `input` from the colour picker and commits only on `change`', async () => {
+      const { panel, mapId, line } = await mountWithLine()
+      const model = useModelStore()
+      const before = model.status.undoLabel
+      const field = panel.get('#inspector-line-color')
+
+      ;(field.element as HTMLInputElement).value = '#123456'
+      await field.trigger('input')
+      expect(lineOf(mapId, line).color).toBe('#ffcc00')
+      expect(model.status.undoLabel).toBe(before)
+
+      await field.trigger('change')
+      expect(lineOf(mapId, line).color).toBe('#123456')
+      expect(model.status.undoLabel).toBe('Change Line Color')
+    })
+
+    it('toggles each arrowhead independently', async () => {
+      const { panel, mapId, line } = await mountWithLine()
+
+      await panel.get('#inspector-line-arrow-end').setValue(true)
+      expect(lineOf(mapId, line).arrowEnd).toBe(true)
+      expect(lineOf(mapId, line).arrowStart).toBe(false)
+
+      await panel.get('#inspector-line-arrow-start').setValue(true)
+      expect(lineOf(mapId, line).arrowStart).toBe(true)
+      expect(lineOf(mapId, line).arrowEnd).toBe(true)
+    })
+
+    it('writes a label and notes', async () => {
+      const { panel, mapId, line } = await mountWithLine()
+
+      const label = panel.get('#inspector-line-label')
+      await label.setValue('Shortcut')
+      await label.trigger('blur')
+      expect(lineOf(mapId, line).label).toBe('Shortcut')
+
+      const notes = panel.get('#inspector-line-notes')
+      await notes.setValue('Needs the grapple')
+      await notes.trigger('blur')
+      expect(lineOf(mapId, line).notes).toBe('Needs the grapple')
+    })
+
+    it('shows a restyle made anywhere else', async () => {
+      const { panel, mapId, line } = await mountWithLine()
+      const model = useModelStore()
+
+      model.run('Elsewhere', mapScope(mapId), (tx) =>
+        setLineStyle(tx, model.project.mapsById.get(mapId)!, line, 'arrowEnd', true),
+      )
+      await nextTick()
+
+      expect((panel.get('#inspector-line-arrow-end').element as HTMLInputElement).checked).toBe(
+        true,
+      )
     })
   })
 })
