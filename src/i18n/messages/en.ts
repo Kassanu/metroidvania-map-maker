@@ -16,6 +16,7 @@ export const en = {
   'name.project': 'Untitled Project',
   'name.map': 'Map {n}',
   'name.room': 'Room {n}',
+  'name.area': 'Area {n}',
   // What an unnamed room is called wherever one has to be listed. Rooms start
   // unnamed, and two of them need telling apart.
   'name.roomAt': 'Room at {cell}',
@@ -68,6 +69,7 @@ export const en = {
   'history.renameRoom': 'Rename Room',
   'history.roomNotes': 'Edit Room Notes',
   'history.assignArea': 'Change Area',
+  'history.addArea': 'Add Area',
   'history.iconColors': 'Change Icon Colors',
   'history.iconLabel': 'Edit Icon Label',
   'history.iconNotes': 'Edit Icon Notes',
@@ -263,6 +265,13 @@ export const en = {
   'panel.hierarchy': 'Hierarchy',
   'panel.iconLibrary': 'Icon Library',
   'panel.inspector': 'Inspector',
+
+  'hierarchy.tree': 'Areas and rooms',
+  'hierarchy.expandArea': 'Expand {name}',
+  'hierarchy.collapseArea': 'Collapse {name}',
+  'hierarchy.filter': 'Filter',
+  'hierarchy.addArea': 'New area',
+  'hierarchy.noMatches': 'Nothing matches "{query}"',
 
   // The two counts are separate keys rather than one plural, because this
   // catalogue interpolates and does not decline.

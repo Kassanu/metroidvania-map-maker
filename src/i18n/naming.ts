@@ -47,6 +47,22 @@ export function freshRoomName(existingNames: readonly string[]): string {
   return t('name.room', { n })
 }
 
+// The name a new area gets from the Hierarchy's `+`. Same lowest-unused scan
+// as rooms and maps, and the same consequence: only an exact match counts as
+// used, so `Area 07` and `Area 2 copy` both leave their numbers free.
+export function freshAreaName(existingNames: readonly string[]): string {
+  const matchAreaName = templateMatcher(t('name.area'), { n: '\\d+' })
+  const used = new Set(
+    existingNames
+      .map((name) => matchAreaName(name)?.n)
+      .filter((n): n is string => n !== undefined)
+      .map(Number),
+  )
+  let n = 1
+  while (used.has(n)) n++
+  return t('name.area', { n })
+}
+
 // `existingNames` is what the new name has to avoid. Whichever scope the caller
 // is naming within: every map in the project, or every room on one map.
 export function copyName(originalName: string, existingNames: readonly string[]): string {
