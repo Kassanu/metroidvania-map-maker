@@ -18,7 +18,7 @@ import { parseEdge, segmentFromEdge } from '@/core/cell'
 import type { EdgeAxis, EdgeKey } from '@/core/cell'
 import { contiguousRuns } from '@/core/ops/transitions'
 import type { LockTypeId, TransitionId } from '@/core/ids'
-import type { MapModel } from '@/core/types'
+import type { Direction, MapModel } from '@/core/types'
 
 // How much wall is left standing at each end of a door's opening, as a
 // fraction of one cell.
@@ -57,8 +57,10 @@ export interface DoorRun {
   // room is on the `lo` side throughout. But the type permits a mixture and one
   // arrow cannot draw two directions, so the first segment decides.
   aSide: 'lo' | 'hi'
-  // Draws an arrow through the edge, from A's side to B's.
-  oneWay: boolean
+  // Which way the arrow through the edge points, or `both` for no arrow at
+  // all. `aToB` runs from A's side across the seam; `bToA` is the same line
+  // travelled the other way.
+  direction: Direction
 }
 
 // The open part of one edge, as a fraction of that edge's own length measured
@@ -97,7 +99,7 @@ export function doorRuns(map: MapModel): DoorRun[] {
         edges,
         locks: transition.locks,
         aSide: segments[0].aSide,
-        oneWay: transition.oneWay,
+        direction: transition.direction,
       })
     }
   }

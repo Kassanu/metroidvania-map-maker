@@ -33,6 +33,7 @@ import type { AreaId, IconId, LineId, LockTypeId, MapId, RoomId, TransitionId } 
 import { contiguousRuns, isSegmentValid, isTransitionValid } from '../ops/transitions'
 import { farEndOf, transitionAnchors } from '../primitives'
 import type {
+  Direction,
   DoorSegment,
   IconObject,
   LineObject,
@@ -174,7 +175,7 @@ function serializeTransition(transition: Transition): JsonTransition {
     id: transition.id,
     locks: { a: transition.locks.a, b: transition.locks.b },
     notes: transition.notes,
-    oneWay: transition.oneWay,
+    direction: transition.direction,
   }
   switch (transition.kind) {
     case 'edge':
@@ -826,6 +827,14 @@ function occupiedByTeleport(
   return false
 }
 
+// An absent or unrecognised direction loads as two-way. Two-way is the value
+// that constrains nothing, so a file written by a newer version naming a
+// direction this one does not know still opens, with a transition that can be
+// travelled rather than one that cannot.
+function readDirection(raw: unknown): Direction {
+  return raw === 'aToB' || raw === 'bToA' ? raw : 'both'
+}
+
 function resolveLock(id: string, map: MapModel, project: ProjectModel, log: LoadLog): LockTypeId {
   if (project.lockTypes.has(id as LockTypeId)) return id as LockTypeId
   log.add({ kind: 'lock-remapped', map: map.name })
@@ -845,7 +854,7 @@ function deserializeTransition(
       a: resolveLock(json.locks?.a ?? OPEN_LOCK_ID, map, project, log),
       b: resolveLock(json.locks?.b ?? OPEN_LOCK_ID, map, project, log),
     },
-    oneWay: json.oneWay ?? false,
+    direction: readDirection(json.direction),
     notes: json.notes ?? '',
   }
 

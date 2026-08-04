@@ -91,7 +91,7 @@ describe('doorRuns', () => {
           { edge: edgeKey(2, 1, 'V'), aSide: 'lo' },
         ],
         locks: { a: OPEN_LOCK_ID, b: OPEN_LOCK_ID },
-        oneWay: false,
+        direction: 'both',
         notes: '',
       })
     })
@@ -152,7 +152,7 @@ describe('doorOpening', () => {
       edges: [],
       locks: { a: OPEN_LOCK_ID, b: OPEN_LOCK_ID },
       aSide: 'lo',
-      oneWay: false,
+      direction: 'both',
     }
 
     expect(doorOpening(run)).toEqual({
@@ -171,7 +171,7 @@ describe('doorOpening', () => {
       edges: [],
       locks: { a: OPEN_LOCK_ID, b: OPEN_LOCK_ID },
       aSide: 'lo',
-      oneWay: false,
+      direction: 'both',
     }
 
     expect(doorOpening(run)).toEqual({

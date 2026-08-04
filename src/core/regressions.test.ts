@@ -799,10 +799,12 @@ describe('inner walls must rotate and mirror with the room', () => {
   })
 })
 
-describe('setDirection B->A on a cross-tab teleport', () => {
-  // Direction is encoded as endpoint order, so B->A swaps the ends, which for
-  // a cross-tab teleport swaps which map is the origin. A teleport is stored
-  // once under its origin map, so a swap must re-file it to its new origin.
+describe('setDirection on a cross-tab teleport', () => {
+  // Direction is a stored field, so reversing one changes nothing about where
+  // a teleport lives. It used to be encoded as endpoint order, which for a
+  // cross-tab teleport swapped which map was the origin and forced a re-file:
+  // a teleport is stored once, under its origin map. These pin that the
+  // re-filing is gone rather than merely unexercised.
   function crossTabTeleport() {
     const { project, map: m1 } = setup()
     const seed = tx()
@@ -822,7 +824,7 @@ describe('setDirection B->A on a cross-tab teleport', () => {
     return { project, m1, m2, far, teleport }
   }
 
-  it('re-homes the teleport onto its new origin map', () => {
+  it('leaves the teleport on the map that stores it', () => {
     const { project, m1, m2, teleport } = crossTabTeleport()
 
     const flip = tx(m1)
@@ -830,12 +832,25 @@ describe('setDirection B->A on a cross-tab teleport', () => {
     flip.commit()
 
     expect(checkInvariants(project)).toEqual([])
-    // Stored once, under whichever map now holds endpoint A.
-    expect(m2.transitions.has(teleport.id)).toBe(true)
-    expect(m1.transitions.has(teleport.id)).toBe(false)
-    // ...and the far end now points back at the original origin.
-    expect(getFarEnd(project.teleportFarEnds, m1.id, '0,0')?.transitionId).toBe(teleport.id)
+    expect(m1.transitions.get(teleport.id)?.direction).toBe('bToA')
+    expect(m2.transitions.has(teleport.id)).toBe(false)
+    // The far-end index is untouched: still one entry, still on the
+    // destination map at the cell the teleport was drawn to.
+    expect(getFarEnd(project.teleportFarEnds, m2.id, '5,5')?.transitionId).toBe(teleport.id)
     expect(farEndCount(project.teleportFarEnds)).toBe(1)
+  })
+
+  it('can be set from the destination tab, and still edits the storing map', () => {
+    const { project, m1, m2, teleport } = crossTabTeleport()
+
+    // `resolveTransition` is what makes this work: m2 draws a marker rebuilt
+    // from the far-end index and never holds the object.
+    const flip = tx(m2)
+    setDirection(flip, project, m2, teleport.id, 'aToB')
+    flip.commit()
+
+    expect(m1.transitions.get(teleport.id)?.direction).toBe('aToB')
+    expect(checkInvariants(project)).toEqual([])
   })
 
   it('leaves the cascade able to reach it: it dies with the rooms it points at', () => {
@@ -845,17 +860,15 @@ describe('setDirection B->A on a cross-tab teleport', () => {
     setDirection(flip, project, m1, teleport.id, 'bToA')
     flip.commit()
 
-    // Deleting the room the (now) origin end sits on must take the teleport
-    // with it. Before the fix it survived, pointing at nothing.
     const wipe = tx(m2)
     deleteRooms(wipe, project, m2, [far.id])
     wipe.commit()
 
-    expect(m2.transitions.has(teleport.id)).toBe(false)
+    expect(m1.transitions.has(teleport.id)).toBe(false)
     expect(checkInvariants(project)).toEqual([])
   })
 
-  it('rolls back exactly, putting it back on the original map', () => {
+  it('rolls back exactly', () => {
     const { project, m1, teleport } = crossTabTeleport()
     const before = snapshot(project)
 
@@ -866,7 +879,7 @@ describe('setDirection B->A on a cross-tab teleport', () => {
     expect(snapshot(project)).toEqual(before)
   })
 
-  it('still swaps a same-map teleport in place', () => {
+  it('reverses a same-map teleport without moving its endpoints', () => {
     const { project, map } = setup()
     const paint = tx(map)
     paintCells(paint, project, map, ['0,0'], { areaId: WORLD_AREA_ID })
@@ -883,9 +896,9 @@ describe('setDirection B->A on a cross-tab teleport', () => {
     setDirection(flip, project, map, teleport.id, 'bToA')
     flip.commit()
 
-    const swapped = map.transitions.get(teleport.id)!
-    expect(swapped.kind === 'teleport' && swapped.a.cell).toBe('3,0')
-    expect(swapped.oneWay).toBe(true)
+    const reversed = map.transitions.get(teleport.id)!
+    expect(reversed.kind === 'teleport' && reversed.a.cell).toBe('0,0')
+    expect(reversed.direction).toBe('bToA')
     expect(checkInvariants(project)).toEqual([])
   })
 })
@@ -2048,7 +2061,7 @@ describe('a cross-tab teleport is editable from either tab', () => {
     setDirection(flip, project, second, teleport.id, 'aToB')
     flip.commit()
 
-    expect(map.transitions.get(teleport.id)!.oneWay).toBe(true)
+    expect(map.transitions.get(teleport.id)!.direction).toBe('aToB')
     expect(checkInvariants(project)).toEqual([])
   })
 

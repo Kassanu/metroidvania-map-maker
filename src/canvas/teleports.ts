@@ -17,7 +17,7 @@ import { parseCell } from '@/core/cell'
 import type { CellKey } from '@/core/cell'
 import { farEndsOnMap } from '@/core/farEnds'
 import type { LockTypeId, MapId, TransitionId } from '@/core/ids'
-import type { ProjectModel, TeleportTransition } from '@/core/types'
+import type { Direction, ProjectModel, TeleportTransition } from '@/core/types'
 
 export interface TeleportEnd {
   id: TransitionId
@@ -40,8 +40,9 @@ export interface TeleportLine {
   id: TransitionId
   from: CellKey
   to: CellKey
-  // Draws an arrowhead at the midpoint, pointing from A to B.
-  oneWay: boolean
+  // Draws an arrowhead at the midpoint. `aToB` points from A to B, `bToA` the
+  // other way, `both` draws none.
+  direction: Direction
 }
 
 export interface TeleportScene {
@@ -68,7 +69,7 @@ export function teleportScene(project: ProjectModel, mapId: MapId): TeleportScen
         id: transition.id,
         from: transition.a.cell,
         to: transition.b.cell,
-        oneWay: transition.oneWay,
+        direction: transition.direction,
       })
       continue
     }

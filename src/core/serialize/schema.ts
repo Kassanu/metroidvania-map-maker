@@ -10,7 +10,10 @@
 //   * Edge door segments carry `aSide` to name which boundary cell owns `locks.a`.
 
 export const FILE_FORMAT = 'metroidvania-map-maker'
-export const FILE_VERSION = 1
+// Bumped to 2 when `oneWay: boolean` became `direction`. A replaced field, not
+// an added one: a v1 file's one-way transitions would otherwise load two-way,
+// which loses data silently rather than loudly.
+export const FILE_VERSION = 2
 
 export type JsonCell = [number, number]
 export type JsonVertexSegment = [[number, number], [number, number]]
@@ -70,7 +73,9 @@ export interface JsonTransition {
   type: 'edge' | 'elevator' | 'teleport'
   locks: { a: string; b: string }
   notes?: string
-  oneWay?: boolean
+  // Omitted means two-way, which is what most transitions are. Replaced v1's
+  // `oneWay: boolean`, which could not express a reversed one-way.
+  direction?: 'both' | 'aToB' | 'bToA'
   geometry: JsonGeometry
 }
 

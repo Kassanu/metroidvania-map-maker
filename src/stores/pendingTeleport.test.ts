@@ -164,7 +164,7 @@ describe('pendingTeleport store', () => {
 
       const teleport = transitionsOn(mapId)[0]
       expect(teleport.locks).toEqual({ a: missile.id, b: missile.id })
-      expect(teleport.oneWay).toBe(true)
+      expect(teleport.direction).toBe('aToB')
     })
 
     it('does nothing at all when nothing is pending', () => {

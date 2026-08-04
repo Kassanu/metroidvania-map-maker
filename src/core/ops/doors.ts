@@ -14,13 +14,9 @@ import type { Outcome } from '../outcome'
 import { OPEN_LOCK_ID } from '../ids'
 import type { LockTypeId, MapId, RoomId, TransitionId } from '../ids'
 import type { Transaction } from '../journal'
-import {
-  putTransition,
-  removeTransition,
-  replaceTransition,
-  setTransitionField,
-} from '../primitives'
+import { putTransition, removeTransition, setTransitionField } from '../primitives'
 import type {
+  Direction,
   DoorSegment,
   EdgeTransition,
   ElevatorTransition,
@@ -29,6 +25,10 @@ import type {
   TeleportTransition,
   Transition,
 } from '../types'
+
+// Re-exported so the door layer stays the one import site for everything about
+// a transition, model type included.
+export type { Direction }
 import { contiguousRuns, isGapIntact, isTransitionValid } from './transitions'
 
 // What a gesture asks a new transition to be born with: the Door toolbar's
@@ -48,6 +48,11 @@ export interface TransitionOptions {
   // Applied to both ends. Omitted means `Open`.
   lockTypeId?: LockTypeId
   // One-way from the gesture's origin end to its far end.
+  //
+  // A boolean where the model stores a three-state, deliberately: the gesture
+  // decides which end is A, so the only direction expressible at creation is
+  // "the way I am about to draw it". `bToA` is an editing concept and has no
+  // meaning here, and a `Direction` in this shape would offer it.
   oneWay?: boolean
 }
 
@@ -55,7 +60,11 @@ export interface TransitionOptions {
 // until a colour or glyph is assigned.
 function defaults(options: TransitionOptions = {}) {
   const lock = options.lockTypeId ?? OPEN_LOCK_ID
-  return { locks: { a: lock, b: lock }, oneWay: options.oneWay ?? false, notes: '' }
+  return {
+    locks: { a: lock, b: lock },
+    direction: (options.oneWay ? 'aToB' : 'both') as Direction,
+    notes: '',
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -353,20 +362,6 @@ export function createTeleport(
 // Editing
 // ---------------------------------------------------------------------------
 
-// The inspector's 3-way direction selector. "Both" is two-way; the one-way
-// options are stored as endpoint order plus the oneWay flag, so choosing B->A
-// swaps the endpoints rather than adding a direction field.
-export type Direction = 'both' | 'aToB' | 'bToA'
-
-// Direction is encoded by endpoint order plus the one-way flag, with no
-// separate field, so from a stored transition alone "A to B" and "B to A"
-// are indistinguishable: both are `oneWay: true`, differing only in which end
-// the user considers first. The inspector's selector is a view over the
-// current order, so a stored one-way always reads as A -> B.
-export function directionOf(transition: Transition): Direction {
-  return transition.oneWay ? 'aToB' : 'both'
-}
-
 // Finds a transition by id from whichever tab the user is looking at.
 //
 // A cross-tab teleport is stored once, under its origin map, while the
@@ -403,32 +398,7 @@ export function setDirection(
   // Everything below works on the map the transition is stored under, which
   // is not necessarily the tab the user is on: see `resolveTransition`.
   const { map: owner, transition } = resolveTransition(project, map, transitionId)
-
-  if (direction === 'both') {
-    setTransitionField(tx, owner, transition, 'oneWay', false)
-    return
-  }
-  if (direction === 'aToB') {
-    setTransitionField(tx, owner, transition, 'oneWay', true)
-    return
-  }
-
-  // B -> A is the same one-way relationship with the endpoints reversed, which
-  // is a geometry change, so it goes through replace rather than a field set.
-  const swapped = swapEnds(transition)
-  swapped.oneWay = true
-
-  // For a cross-tab teleport the swap changes which map is the origin, and a
-  // teleport is stored exactly once under that origin map. Remove it from its
-  // current map and add it to its new one, which lets `putTransition` rebuild
-  // the far-end entry pointing the other way.
-  const origin = swapped.kind === 'teleport' ? swapped.a.mapId : owner.id
-  if (origin === owner.id) {
-    replaceTransition(tx, project, owner, transition, swapped)
-    return
-  }
-  removeTransition(tx, project, owner, transition)
-  putTransition(tx, project, mustGet(project.mapsById, origin, 'map'), swapped)
+  setTransitionField(tx, owner, transition, 'direction', direction)
 }
 
 // Per-end lock assignment. The panel defaults to synced, so `both` is the
@@ -468,25 +438,6 @@ export function deleteTransition(
 ): void {
   const { map: owner, transition } = resolveTransition(project, map, transitionId)
   removeTransition(tx, project, owner, transition)
-}
-
-export function swapEnds(transition: Transition): Transition {
-  const locks = { a: transition.locks.b, b: transition.locks.a }
-  switch (transition.kind) {
-    case 'edge':
-      return {
-        ...transition,
-        locks,
-        segments: transition.segments.map((segment) => ({
-          edge: segment.edge,
-          aSide: segment.aSide === 'lo' ? ('hi' as const) : ('lo' as const),
-        })),
-      }
-    case 'elevator':
-      return { ...transition, locks, a: transition.b, b: transition.a }
-    case 'teleport':
-      return { ...transition, locks, a: transition.b, b: transition.a }
-  }
 }
 
 export function isValid(project: ProjectModel, map: MapModel, transition: Transition): boolean {

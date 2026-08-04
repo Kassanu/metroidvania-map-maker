@@ -14,7 +14,7 @@
 import { facingEdges, cellKey, parseCell } from '@/core/cell'
 import type { CellKey, EdgeKey } from '@/core/cell'
 import type { LockTypeId, TransitionId } from '@/core/ids'
-import type { MapModel } from '@/core/types'
+import type { Direction, MapModel } from '@/core/types'
 
 export interface ElevatorShaft {
   id: TransitionId
@@ -31,8 +31,9 @@ export interface ElevatorShaft {
   // Per-end locks, so each end can show the lock facing its own room, which an
   // elevator does naturally, having two distinct markers.
   locks: { a: LockTypeId; b: LockTypeId }
-  // A one-way elevator carries an arrowhead on the shaft, pointing A to B.
-  oneWay: boolean
+  // A one-way elevator carries an arrowhead on the shaft. `aToB` points from
+  // the A end toward B; `bToA` points back.
+  direction: Direction
 }
 
 export function elevatorShafts(map: MapModel): ElevatorShaft[] {
@@ -51,7 +52,7 @@ export function elevatorShafts(map: MapModel): ElevatorShaft[] {
       openCells: gapCells(transition.a, transition.b).filter((cell) => !map.cellOwner.has(cell)),
       ends: [ends[0], ends[1]],
       locks: transition.locks,
-      oneWay: transition.oneWay,
+      direction: transition.direction,
     })
   }
 

@@ -1,6 +1,6 @@
 {
   "format": "metroidvania-map-maker",
-  "version": 1,
+  "version": 2,
   "project": {
     "name": "Dev Fixture",
     "settings": {
@@ -179,7 +179,7 @@
               "b": "open"
             },
             "notes": "",
-            "oneWay": false,
+            "direction": "both",
             "type": "edge",
             "geometry": {
               "segments": [
@@ -203,7 +203,7 @@
               "b": "open"
             },
             "notes": "",
-            "oneWay": false,
+            "direction": "both",
             "type": "teleport",
             "geometry": {
               "a": {
@@ -223,7 +223,7 @@
               "b": "open"
             },
             "notes": "",
-            "oneWay": false,
+            "direction": "both",
             "type": "elevator",
             "geometry": {
               "a": [1, 5],
@@ -238,7 +238,7 @@
               "b": "open"
             },
             "notes": "",
-            "oneWay": true,
+            "direction": "aToB",
             "type": "elevator",
             "geometry": {
               "a": [0, 6],
@@ -253,7 +253,7 @@
               "b": "open"
             },
             "notes": "",
-            "oneWay": false,
+            "direction": "both",
             "type": "teleport",
             "geometry": {
               "a": {
@@ -273,7 +273,7 @@
               "b": "open"
             },
             "notes": "",
-            "oneWay": false,
+            "direction": "both",
             "type": "edge",
             "geometry": {
               "segments": [
@@ -292,7 +292,7 @@
               "b": "locked"
             },
             "notes": "",
-            "oneWay": true,
+            "direction": "aToB",
             "type": "edge",
             "geometry": {
               "segments": [

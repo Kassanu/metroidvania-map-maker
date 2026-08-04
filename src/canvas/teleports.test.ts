@@ -113,11 +113,11 @@ describe('teleportScene', () => {
     expect(teleportScene(project, cavesId).ends[0].leadsTo?.label).toBe('S')
   })
 
-  // B -> A on a cross-tab teleport swaps the endpoints, which re-homes the
-  // object to the other map, so the tab that stores it and the tab that
-  // derives it trade places. Both tabs must still show one end each, or the
-  // direction selector would make a teleport vanish from one side.
-  it('survives the endpoints being swapped, which changes which map stores it', () => {
+  // Direction is stored, so B -> A moves nothing: the map that holds the object
+  // still holds it, both tabs still show one end each, and the arrow is the
+  // only thing that changed. Reversing used to swap the endpoints, which
+  // re-homed a cross-tab teleport to the other map.
+  it('is unmoved by reversing it, and both tabs still draw their end', () => {
     const { project, surfaceId, cavesId } = twoMaps((tx, project, [surface, caves]) => {
       const teleport = ok(
         createTeleport(tx, project, { mapId: surface, cell: '0,0' }, { mapId: caves, cell: '2,2' }),
@@ -125,9 +125,8 @@ describe('teleportScene', () => {
       setDirection(tx, project, project.mapsById.get(surface)!, teleport.id, 'bToA')
     })
 
-    // Stored under Caves now.
-    expect(project.mapsById.get(cavesId)!.transitions.size).toBe(1)
-    expect(project.mapsById.get(surfaceId)!.transitions.size).toBe(0)
+    expect(project.mapsById.get(surfaceId)!.transitions.size).toBe(1)
+    expect(project.mapsById.get(cavesId)!.transitions.size).toBe(0)
 
     const fromSurface = teleportScene(project, surfaceId)
     const fromCaves = teleportScene(project, cavesId)

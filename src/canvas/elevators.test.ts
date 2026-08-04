@@ -130,6 +130,6 @@ describe('elevatorShafts', () => {
     const shaft = elevatorShafts(map)[0]
 
     expect(shaft.locks).toEqual({ a: 'open', b: 'open' })
-    expect(shaft.oneWay).toBe(false)
+    expect(shaft.direction).toBe('both')
   })
 })

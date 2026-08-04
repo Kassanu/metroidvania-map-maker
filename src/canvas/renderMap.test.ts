@@ -581,6 +581,29 @@ describe('renderMap drawing edge doors', () => {
     expect(apexOf('1,0', '0,0')).toBeLessThan(SEAM_X)
   })
 
+  // B -> A is the same crossing travelled the other way, and the only thing
+  // that distinguishes it: the endpoints, the per-end locks and the geometry
+  // are all untouched, so an arrow that ignored the reversal would render a
+  // door identical to its opposite.
+  it('reverses a one-way door’s arrow for B -> A', () => {
+    const apexOf = (direction: 'aToB' | 'bToA') => {
+      const { ctx, strokes } = fakeContext()
+      const { project, map } = acrossASeam((tx, project, map) => {
+        const [door] = ok(createFromBox(tx, project, map, '0,0', '1,0'))
+        setDirection(tx, project, map, door.id, direction)
+      })
+      draw(ctx, { map, areas: project.areas, lockTypes: project.lockTypes })
+
+      const arrow = strokes.find(
+        (stroke) => stroke.style === '#transition' && stroke.segments.length === 2,
+      )!
+      return arrow.segments[0][2]
+    }
+
+    expect(apexOf('aToB')).toBeGreaterThan(SEAM_X)
+    expect(apexOf('bToA')).toBeLessThan(SEAM_X)
+  })
+
   it('draws no arrow for a two-way door, whatever its colour', () => {
     const { ctx, strokes } = fakeContext()
     const { project, map } = acrossASeam((tx, project, map) => {
@@ -786,6 +809,25 @@ describe('renderMap drawing elevators', () => {
     expect(arrow.segments[0][2]).toBeLessThan(2.5 * TILE)
   })
 
+  it('reverses the shaft arrow for B -> A', () => {
+    const apexOf = (direction: 'aToB' | 'bToA') => {
+      const { ctx, strokes } = fakeContext()
+      const { project, map } = acrossAGap((tx, project, map) => {
+        const [elevator] = [...map.transitions.values()]
+        setDirection(tx, project, map, elevator.id, direction)
+      })
+      draw(ctx, { map, areas: project.areas, lockTypes: project.lockTypes })
+
+      const arrow = strokes.find(
+        (stroke) => stroke.style === '#markertext' && stroke.segments.length === 2,
+      )!
+      return arrow.segments[0][2]
+    }
+
+    expect(apexOf('aToB')).toBeGreaterThan(2.5 * TILE)
+    expect(apexOf('bToA')).toBeLessThan(2.5 * TILE)
+  })
+
   // A live, valid elevator with nothing to draw: the arrow has no cell to
   // sit in, so an implementation that reaches for the middle of an empty
   // list throws before any of the assertions below run.
@@ -964,6 +1006,31 @@ describe('renderMap drawing teleports', () => {
     const [, , apexX, apexY] = arrow.segments[0]
     expect(apexX).toBeGreaterThan(3 * TILE)
     expect(apexY).toBeGreaterThan(3 * TILE)
+  })
+
+  it('reverses the line arrow for B -> A', () => {
+    const { ctx, strokes } = fakeContext()
+    const { project, surfaceId } = twoMaps((tx, project, [surface]) => {
+      const teleport = ok(
+        createTeleport(
+          tx,
+          project,
+          { mapId: surface, cell: '0,0' },
+          { mapId: surface, cell: '5,5' },
+        ),
+      )
+      setDirection(tx, project, project.mapsById.get(surface)!, teleport.id, 'bToA')
+    })
+
+    draw(ctx, sceneFor(project, surfaceId))
+
+    const arrow = strokes.find(
+      (stroke) => stroke.style === '#transition' && stroke.segments.length === 2,
+    )!
+    // Back up and to the left: the same line travelled from B to A.
+    const [, , apexX, apexY] = arrow.segments[0]
+    expect(apexX).toBeLessThan(3 * TILE)
+    expect(apexY).toBeLessThan(3 * TILE)
   })
 })
 

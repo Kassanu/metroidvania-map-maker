@@ -4,7 +4,13 @@ import { getFarEnd } from '../farEnds'
 import { OPEN_LOCK_ID } from '../ids'
 import type { LockTypeId } from '../ids'
 import { makeRoom, ok, refusal, rect, setup, tx } from '../testUtils'
-import { classifyBox, createFromBox, createTeleport, canCompleteTeleport, swapEnds } from './doors'
+import {
+  classifyBox,
+  createFromBox,
+  createTeleport,
+  canCompleteTeleport,
+  setDirection,
+} from './doors'
 import { deleteRooms, eraseCells, moveRooms, paintCells } from './rooms'
 import { addMap } from './maps'
 import { WORLD_AREA_ID } from '../ids'
@@ -87,7 +93,7 @@ describe('creation', () => {
     const transaction = tx(map)
     const [door] = ok(createFromBox(transaction, project, map, '1,1', '2,1'))
     expect(door.locks).toEqual({ a: OPEN_LOCK_ID, b: OPEN_LOCK_ID })
-    expect(door.oneWay).toBe(false)
+    expect(door.direction).toBe('both')
   })
 
   it('indexes an edge door by edge, so four can share one cell', () => {
@@ -264,7 +270,7 @@ describe('attachment lifecycle', () => {
 })
 
 describe('direction', () => {
-  it('encodes B->A by swapping the endpoints, not with a direction field', () => {
+  it('stores all three values, leaving the endpoints and per-end locks alone', () => {
     const { project, map } = twoRooms()
     const transaction = tx(map)
     const teleport = ok(
@@ -277,8 +283,30 @@ describe('direction', () => {
     )
     teleport.locks = { a: OPEN_LOCK_ID, b: 'locked' as LockTypeId }
 
-    const swapped = swapEnds(teleport)
-    expect(swapped.kind === 'teleport' && swapped.a.cell).toBe('3,0')
-    expect(swapped.locks).toEqual({ a: 'locked', b: OPEN_LOCK_ID })
+    // The whole point of a stored direction: A stays A. Reversing used to swap
+    // the endpoints and the locks with them, which relabelled both ends of a
+    // transition the user had only asked to point the other way.
+    setDirection(transaction, project, map, teleport.id, 'bToA')
+    expect(teleport.direction).toBe('bToA')
+    expect(teleport.kind === 'teleport' && teleport.a.cell).toBe('0,0')
+    expect(teleport.locks).toEqual({ a: OPEN_LOCK_ID, b: 'locked' })
+
+    setDirection(transaction, project, map, teleport.id, 'aToB')
+    expect(teleport.direction).toBe('aToB')
+    expect(teleport.kind === 'teleport' && teleport.a.cell).toBe('0,0')
+
+    setDirection(transaction, project, map, teleport.id, 'both')
+    expect(teleport.direction).toBe('both')
+  })
+
+  it('undoes a direction change on its own', () => {
+    const { project, map } = twoRooms()
+    const transaction = tx(map)
+    const [door] = ok(createFromBox(transaction, project, map, '1,1', '2,1'))
+
+    setDirection(transaction, project, map, door.id, 'bToA')
+    expect(door.direction).toBe('bToA')
+    transaction.rollback()
+    expect(door.direction).toBe('both')
   })
 })

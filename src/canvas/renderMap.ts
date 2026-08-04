@@ -1237,7 +1237,7 @@ function drawDoors(ctx: CanvasRenderingContext2D, scene: MapScene, runs: readonl
   // skipped above still need theirs. The marker is optional; the arrow is the
   // only thing saying which way the door goes, so it never is.
   for (const run of runs) {
-    if (!run.oneWay) continue
+    if (run.direction === 'both') continue
     const { from, to } = openingOnScreen(run, scene)
     drawArrow(
       ctx,
@@ -1307,7 +1307,7 @@ function drawElevatorEnds(
     // An elevator whose gap a third room has filled entirely is valid and draws
     // no shaft, so there is no cell for the arrow to sit in. Reaching for the
     // middle of an empty list is how that becomes a crash rather than a nothing.
-    if (!shaft.oneWay || shaft.openCells.length === 0) continue
+    if (shaft.direction === 'both' || shaft.openCells.length === 0) continue
     const middle = shaft.openCells[Math.floor(shaft.openCells.length / 2)]
     // In the label colour, not the shaft's own: an arrow drawn in the colour of
     // the thing it sits on is invisible. An arrow contrasts with what it sits
@@ -1346,15 +1346,17 @@ function drawTeleports(ctx: CanvasRenderingContext2D, scene: MapScene, teleports
     ctx.stroke()
 
     for (const line of teleports.lines) {
-      if (!line.oneWay) continue
+      if (line.direction === 'both') continue
       const from = worldPointOf(line.from, scene)
       const to = worldPointOf(line.to, scene)
       const length = Math.hypot(to.x - from.x, to.y - from.y) || 1
+      // The stored line runs A to B, so B -> A is the same vector negated.
+      const sign = line.direction === 'bToA' ? -1 : 1
       drawArrow(
         ctx,
         scene,
         { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
-        { dx: (to.x - from.x) / length, dy: (to.y - from.y) / length },
+        { dx: (sign * (to.x - from.x)) / length, dy: (sign * (to.y - from.y)) / length },
         scene.palette.transition,
       )
     }
@@ -1419,8 +1421,10 @@ function drawArrow(
 // way across is `aSide`: A's side of the seam is `lo` (west of a V seam, north
 // of an H one) or `hi`, and the arrow points from A's side to B's, so the same
 // two rooms give opposite arrows depending on which one the box was drawn from.
+// Across the seam, out of A's side into B's. `aSide` says which of the edge's
+// two cells is A's, and `bToA` is that crossing negated.
 function doorDirection(run: DoorRun): { dx: number; dy: number } {
-  const sign = run.aSide === 'lo' ? 1 : -1
+  const sign = (run.aSide === 'lo' ? 1 : -1) * (run.direction === 'bToA' ? -1 : 1)
   return run.axis === 'V' ? { dx: sign, dy: 0 } : { dx: 0, dy: sign }
 }
 
@@ -1431,8 +1435,9 @@ function doorDirection(run: DoorRun): { dx: number; dy: number } {
 function shaftDirection(shaft: ElevatorShaft): { dx: number; dy: number } {
   const first = parseCell(shaft.openCells[0])
   const last = parseCell(shaft.openCells[shaft.openCells.length - 1])
-  if (shaft.axis === 'h') return { dx: last.x >= first.x ? 1 : -1, dy: 0 }
-  return { dx: 0, dy: last.y >= first.y ? 1 : -1 }
+  const sign = shaft.direction === 'bToA' ? -1 : 1
+  if (shaft.axis === 'h') return { dx: sign * (last.x >= first.x ? 1 : -1), dy: 0 }
+  return { dx: 0, dy: sign * (last.y >= first.y ? 1 : -1) }
 }
 
 // One colour for a door with two ends.

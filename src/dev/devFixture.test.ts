@@ -44,7 +44,7 @@ describe('the dev fixture', () => {
 
     // A one-way of every kind that can show an arrow, and a colourless door, so
     // the two-way and no-colour paths are on screen next to their opposites.
-    const oneWay = [...surface.transitions.values()].filter((each) => each.oneWay)
+    const oneWay = [...surface.transitions.values()].filter((each) => each.direction !== 'both')
     expect(oneWay.map((each) => each.kind).sort()).toEqual(['edge', 'elevator'])
   })
 

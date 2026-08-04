@@ -336,7 +336,7 @@ describe('beginBoxDrag', () => {
 
       const door = transitions()[0]
       expect(door.locks).toEqual({ a: missile.id, b: missile.id })
-      expect(door.oneWay).toBe(true)
+      expect(door.direction).toBe('aToB')
     })
 
     it('gives an elevator the same, and defaults to Open two-way', () => {
@@ -346,7 +346,7 @@ describe('beginBoxDrag', () => {
       dragFromTo('0,0', [3, 0])
       const plain = transitions()[0]
       expect(plain.locks).toEqual({ a: OPEN_LOCK_ID, b: OPEN_LOCK_ID })
-      expect(plain.oneWay).toBe(false)
+      expect(plain.direction).toBe('both')
 
       defaults.setOneWay(true)
       const model = useModelStore()
@@ -357,7 +357,7 @@ describe('beginBoxDrag', () => {
         paintCells(tx, model.project, firstMap().map, ['3,3'], { areaId: WORLD_AREA_ID }),
       )
       dragFromTo('0,3', [3, 3])
-      expect(transitions().some((each) => each.oneWay)).toBe(true)
+      expect(transitions().some((each) => each.direction === 'aToB')).toBe(true)
     })
   })
 

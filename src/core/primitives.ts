@@ -393,7 +393,7 @@ export function replaceTransition(
   tx.touched.removedTransitions.delete(after.id)
 }
 
-export function setTransitionField<K extends 'locks' | 'oneWay' | 'notes'>(
+export function setTransitionField<K extends 'locks' | 'direction' | 'notes'>(
   tx: Transaction,
   map: MapModel,
   transition: Transition,

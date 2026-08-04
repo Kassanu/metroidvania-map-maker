@@ -50,6 +50,19 @@ describe('the frozen v1 file', () => {
     icon.plateColor = '#e0e0e0'
     icon.glyphColor = '#202020'
 
+    // v2 replaced `oneWay: boolean` with `direction`, which is the one change
+    // here that is a migration rather than a defaulted addition: the writer
+    // stamps the new version, and every v1 one-way becomes `aToB` because v1
+    // could only express a one-way in its own A-to-B order.
+    expected.version = 2
+    for (const map of expected.project.maps) {
+      for (const transition of map.transitions) {
+        const legacy = transition as { oneWay?: boolean }
+        transition.direction = legacy.oneWay ? 'aToB' : 'both'
+        delete legacy.oneWay
+      }
+    }
+
     expect(toJSON(openProject(fixture).accept())).toEqual(expected)
   })
 

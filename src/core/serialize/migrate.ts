@@ -18,8 +18,25 @@ export class UnsupportedVersionError extends Error {
   }
 }
 
+// v1 stored direction as `oneWay: boolean` plus endpoint order, so a reversed
+// one-way was the endpoints swapped rather than a value. Every v1 one-way was
+// therefore written in its own A-to-B order, and that is exactly what `aToB`
+// means: the translation is total and loses nothing.
+function v1ToV2(file: JsonFile): JsonFile {
+  for (const map of file.project.maps ?? []) {
+    for (const transition of map.transitions ?? []) {
+      const legacy = transition as { oneWay?: boolean }
+      transition.direction = legacy.oneWay ? 'aToB' : 'both'
+      delete legacy.oneWay
+    }
+  }
+  return { ...file, version: 2 }
+}
+
 // Each entry upgrades a file *from* the keyed version to the next one.
-const STEPS: Record<number, (file: JsonFile) => JsonFile> = {}
+const STEPS: Record<number, (file: JsonFile) => JsonFile> = {
+  1: v1ToV2,
+}
 
 export function migrate(file: JsonFile): JsonFile {
   let current = file

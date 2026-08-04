@@ -53,7 +53,7 @@ function populated() {
   )
   const [door] = ok(createFromBox(content, project, map, '1,0', '2,2'))
   door.locks = { a: missile.id, b: OPEN_LOCK_ID }
-  door.oneWay = true
+  door.direction = 'bToA'
   content.commit()
 
   const far = tx(second)
@@ -134,7 +134,7 @@ describe('round trip', () => {
       .flatMap((map) => [...map.transitions.values()])
       .find((transition) => transition.id === door.id)!
     expect(copy.locks).toEqual({ a: missile.id, b: OPEN_LOCK_ID })
-    expect(copy.oneWay).toBe(true)
+    expect(copy.direction).toBe('bToA')
   })
 })
 

@@ -163,13 +163,22 @@ export interface Room {
 
 export type TransitionKind = 'edge' | 'elevator' | 'teleport'
 
-// Per-end locks: A is the origin/from end, B the destination. Direction is
-// encoded by endpoint order plus oneWay, so "B -> A" is stored as one-way with
-// the endpoints swapped.
+// Which way a transition can be travelled. A is the origin end, B the
+// destination, fixed at creation by the gesture and never renamed afterwards.
+//
+// A stored three-state rather than a flag plus endpoint order. Endpoint order
+// is what the *geometry* is anchored to and what the per-end locks are named
+// for, so making it carry direction as well meant reversing a transition
+// relabelled both: an editor showing A and B watched them trade places under a
+// single choice. Three values also have no illegal combination, where a flag
+// plus a `reversed` bit admits a reversed two-way, which means nothing.
+export type Direction = 'both' | 'aToB' | 'bToA'
+
+// Per-end locks: A is the origin/from end, B the destination.
 export interface TransitionCommon {
   id: TransitionId
   locks: { a: LockTypeId; b: LockTypeId }
-  oneWay: boolean
+  direction: Direction
   notes: string
 }
 

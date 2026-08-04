@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { edgeOfCell } from './cell'
 import { farEndCount, getFarEnd } from './farEnds'
 import { History } from './history'
-import { OPEN_LOCK_ID, WORLD_AREA_ID } from './ids'
+import { WORLD_AREA_ID } from './ids'
 import { Transaction } from './journal'
-import { createFromBox, createTeleport, swapEnds } from './ops/doors'
+import { createFromBox, createTeleport } from './ops/doors'
 import { addMap, deleteMap, duplicateMap, reorderMap } from './ops/maps'
 import { normalizePath, placeIcon } from './ops/markup'
 import { drawInnerWall, moveRooms, paintCells, transformRooms } from './ops/rooms'
@@ -118,39 +118,6 @@ describe('serialization of every transition kind', () => {
     expect(copy.b).toBe('0,4')
     expect(copy.axis).toBe('v')
     expect(checkInvariants(reloaded)).toEqual([])
-  })
-})
-
-describe('swapEnds for every kind', () => {
-  it('swaps an edge door’s per-segment sides', () => {
-    const { project, map } = setup()
-    makeRoom(project, map, rect(0, 0, 1, 2))
-    makeRoom(project, map, rect(1, 0, 1, 2))
-    const transaction = tx(map)
-    const [door] = ok(createFromBox(transaction, project, map, '0,0', '1,1'))
-    if (door.kind !== 'edge') throw new Error('expected an edge door')
-
-    const before = door.segments.map((segment) => segment.aSide)
-    const swapped = swapEnds(door)
-    if (swapped.kind !== 'edge') throw new Error('expected an edge door')
-    expect(swapped.segments.map((segment) => segment.aSide)).toEqual(
-      before.map((side) => (side === 'lo' ? 'hi' : 'lo')),
-    )
-  })
-
-  it('swaps an elevator’s endpoints and locks', () => {
-    const { project, map } = setup()
-    makeRoom(project, map, ['0,0'])
-    makeRoom(project, map, ['0,4'])
-    const transaction = tx(map)
-    const [elevator] = ok(createFromBox(transaction, project, map, '0,0', '0,4'))
-    if (elevator.kind !== 'elevator') throw new Error('expected an elevator')
-
-    const swapped = swapEnds(elevator)
-    if (swapped.kind !== 'elevator') throw new Error('expected an elevator')
-    expect(swapped.a).toBe(elevator.b)
-    expect(swapped.b).toBe(elevator.a)
-    expect(swapped.locks).toEqual({ a: OPEN_LOCK_ID, b: OPEN_LOCK_ID })
   })
 })
 
