@@ -1,0 +1,37 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "name": "Absurd tile size",
+    "settings": {
+      "tileSize": 1e-300
+    },
+    "lockTypes": [],
+    "areas": [],
+    "maps": [
+      {
+        "id": "m1",
+        "name": "M1",
+        "rooms": [
+          {
+            "id": "r1",
+            "areaId": "world",
+            "cells": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ]
+            ]
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      }
+    ]
+  }
+}

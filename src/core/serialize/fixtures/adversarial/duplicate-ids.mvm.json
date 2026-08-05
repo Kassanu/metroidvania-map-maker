@@ -1,0 +1,1625 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "name": "Adversarial",
+    "settings": {
+      "tileSize": 32
+    },
+    "lockTypes": [],
+    "areas": [],
+    "maps": [
+      {
+        "id": "m1",
+        "name": "M1",
+        "rooms": [
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                0,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                1,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                2,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                3,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                4,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                5,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                6,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                7,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                8,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                9,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                10,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                11,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                12,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                13,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                14,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                15,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                16,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                17,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                18,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                19,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                20,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                21,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                22,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                23,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                24,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                25,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                26,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                27,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                28,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                29,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                30,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                31,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                32,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                33,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                34,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                35,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                36,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                37,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                38,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                39,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                40,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                41,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                42,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                43,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                44,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                45,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                46,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                47,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                48,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "areaId": "world",
+            "cells": [
+              [
+                49,
+                0
+              ]
+            ]
+          }
+        ],
+        "transitions": [],
+        "icons": [
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              0,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              1,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              2,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              3,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              4,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              5,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              6,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              7,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              8,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              9,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              10,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              11,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              12,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              13,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              14,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              15,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              16,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              17,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              18,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              19,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              20,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              21,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              22,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              23,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              24,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              25,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              26,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              27,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              28,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              29,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              30,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              31,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              32,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              33,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              34,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              35,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              36,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              37,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              38,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              39,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              40,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              41,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              42,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              43,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              44,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              45,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              46,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              47,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              48,
+              0
+            ]
+          },
+          {
+            "id": "same",
+            "iconType": "save",
+            "cell": [
+              49,
+              0
+            ]
+          }
+        ],
+        "lines": [
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "id": "same",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

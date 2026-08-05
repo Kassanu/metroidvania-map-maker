@@ -1,0 +1,156 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "name": "Adversarial",
+    "settings": {
+      "tileSize": 32
+    },
+    "lockTypes": [],
+    "areas": [],
+    "maps": [
+      {
+        "id": "m1",
+        "name": "M1",
+        "rooms": [
+          {
+            "id": "r1",
+            "areaId": "world",
+            "cells": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ]
+            ]
+          }
+        ],
+        "transitions": [
+          {
+            "id": "t1",
+            "type": "teleport",
+            "locks": {
+              "a": "open",
+              "b": "open"
+            },
+            "geometry": {
+              "a": {
+                "mapId": "m1",
+                "cell": [
+                  0,
+                  0
+                ]
+              },
+              "b": {
+                "mapId": "nope",
+                "cell": [
+                  0,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "id": "t2",
+            "type": "teleport",
+            "locks": {
+              "a": "open",
+              "b": "open"
+            },
+            "geometry": {
+              "a": {
+                "mapId": "m2",
+                "cell": [
+                  0,
+                  0
+                ]
+              },
+              "b": {
+                "mapId": "m2",
+                "cell": [
+                  1,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "id": "t3",
+            "type": "teleport",
+            "locks": {
+              "a": "open",
+              "b": "open"
+            },
+            "geometry": {
+              "a": {
+                "mapId": "m1",
+                "cell": [
+                  0,
+                  0
+                ]
+              },
+              "b": {
+                "mapId": "m1",
+                "cell": [
+                  0,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "id": "t4",
+            "type": "teleport",
+            "locks": {
+              "a": "open",
+              "b": "open"
+            },
+            "geometry": {
+              "a": {
+                "cell": [
+                  0,
+                  0
+                ]
+              },
+              "b": {
+                "mapId": "m1",
+                "cell": [
+                  1,
+                  0
+                ]
+              }
+            }
+          }
+        ],
+        "icons": [],
+        "lines": []
+      },
+      {
+        "id": "m2",
+        "name": "M2",
+        "rooms": [
+          {
+            "id": "r2",
+            "areaId": "world",
+            "cells": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ]
+            ]
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      }
+    ]
+  }
+}

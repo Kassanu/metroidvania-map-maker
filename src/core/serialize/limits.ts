@@ -44,6 +44,25 @@ export const LIMITS = {
   glyphLength: 16,
 } as const
 
+// Screen pixels per cell at zoom 1. Not in LIMITS because it repairs rather
+// than rejects, and because it is a range: a value is out of it on either
+// side, where every entry above is a ceiling.
+//
+// The bound exists because `tileSize * zoom` scales every world-to-screen
+// conversion in the app. A positive finite number is not enough: 1e-300
+// collapses the whole map into one pixel and 1e300 sends every coordinate to
+// Infinity, and neither is reachable through any control the user has.
+export const TILE_SIZE_RANGE = { min: 1, max: 512 } as const
+
+export function isUsableTileSize(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= TILE_SIZE_RANGE.min &&
+    value <= TILE_SIZE_RANGE.max
+  )
+}
+
 export type LimitName = keyof typeof LIMITS
 
 // Carries which cap was exceeded and by how much, so the dialog can say

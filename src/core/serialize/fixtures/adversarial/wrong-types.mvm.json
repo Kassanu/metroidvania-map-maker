@@ -1,0 +1,75 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "name": 42,
+    "settings": "not settings",
+    "lockTypes": "nope",
+    "areas": {
+      "id": "a"
+    },
+    "maps": [
+      {
+        "id": 7,
+        "name": [],
+        "notes": {},
+        "rooms": "no",
+        "transitions": 3,
+        "icons": null,
+        "lines": false
+      },
+      {
+        "id": "m1",
+        "name": "M1",
+        "rooms": [
+          {
+            "id": "r1",
+            "areaId": 99,
+            "name": [],
+            "notes": 1,
+            "cells": "nope",
+            "innerWalls": 5
+          },
+          null,
+          "room",
+          7
+        ],
+        "transitions": [
+          {
+            "id": "t",
+            "type": "nope",
+            "locks": null,
+            "geometry": null
+          },
+          "transition",
+          null
+        ],
+        "icons": [
+          {
+            "id": "ic",
+            "iconType": {},
+            "cell": "here"
+          },
+          null
+        ],
+        "lines": [
+          {
+            "id": "ln",
+            "color": [],
+            "points": "nope"
+          },
+          {
+            "id": "ln2",
+            "color": "#fff",
+            "points": [
+              [
+                0,
+                0
+              ]
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

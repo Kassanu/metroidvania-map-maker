@@ -45,7 +45,8 @@ import type {
   Transition,
   WallStyle,
 } from '../types'
-import { CellBudget, LIMITS, checkLimit, inCoordinateRange } from './limits'
+import { InvalidFileError } from './errors'
+import { CellBudget, LIMITS, checkLimit, inCoordinateRange, isUsableTileSize } from './limits'
 import { migrate } from './migrate'
 import { FILE_FORMAT, FILE_VERSION } from './schema'
 import type {
@@ -219,12 +220,7 @@ function serializeTransition(transition: Transition): JsonTransition {
 // Read
 // ---------------------------------------------------------------------------
 
-export class InvalidFileError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'InvalidFileError'
-  }
-}
+export { InvalidFileError }
 
 // Everything the loader repaired, so the UI can say so rather than silently
 // changing the user's data.
@@ -557,11 +553,8 @@ function loadSettings(raw: JsonSettings | undefined, log: LoadLog): ProjectSetti
   }
 
   if (raw.tileSize !== undefined) {
-    if (typeof raw.tileSize === 'number' && Number.isFinite(raw.tileSize) && raw.tileSize > 0) {
-      settings.tileSize = raw.tileSize
-    } else {
-      log.add({ kind: 'setting-reset', setting: 'tileSize' })
-    }
+    if (isUsableTileSize(raw.tileSize)) settings.tileSize = raw.tileSize
+    else log.add({ kind: 'setting-reset', setting: 'tileSize' })
   }
 
   // Reported as a setting rather than as a colour: these two are project

@@ -1,0 +1,92 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "name": "Adversarial",
+    "settings": {
+      "tileSize": 32
+    },
+    "lockTypes": [],
+    "areas": [],
+    "maps": [
+      {
+        "id": "m1",
+        "name": "M1",
+        "rooms": [
+          {
+            "id": "r1",
+            "areaId": "world",
+            "cells": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                2,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "r2",
+            "areaId": "world",
+            "cells": [
+              [
+                1,
+                0
+              ],
+              [
+                2,
+                0
+              ],
+              [
+                3,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "r3",
+            "areaId": "world",
+            "cells": [
+              [
+                10,
+                10
+              ],
+              [
+                20,
+                20
+              ],
+              [
+                30,
+                30
+              ]
+            ],
+            "innerWalls": [
+              {
+                "seg": [
+                  [
+                    10,
+                    10
+                  ],
+                  [
+                    10,
+                    11
+                  ]
+                ],
+                "style": "solid"
+              }
+            ]
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      }
+    ]
+  }
+}

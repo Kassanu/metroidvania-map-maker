@@ -4,3 +4,7 @@ coverage
 playwright-report
 test-results
 *.tsbuildinfo
+
+# Deliberately malformed inputs. Reformatting them, or failing on the ones that
+# are not valid JSON at all, would defeat what they are for.
+src/core/serialize/fixtures/adversarial

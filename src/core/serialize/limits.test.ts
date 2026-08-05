@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { fromJSON } from './index'
 import type { LoadEvent, LoadEventKind, LoadReport } from './index'
-import { CellBudget, FileTooLargeError, LIMITS, checkByteLength, checkLimit } from './limits'
+import { DEFAULT_TILE_SIZE } from '../factory'
+import {
+  CellBudget,
+  FileTooLargeError,
+  LIMITS,
+  TILE_SIZE_RANGE,
+  checkByteLength,
+  checkLimit,
+} from './limits'
 import { FILE_FORMAT, FILE_VERSION } from './schema'
 import type { JsonCell, JsonFile, JsonInnerWall, JsonMap, JsonProject } from './schema'
 
@@ -256,6 +264,54 @@ describe('the byte cap', () => {
     } catch (error) {
       expect((error as FileTooLargeError).limit).toBe('bytes')
     }
+  })
+})
+
+// `tileSize` scales every world-to-screen conversion in the app, so a value
+// that is merely positive and finite is not enough. This one is checked
+// explicitly rather than left to the corpus: a project carrying an unusable
+// tile size still has intact invariants and still round-trips, so none of the
+// corpus's structural properties can see it.
+describe('the tile size range', () => {
+  function withTileSize(tileSize: unknown): number {
+    return fromJSON({
+      format: FILE_FORMAT,
+      version: FILE_VERSION,
+      project: {
+        name: 'P',
+        settings: { tileSize },
+        lockTypes: [],
+        areas: [],
+        maps: [mapOf({ rooms: [{ id: 'r', areaId: 'world', cells: [[0, 0]] }] })],
+      },
+    }).project.settings.tileSize
+  }
+
+  it('keeps a usable size', () => {
+    for (const size of [TILE_SIZE_RANGE.min, 32, 48.5, TILE_SIZE_RANGE.max]) {
+      expect(withTileSize(size)).toBe(size)
+    }
+  })
+
+  it('resets one that would collapse or explode the viewport', () => {
+    for (const size of [1e-300, 1e300, 0.0000001, Number.MIN_VALUE, 0, -32, Infinity, '32']) {
+      expect(withTileSize(size)).toBe(DEFAULT_TILE_SIZE)
+    }
+  })
+
+  it('reports the reset as the setting it is', () => {
+    const report = fromJSON({
+      format: FILE_FORMAT,
+      version: FILE_VERSION,
+      project: {
+        name: 'P',
+        settings: { tileSize: 1e-300 },
+        lockTypes: [],
+        areas: [],
+        maps: [mapOf({ rooms: [{ id: 'r', areaId: 'world', cells: [[0, 0]] }] })],
+      },
+    }).report
+    expect(eventsOf(report, 'setting-reset').map((e) => e.setting)).toEqual(['tileSize'])
   })
 })
 

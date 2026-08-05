@@ -3,6 +3,7 @@
 // re-derived from anywhere else, so retrofitting migration onto existing files
 // would require guessing what unversioned files meant.
 
+import { InvalidFileError } from './errors'
 import { FILE_VERSION } from './schema'
 import type { JsonFile } from './schema'
 
@@ -48,7 +49,17 @@ export function migrate(file: JsonFile): JsonFile {
   // caller's own object leaves it holding migrated fields under its original
   // version, and a second migration of it then reads a replaced field as
   // absent and substitutes the default, losing what the first one recovered.
-  let current: JsonFile = structuredClone(file)
+  //
+  // The copy recurses, so a file nested deeper than the stack exhausts it.
+  // That surfaces as a RangeError, which is not something a caller can tell
+  // the user, so it becomes the refusal it actually is.
+  let current: JsonFile
+  try {
+    current = structuredClone(file)
+  } catch (error) {
+    if (error instanceof RangeError) throw new InvalidFileError('file is nested too deeply')
+    throw error
+  }
   let version = current.version
 
   while (version < FILE_VERSION) {

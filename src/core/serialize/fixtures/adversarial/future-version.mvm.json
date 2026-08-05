@@ -1,0 +1,33 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 3,
+  "project": {
+    "name": "Adversarial",
+    "settings": {
+      "tileSize": 32
+    },
+    "lockTypes": [],
+    "areas": [],
+    "maps": [
+      {
+        "id": "m1",
+        "name": "M1",
+        "rooms": [
+          {
+            "id": "r1",
+            "areaId": "world",
+            "cells": [
+              [
+                0,
+                0
+              ]
+            ]
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      }
+    ]
+  }
+}

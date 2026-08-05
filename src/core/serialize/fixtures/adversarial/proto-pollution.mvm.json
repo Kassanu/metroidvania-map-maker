@@ -1,0 +1,18 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "__proto__": { "polluted": "yes" },
+    "constructor": { "prototype": { "polluted": "yes" } },
+    "name": "Adversarial",
+    "settings": { "tileSize": 32, "__proto__": { "polluted": "yes" } },
+    "lockTypes": [{ "id": "lk1", "name": "L", "__proto__": { "polluted": "yes" } }],
+    "areas": [{ "id": "a1", "name": "A", "__proto__": { "polluted": "yes" } }],
+    "maps": [{
+      "id": "m1", "name": "M1", "transitions": [], "lines": [],
+      "__proto__": { "polluted": "yes" },
+      "rooms": [{ "id": "r1", "areaId": "a1", "cells": [[0,0]], "__proto__": { "polluted": "yes" } }],
+      "icons": [{ "id": "ic1", "iconType": "save", "cell": [0,0], "__proto__": { "polluted": "yes" } }]
+    }]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "name": "Hostile icons",
+    "settings": { "tileSize": 32 },
+    "lockTypes": [],
+    "areas": [],
+    "maps": [
+      {
+        "id": "m1",
+        "name": "M1",
+        "rooms": [{ "id": "r1", "areaId": "world", "cells": [[0, 0], [1, 0], [2, 0], [3, 0]] }],
+        "transitions": [],
+        "lines": [],
+        "icons": [
+          { "id": "ic1", "iconType": "<script>alert(1)</script>", "cell": [0, 0] },
+          { "id": "ic2", "iconType": "../../etc/passwd", "cell": [1, 0] },
+          { "id": "ic3", "iconType": "UPPERCASE", "cell": [2, 0] },
+          { "id": "ic4", "iconType": "save", "cell": [3, 0], "label": "kept" },
+          { "id": "ic5", "iconType": "save", "cell": [3, 0], "label": "cell already taken" },
+          { "id": "ic6", "iconType": "save", "cell": [99, 99], "label": "outside every room" }
+        ]
+      }
+    ]
+  }
+}

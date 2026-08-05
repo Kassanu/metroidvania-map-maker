@@ -1,0 +1,79 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "name": "Adversarial",
+    "settings": {
+      "tileSize": 32,
+      "backgroundColor": "url(https://example.invalid/beacon.png)",
+      "gridColor": "image-set(url(x))"
+    },
+    "lockTypes": [
+      {
+        "id": "lk1",
+        "name": "L",
+        "color": "url(https://example.invalid/beacon.png)",
+        "glyph": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
+      }
+    ],
+    "areas": [
+      {
+        "id": "a1",
+        "name": "A",
+        "cellColor": "url(https://example.invalid/beacon.png)",
+        "wallColor": "expression(alert(1))"
+      }
+    ],
+    "maps": [
+      {
+        "id": "m1",
+        "name": "M1",
+        "rooms": [
+          {
+            "id": "r1",
+            "areaId": "a1",
+            "cells": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ]
+            ]
+          }
+        ],
+        "transitions": [],
+        "icons": [
+          {
+            "id": "ic1",
+            "iconType": "save",
+            "cell": [
+              0,
+              0
+            ],
+            "plateColor": "url(https://example.invalid/beacon.png)",
+            "glyphColor": "var(--x)"
+          }
+        ],
+        "lines": [
+          {
+            "id": "ln1",
+            "color": "#fff; background-image: url(x)",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
