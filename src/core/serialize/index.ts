@@ -67,6 +67,14 @@ const WALL_STYLES: WallStyle[] = ['solid', 'dotted', 'doorway']
 const DEFAULT_ICON_PLATE = '#e0e0e0'
 const DEFAULT_ICON_GLYPH = '#202020'
 
+// What a line falls back to. Lines are always coloured, so unlike an area
+// there is no "follow the theme" value to fall back to.
+const DEFAULT_LINE_COLOR = '#ffffff'
+
+// What an icon whose type the file did not usably state draws as. The badge
+// renderer already has a hollow frame for a type no registry entry claims.
+const UNKNOWN_ICON_TYPE = 'unknown'
+
 // ---------------------------------------------------------------------------
 // Write
 // ---------------------------------------------------------------------------
@@ -264,6 +272,11 @@ export type LoadEvent =
   | { kind: 'lock-remapped'; map: string }
   // A setting whose value was not usable, replaced by the default.
   | { kind: 'setting-reset'; setting: string }
+  // A colour that was not a colour. `what` names the field, since the value
+  // is by definition not worth quoting back.
+  | { kind: 'color-reset'; what: string }
+  // An icon whose type could not be a registry key, so it draws as unknown.
+  | { kind: 'icon-type-reset'; map: string }
   // A field the file left out that the loader had to assume a value for. Only
   // ever used where a wrong guess is bounded and visible, never where it
   // would silently change what an object points at.
@@ -370,6 +383,32 @@ function stringOr(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
 }
 
+// Hex only, in the four lengths a colour picker emits. A colour from a file
+// reaches a CSS property, where `url(https://…)` is a request to whoever wrote
+// the file and `var(--x)` reads a value the file was never shown. Neither is a
+// colour, so neither is one this accepts.
+const HEX_COLOR = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+
+function isHexColor(raw: unknown): raw is string {
+  return typeof raw === 'string' && HEX_COLOR.test(raw)
+}
+
+// A colour the file may hold, or null where it holds none. Absent and invalid
+// are deliberately different: absent is legitimate and silent, invalid changed
+// the user's data and is reported.
+function colorOf(raw: unknown, what: string, log: LoadLog): string | null {
+  if (raw === undefined || raw === null) return null
+  if (isHexColor(raw)) return raw
+  log.add({ kind: 'color-reset', what })
+  return null
+}
+
+// An icon's type is a registry key, so it is bounded the way registry keys
+// are: flat kebab-case, with a colon reserved for user-supplied icons. An
+// unrecognised value already draws as the unknown badge, which is what makes
+// rejecting the shape safe rather than lossy.
+const ICON_TYPE = /^[a-z0-9:-]{1,64}$/
+
 // Free text, capped. Over-length text is one bad value rather than a file that
 // is not what it claims, so it truncates and reports rather than refusing the
 // whole load.
@@ -427,8 +466,8 @@ export function fromJSON(raw: unknown): LoadResult {
     project.areas.set(area.id as AreaId, {
       id: area.id as AreaId,
       name,
-      cellColor: area.cellColor ?? null,
-      wallColor: area.wallColor ?? null,
+      cellColor: colorOf(area.cellColor, 'area cell colour', log),
+      wallColor: colorOf(area.wallColor, 'area wall colour', log),
       notes: textOf(area.notes, '', LIMITS.notesLength, 'area notes', log),
     })
   }
@@ -442,8 +481,13 @@ export function fromJSON(raw: unknown): LoadResult {
     project.lockTypes.set(lockType.id as LockTypeId, {
       id: lockType.id as LockTypeId,
       name,
-      color: lockType.color ?? null,
-      glyph: lockType.glyph ?? null,
+      color: colorOf(lockType.color, 'lock type colour', log),
+      // A glyph is one display character, so it is capped rather than
+      // patterned: any character the user can type is a legitimate one.
+      glyph:
+        lockType.glyph === undefined || lockType.glyph === null
+          ? null
+          : textOf(lockType.glyph, '', LIMITS.glyphLength, 'lock type glyph', log),
     })
   }
 
@@ -520,10 +564,13 @@ function loadSettings(raw: JsonSettings | undefined, log: LoadLog): ProjectSetti
     }
   }
 
+  // Reported as a setting rather than as a colour: these two are project
+  // settings that happen to be colours, and the dialog groups by what the user
+  // would go and fix.
   for (const key of ['backgroundColor', 'gridColor'] as const) {
     const value = raw[key]
     if (value === undefined || value === null) continue
-    if (typeof value === 'string') settings[key] = value
+    if (isHexColor(value)) settings[key] = value
     else log.add({ kind: 'setting-reset', setting: key })
   }
 
@@ -699,6 +746,15 @@ function attachRooms(
   })
 }
 
+// An icon type the registry could conceivably claim, or the unknown badge.
+// Reported, because an icon that draws as a hollow frame instead of what the
+// file named is the user's data having changed.
+function iconTypeOf(raw: unknown, map: MapModel, log: LoadLog): string {
+  if (typeof raw === 'string' && ICON_TYPE.test(raw)) return raw
+  if (raw !== undefined) log.add({ kind: 'icon-type-reset', map: map.name })
+  return UNKNOWN_ICON_TYPE
+}
+
 function loadIcons(map: MapModel, jsonMap: JsonMap, log: LoadLog, seenIds: Set<string>): void {
   for (const jsonIcon of arrayOf(jsonMap.icons)) {
     const cell = isPlainObject(jsonIcon) ? cellOf(jsonIcon.cell) : null
@@ -720,10 +776,10 @@ function loadIcons(map: MapModel, jsonMap: JsonMap, log: LoadLog, seenIds: Set<s
     }
     const icon: IconObject = {
       id: claimId(jsonIcon.id, 'ic', `icon at ${cell}`, seenIds, log) as IconId,
-      iconType: stringOr(jsonIcon.iconType, 'unknown'),
+      iconType: iconTypeOf(jsonIcon.iconType, map, log),
       cell,
-      plateColor: stringOr(jsonIcon.plateColor, DEFAULT_ICON_PLATE),
-      glyphColor: stringOr(jsonIcon.glyphColor, DEFAULT_ICON_GLYPH),
+      plateColor: colorOf(jsonIcon.plateColor, 'icon plate colour', log) ?? DEFAULT_ICON_PLATE,
+      glyphColor: colorOf(jsonIcon.glyphColor, 'icon glyph colour', log) ?? DEFAULT_ICON_GLYPH,
       label: textOf(jsonIcon.label, '', LIMITS.nameLength, 'icon label', log),
       notes: textOf(jsonIcon.notes, '', LIMITS.notesLength, 'icon notes', log),
     }
@@ -754,7 +810,7 @@ function loadLines(map: MapModel, jsonMap: JsonMap, log: LoadLog, seenIds: Set<s
     }
     const line: LineObject = {
       id: claimId(jsonLine.id, 'ln', `line on "${map.name}"`, seenIds, log) as LineId,
-      color: stringOr(jsonLine.color, '#ffffff'),
+      color: colorOf(jsonLine.color, 'line colour', log) ?? DEFAULT_LINE_COLOR,
       points,
       arrowStart: jsonLine.arrowStart === true,
       arrowEnd: jsonLine.arrowEnd === true,

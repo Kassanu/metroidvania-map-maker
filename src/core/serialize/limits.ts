@@ -39,6 +39,9 @@ export const LIMITS = {
 
   nameLength: 1_000,
   notesLength: 100_000,
+  // A lock type's glyph is one display character. The allowance is for
+  // combining marks and emoji sequences, not for a second name.
+  glyphLength: 16,
 } as const
 
 export type LimitName = keyof typeof LIMITS

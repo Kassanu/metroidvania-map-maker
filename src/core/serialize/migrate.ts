@@ -39,10 +39,17 @@ const STEPS: Record<number, (file: JsonFile) => JsonFile> = {
 }
 
 export function migrate(file: JsonFile): JsonFile {
-  let current = file
-  let version = current.version
+  if (file.version > FILE_VERSION) throw new UnsupportedVersionError(file.version)
+  // A file already at the current version needs no step, and no copy: nothing
+  // downstream of here writes to it.
+  if (file.version === FILE_VERSION) return file
 
-  if (version > FILE_VERSION) throw new UnsupportedVersionError(version)
+  // The steps rewrite in place, so they are given a copy. Migrating the
+  // caller's own object leaves it holding migrated fields under its original
+  // version, and a second migration of it then reads a replaced field as
+  // absent and substitutes the default, losing what the first one recovered.
+  let current: JsonFile = structuredClone(file)
+  let version = current.version
 
   while (version < FILE_VERSION) {
     const step = STEPS[version]
