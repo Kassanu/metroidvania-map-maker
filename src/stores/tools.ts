@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { DEFAULT_BRUSH_SIZE, clampBrushSize } from '@/canvas/brush'
+import { useModeStore } from './mode'
 import { useSelectionStore } from './selection'
 import type { WallStyle } from '@/core/types'
 import type { SubMode } from '@/gestures/subMode'
@@ -42,6 +43,16 @@ export const useToolsStore = defineStore('tools', {
     // and the one where every gesture has an obvious meaning.
     selectSubMode: 'rooms' as SelectSubMode,
   }),
+  getters: {
+    // What `Delete` means where the user is standing: the Cells granularity
+    // erases cells back to bare grid, everywhere else the key names objects.
+    //
+    // Mode is half the answer because a cell selection survives a mode switch,
+    // and the same selection reached from Draw must not erase.
+    erasesCells(): boolean {
+      return useModeStore().active === 'select' && this.selectSubMode === 'cells'
+    },
+  },
   actions: {
     setWallStyle(style: WallStyle) {
       this.wallStyle = style

@@ -142,6 +142,18 @@ export const useSelectionStore = defineStore('selection', () => {
   // Written out per kind rather than derived from a kind argument, because each
   // one's return type is the point: a caller gets RoomId[] to hand to a room op,
   // not a union it has to narrow again.
+  // Everything selected on the tab asked about, kinds mixed, in selection
+  // order. What a caller wants when the answer covers several kinds at once:
+  // `Delete` acts on all of them, and asking six selectors would be six chances
+  // to forget the tab check.
+  //
+  // Areas are project-wide and still answer per-tab here. The selection belongs
+  // to the tab it was made on, so an area selected on one tab is invisible to
+  // another tab's keys and menus, exactly like every other kind.
+  function refsOn(mapId: MapId): readonly ObjectRef[] {
+    return selectionMapId.value === mapId ? items.value : []
+  }
+
   function roomsOn(mapId: MapId): RoomId[] {
     const out: RoomId[] = []
     if (selectionMapId.value !== mapId) return out
@@ -239,6 +251,7 @@ export const useSelectionStore = defineStore('selection', () => {
     clear,
     clickSelect,
     soleRoomOn: computed(() => soleRoomOn),
+    refsOn: computed(() => refsOn),
     roomsOn: computed(() => roomsOn),
     cellsOn: computed(() => cellsOn),
     transitionsOn: computed(() => transitionsOn),

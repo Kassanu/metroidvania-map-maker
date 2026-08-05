@@ -106,6 +106,37 @@ describe('tools store', () => {
     expect(tools.erase).toBe(true)
   })
 
+  // What `Delete` means where the user is standing, which both menus and the
+  // key read: only the Cells granularity erases, and only inside Select mode.
+  describe('erasesCells', () => {
+    it('is on in Select mode with the Cells granularity', () => {
+      const tools = useToolsStore()
+      useModeStore().setMode('select')
+      tools.setSelectSubMode('cells')
+
+      expect(tools.erasesCells).toBe(true)
+    })
+
+    it('is off in the Rooms granularity', () => {
+      const tools = useToolsStore()
+      useModeStore().setMode('select')
+      tools.setSelectSubMode('rooms')
+
+      expect(tools.erasesCells).toBe(false)
+    })
+
+    // The granularity survives a mode switch, and the same selection reached
+    // from Draw names objects rather than erasing.
+    it('is off outside Select mode, whatever the granularity says', () => {
+      const tools = useToolsStore()
+      useModeStore().setMode('select')
+      tools.setSelectSubMode('cells')
+      useModeStore().setMode('draw')
+
+      expect(tools.erasesCells).toBe(false)
+    })
+  })
+
   // Deliberately not persisted: the store declares no `persist` option, which
   // is the whole opt-in. Brush size resets to the default each session rather
   // than being saved as a user pref; the erase toggle follows it because a tool

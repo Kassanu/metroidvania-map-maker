@@ -106,6 +106,7 @@ export const en = {
 
   'common.close': 'Close',
   'common.cancel': 'Cancel',
+  'common.delete': 'Delete',
 
   'menu.main': 'Main menu',
   'menu.file': 'File',
@@ -282,9 +283,14 @@ export const en = {
   'hierarchy.menu.duplicate': 'Duplicate',
   'hierarchy.menu.areaFromRoom': 'New area from this room',
   'hierarchy.menu.delete': 'Delete',
-  'hierarchy.deleteAreaTitle': 'Delete "{name}"?',
-  'hierarchy.deleteAreaRooms': 'Its {count} room(s) move to World.',
-  'hierarchy.deleteAreaEmpty': 'It has no rooms.',
+
+  // The area-delete confirmation, shared by the tree's row menu and Delete on a
+  // selection. Worded for one area or several, since a selection can hold both.
+  'areaDelete.title': 'Delete "{name}"?',
+  'areaDelete.titleMany': 'Delete {count} areas?',
+  'areaDelete.rooms': '{count} room(s) move to World.',
+  'areaDelete.empty': 'No rooms move.',
+  'areaDelete.alsoSelection': 'Everything else selected is deleted.',
 
   // The two counts are separate keys rather than one plural, because this
   // catalogue interpolates and does not decline.

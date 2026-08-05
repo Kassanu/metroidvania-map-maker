@@ -275,6 +275,46 @@ test.describe('Hierarchy', () => {
     expect(errors).toEqual([])
   })
 
+  // `Delete` on a selected area, from Draw mode, with the row itself focused:
+  // the tree is not a text field, so the global dispatcher answers the key, and
+  // the same confirmation the row menu opens is what appears.
+  test('deletes a selected area with the Delete key, from any mode', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    await tree.getByRole('treeitem', { name: 'Crateria' }).click()
+    await page.keyboard.press('Delete')
+
+    const dialog = page.getByRole('alertdialog')
+    await expect(dialog).toContainText('Crateria')
+    await dialog.getByRole('button', { name: 'Delete' }).click()
+
+    await expect(tree.getByRole('treeitem', { name: 'Crateria' })).toHaveCount(0)
+    await expect(tree.getByRole('treeitem', { name: 'Landing Site' })).toBeVisible()
+    expect(await undoLabel(page)).toBe('Undo Delete Area')
+    expect(errors).toEqual([])
+  })
+
+  // World is what every room falls back to, so the key does not even ask, and
+  // the menu that would run it says so too.
+  test('refuses to delete World, from the key and the Edit menu alike', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    await tree.getByRole('treeitem', { name: 'World' }).click()
+    await page.keyboard.press('Delete')
+
+    await expect(page.getByRole('alertdialog')).toHaveCount(0)
+    await expect(tree.getByRole('treeitem', { name: 'World' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Edit' }).click()
+    await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    expect(errors).toEqual([])
+  })
+
   // The only place the real geometry runs: jsdom has no layout, so the unit
   // tests stub every row's rect and the decision itself is a pure function.
   test('drags a room onto another area, and it lands there', async ({ page }) => {

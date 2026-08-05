@@ -26,6 +26,8 @@ import { useSelectionStore } from '@/stores/selection'
 import { useClipboardStore } from '@/stores/clipboard'
 import { useModeStore } from '@/stores/mode'
 import { useTabsStore } from '@/stores/tabs'
+import { useToolsStore } from '@/stores/tools'
+import { isEmptyPlan, planDelete } from '@/selection/deletePlan'
 import { hasAction, runAction } from '@/hotkeys/actions'
 import type { ActionId } from '@/hotkeys/keymap'
 import { t } from '@/i18n'
@@ -41,6 +43,7 @@ const selection = useSelectionStore()
 const clipboard = useClipboardStore()
 const modeStore = useModeStore()
 const tabsStore = useTabsStore()
+const tools = useToolsStore()
 
 // Destructured so the template gets plain (auto-unwrapped) bindings, and so
 // `ref="titleInput"` resolves: a template ref attribute takes the name of a
@@ -127,7 +130,7 @@ const redoLabel = computed(() =>
 //
 //   payload    something a clipboard can hold, in the mode that holds one
 //   clipboard  a payload to land, in the mode that can land it
-//   deletable  a selection this mode has an op for
+//   deletable  a selection Delete itself would act on
 //   selectAll  the mode with a granularity to select everything at
 //   selection  anything selected on this tab
 const EDIT_ITEMS = [
@@ -164,10 +167,12 @@ function meetsNeed(need: EditNeed): boolean {
       return inSelect.value && selection.hasCopyableOn(mapId)
     case 'clipboard':
       return inSelect.value && !clipboard.isEmpty
-    // Cells are the one kind no other mode has an op for: `Del` there names
-    // objects, and a cell selection carried out of Select mode holds none.
+    // The same plan the key acts on, so the item is enabled exactly when
+    // pressing Delete would remove something. Two kinds drop out of it: cells
+    // outside the granularity that erases them, and World, which every room
+    // falls back to and so cannot go.
     case 'deletable':
-      return selected && (inSelect.value || selection.selected.some((ref) => ref.kind !== 'cell'))
+      return !isEmptyPlan(planDelete(selection.refsOn(mapId), { erasesCells: tools.erasesCells }))
     case 'selectAll':
       return inSelect.value
     case 'selection':

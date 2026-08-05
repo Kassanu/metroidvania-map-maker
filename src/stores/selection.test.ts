@@ -271,6 +271,37 @@ describe('useSelectionStore', () => {
       expect(selection.selected).toEqual(all)
     })
 
+    // The mixed answer, for callers whose question spans kinds: `Delete` acts
+    // on all of them at once, and asking six selectors would be six chances to
+    // forget the tab check.
+    it('hands back every ref on the tab asked about, in selection order', () => {
+      const selection = useSelectionStore()
+      const { mapId, roomA, icon } = populate()
+      const refs: ObjectRef[] = [
+        { kind: 'icon', id: icon.id },
+        { kind: 'area', id: WORLD_AREA_ID },
+        { kind: 'room', id: roomA.id },
+      ]
+      selection.set([...refs], mapId)
+
+      expect(selection.refsOn(mapId)).toEqual(refs)
+    })
+
+    // An area is project-wide, and its selection is not. The selection belongs
+    // to the tab it was made on, so switching tabs makes it invisible to that
+    // tab's keys and menus, exactly like every other kind.
+    it('hands back nothing for an area selected on another tab', () => {
+      const selection = useSelectionStore()
+      const model = useModelStore()
+      const { mapId } = populate()
+      selection.set([{ kind: 'area', id: WORLD_AREA_ID }], mapId)
+
+      const other = model.run('Add map', PROJECT_SCOPE, (tx) => addMap(tx, model.project, 'Caves'))
+
+      expect(selection.refsOn(other.id)).toEqual([])
+      expect(selection.refsOn(mapId)).toHaveLength(1)
+    })
+
     it('answers nothing for a map the selection is not on', () => {
       const selection = useSelectionStore()
       const model = useModelStore()

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useTabsStore } from '@/stores/tabs'
-import { mapScope, useModelStore } from '@/stores/model'
+import { PROJECT_SCOPE, dependOn, mapScope, useModelStore } from '@/stores/model'
 import { useThemeStore } from '@/stores/theme'
 import { useCanvasViewStore } from '@/stores/canvasView'
 import { useModeStore } from '@/stores/mode'
@@ -14,6 +14,15 @@ import { useClipboardStore } from '@/stores/clipboard'
 import { resolveZone, zoneTolerances, type DrawZone } from '@/canvas/drawZone'
 import { pushEscHandler } from '@/hotkeys/escStack'
 import { useHotkeyAction } from '@/hotkeys/useHotkeyAction'
+import { useDialogEscTier } from '@/hotkeys/useDialogEscTier'
+import {
+  applyDelete,
+  isEmptyPlan,
+  planDelete,
+  roomsMovingToWorld,
+  touchesMap,
+  type DeletePlan,
+} from '@/selection/deletePlan'
 import { DEFAULT_PAN, screenToWorld, worldToScreen, type ScreenPoint } from '@/canvas/viewport'
 import { pageBounds } from '@/canvas/page'
 import { centerOn, panByScreen, wheelZoom } from '@/canvas/camera'
@@ -33,6 +42,7 @@ import {
 } from '@/canvas/markupTarget'
 import IconPickerPopover from './IconPickerPopover.vue'
 import CanvasContextMenu from './CanvasContextMenu.vue'
+import ConfirmAreaDelete from '../modals/ConfirmAreaDelete.vue'
 import { beginBoxDrag, type BoxDrag } from '@/gestures/boxDrag'
 import { beginMarquee, type Marquee } from '@/gestures/marquee'
 import { beginSelectionMove } from '@/gestures/selectionMove'
@@ -44,7 +54,6 @@ import { beginLinePeel } from '@/gestures/linePeel'
 import { registerIconDropTarget } from '@/gestures/iconDropTarget'
 import { movesOnDrag } from '@/gestures/moveOnDrag'
 import { deleteTransition } from '@/core/ops/doors'
-import { deleteRooms, eraseCells } from '@/core/ops/rooms'
 import {
   copyCells,
   copySelection,
@@ -60,7 +69,6 @@ import { copyNamer, freshRoomName } from '@/i18n/naming'
 import {
   createLine,
   deleteIcon,
-  deleteLine,
   extendLine,
   peelLine,
   placeIcon,
@@ -1848,73 +1856,94 @@ watch(
 const { prefersDark } = useSystemColorScheme()
 watch([() => themeStore.mode, prefersDark], () => repaintForTheme())
 
-// `Delete`/`Backspace` on the selection: rooms, transitions, icons and lines,
-// whichever the selection holds, in every mode.
+// `Delete`/`Backspace` on the selection: rooms, transitions, icons, lines and
+// areas, whichever the selection holds, in every mode.
 //
-// Goes through the same ops the right-click routes do, so no two delete routes
-// can disagree about what deleting means.
+// What the key would remove is `planDelete`'s answer, and the Edit menu and the
+// canvas menu enable their Delete from the same one. A menu item offered by one
+// rule and a handler that refuses by another is what sharing the plan prevents.
 //
 // Draw mode then has two destructive granularities: erase removes cells, this
 // removes the whole room. It is also the *only* way to delete a whole line in
 // one step, since erase on a line's body does nothing by design and a line
 // could otherwise only be peeled away segment by segment.
+//
+// An area is the one kind that asks first, because it is the one kind whose
+// delete reaches tabs the user cannot see: its rooms move to World wherever
+// they are.
+//
+// The plan is held apart from the dialog's open state because the two end at
+// different moments: the dialog closes itself as the confirm button is picked,
+// and the handler that runs the delete is called after that. Tying the plan to
+// the open state would clear it a beat before the delete could read it.
+const pendingDelete = ref<DeletePlan | null>(null)
+const confirmingDelete = ref(false)
+
 useHotkeyAction('deleteSelection', () => {
+  const tab = tabsStore.activeTab
+  if (!tab) return
+  // Refs for this tab only, so a selection left on another tab deletes nothing
+  // here, areas included.
+  const plan = planDelete(selection.refsOn(tab.id), { erasesCells: tools.erasesCells })
+  if (isEmptyPlan(plan)) return
+  if (plan.areas.length > 0) {
+    pendingDelete.value = plan
+    confirmingDelete.value = true
+    return
+  }
+  runDelete(plan)
+})
+
+useDialogEscTier(confirmingDelete)
+
+// What the confirmation says the delete will do, computed only while it is
+// open: the room count walks every map, which is not work to do per render.
+const deleteImpact = computed(() => {
+  const plan = confirmingDelete.value ? pendingDelete.value : null
+  if (!plan) return null
+  dependOn(model.rev, model.structureRev)
+  return {
+    names: plan.areas.map((id) => model.project.areas.get(id)?.name ?? ''),
+    rooms: roomsMovingToWorld(model.project, plan),
+    alsoSelection: touchesMap(plan),
+  }
+})
+
+// The captured plan runs, not a freshly read selection: what the user was told
+// about is what happens.
+function confirmDelete() {
+  const plan = pendingDelete.value
+  pendingDelete.value = null
+  confirmingDelete.value = false
+  if (plan) runDelete(plan)
+}
+
+// One transaction for the whole plan, not one per object: deleting three doors
+// with one keypress must undo as one step, and a mixed delete of rooms and the
+// area they were in is still one step.
+function runDelete(plan: DeletePlan) {
   const tab = tabsStore.activeTab
   const map = tab ? model.project.mapsById.get(tab.id) : undefined
   if (!tab || !map) return
-  // Two granularities, one key, two different ops. In the Cells sub-mode `Del`
-  // erases the selected cells back to bare grid, which can split or destroy a
-  // room through the ordinary cascade; it never deletes the rooms those cells
-  // belong to.
-  if (deletesCells()) {
-    const cells = selection.cellsOn(tab.id)
-    if (cells.length === 0) return
-    model.run(t('history.eraseCells'), mapScope(tab.id), (tx) => {
-      eraseCells(tx, model.project, map, cells)
-    })
-    return
-  }
-
-  // The selectors answer for this tab only, so a selection left on another tab
-  // deletes nothing here.
-  const transitions = selection.transitionsOn(tab.id)
-  const rooms = selection.roomsOn(tab.id)
-  const icons = selection.iconsOn(tab.id)
-  const lines = selection.linesOn(tab.id)
-  if (rooms.length + transitions.length + icons.length + lines.length === 0) return
-
-  // One transaction for the whole selection, not one each: deleting three doors
-  // with one keypress must undo as one step.
-  //
-  // Rooms go last. Deleting a room cascades to the transitions on its edges and
-  // the icons in its cells, so taking the named ones first means each id is
-  // still there when its own op runs rather than having been swept up already.
-  model.run(deleteSelectionLabel(), mapScope(tab.id), (tx) => {
-    for (const id of transitions) deleteTransition(tx, model.project, map, id)
-    for (const id of icons) deleteIcon(tx, map, id)
-    for (const id of lines) deleteLine(tx, map, id)
-    if (rooms.length > 0) deleteRooms(tx, model.project, map, rooms)
-  })
-})
-
-// Which arm of `Del` this press belongs to. A cell selection can only be built
-// in Select mode's Cells sub-mode, and only that sub-mode erases: the same
-// selection reached from anywhere else still names objects.
-function deletesCells(): boolean {
-  return modeStore.active === 'select' && tools.selectSubMode === 'cells'
+  // The scope is where undo takes the user. Map content puts them back on the
+  // tab it belongs to; an area-only delete moves nobody, since the rooms it
+  // reassigns can be on any tab.
+  const scope = touchesMap(plan) ? mapScope(tab.id) : PROJECT_SCOPE
+  model.run(deleteLabel(plan), scope, (tx) => applyDelete(tx, model.project, map, plan))
 }
 
-// The undo entry for the key above. A selection of one kind names that kind, so
+// The undo entry for the key above. A plan holding one kind names that kind, so
 // the entry reads the same as the right-click that deletes the same object; a
-// mixed selection has no truthful specific name and says so.
-function deleteSelectionLabel(): string {
-  const kinds = new Set(selection.selected.map((item) => item.kind))
-  if (kinds.size > 1) return t('history.deleteSelection')
-  const [kind] = kinds
-  if (kind === 'room') return t('history.deleteRoom')
-  if (kind === 'icon') return t('history.deleteIcon')
-  if (kind === 'line') return t('history.deleteLine')
-  return t('history.deleteTransition')
+// mixed plan has no truthful specific name and says so.
+function deleteLabel(plan: DeletePlan): string {
+  if (plan.cells.length > 0) return t('history.eraseCells')
+  const named: string[] = []
+  if (plan.transitions.length > 0) named.push(t('history.deleteTransition'))
+  if (plan.icons.length > 0) named.push(t('history.deleteIcon'))
+  if (plan.lines.length > 0) named.push(t('history.deleteLine'))
+  if (plan.rooms.length > 0) named.push(t('history.deleteRoom'))
+  if (plan.areas.length > 0) named.push(t('history.deleteArea'))
+  return named.length === 1 ? named[0] : t('history.deleteSelection')
 }
 
 // `Ctrl+A` selects everything at the granularity in use, and only in Select
@@ -2141,6 +2170,14 @@ onUnmounted(() => {
         />
       </div>
     </CanvasContextMenu>
+
+    <ConfirmAreaDelete
+      v-model:open="confirmingDelete"
+      :names="deleteImpact?.names ?? []"
+      :rooms="deleteImpact?.rooms ?? 0"
+      :also-selection="deleteImpact?.alsoSelection ?? false"
+      @confirm="confirmDelete"
+    />
   </section>
 </template>
 

@@ -11,8 +11,9 @@ import { useModeStore } from '@/stores/mode'
 import { useToolsStore } from '@/stores/tools'
 import { useSelectionStore } from '@/stores/selection'
 import { useTabsStore } from '@/stores/tabs'
-import { mapScope, useModelStore } from '@/stores/model'
-import { paintCells } from '@/core/ops/rooms'
+import { PROJECT_SCOPE, mapScope, useModelStore } from '@/stores/model'
+import { assignRoomArea, paintCells } from '@/core/ops/rooms'
+import { createNewArea } from '@/core/ops/project'
 import { copyCells } from '@/core/ops/clipboard'
 import { useClipboardStore } from '@/stores/clipboard'
 import { createLine, placeIcon } from '@/core/ops/markup'
@@ -21,7 +22,7 @@ import { WORLD_AREA_ID } from '@/core/ids'
 import { TEST_ICON_COLORS, ok } from '@/core/testUtils'
 import type { ActionId } from '@/hotkeys/keymap'
 import type { CellKey } from '@/core/cell'
-import type { MapId } from '@/core/ids'
+import type { MapId, RoomId } from '@/core/ids'
 import type { Mode } from '@/stores/mode'
 
 // The seven verbs that act on a selection, and the four the canvas menu shows.
@@ -133,6 +134,20 @@ function addTeleport(from: CellKey, to: CellKey, mapId: MapId = activeMapId()) {
   )
 }
 
+// An area with a room in it, which is the fixture every area-delete question
+// needs: an empty area answers nothing about the rooms one moves.
+function addArea(name: string, rooms: RoomId[] = []) {
+  const model = useModelStore()
+  const mapId = activeMapId()
+  return model.run('Area', PROJECT_SCOPE, (tx) => {
+    const area = createNewArea(tx, model.project, name, '#111111', '#222222')
+    for (const roomId of rooms) {
+      assignRoomArea(tx, model.project.mapsById.get(mapId)!, roomId, area.id)
+    }
+    return area
+  })
+}
+
 // Something for Paste to land, since the item is live only when the clipboard
 // holds a payload. The cells need not exist: what the menu asks is whether the
 // payload is empty.
@@ -230,6 +245,21 @@ function openCanvasMenu(): HTMLElement {
   const menu = canvasMenu()
   if (!isOpen(menu)) throw new Error('the canvas context menu did not open')
   return menu as HTMLElement
+}
+
+// The area-delete confirmation is portalled, so it is found in the document
+// rather than through the wrapper.
+async function confirmDelete(): Promise<void> {
+  const button = document.querySelector('.confirm-delete-confirm')
+  if (!button) throw new Error('no confirmation is open')
+  ;(button as HTMLElement).click()
+  await nextTick()
+}
+
+function cancelDelete(): void {
+  const button = document.querySelector('.confirm-delete-cancel')
+  if (!button) throw new Error('no confirmation is open')
+  ;(button as HTMLElement).click()
 }
 
 async function mountMenuBar(): Promise<void> {
@@ -434,6 +464,38 @@ describe('canvas context menu', () => {
 
   // The keymap holds every action id long before a feature answers it, so an
   // item with no handler behind it would offer a command that does nothing.
+  // An area cannot be right-clicked on the canvas, but it can be held in the
+  // selection while the canvas is: the tree puts it there and the menu has to
+  // answer for it.
+  it('offers only Delete for an area selection', async () => {
+    const viewport = await mountCanvas()
+    registerVerbHandlers()
+    await setMode('select')
+    const room = paint(['0,0'])
+    const area = addArea('Crateria', [room.id])
+    useSelectionStore().set([{ kind: 'area', id: area.id }], activeMapId())
+    await rightClick(viewport)
+
+    expect(enabledState(openCanvasMenu(), CANVAS_VERBS)).toEqual({
+      Cut: false,
+      Copy: false,
+      Duplicate: false,
+      Delete: true,
+    })
+  })
+
+  // World is the area every room falls back to, so nothing can delete it. An
+  // enabled item whose handler refuses is the bug this pins.
+  it('disables Delete for a selection of World alone', async () => {
+    const viewport = await mountCanvas()
+    registerVerbHandlers()
+    await setMode('select')
+    useSelectionStore().set([{ kind: 'area', id: WORLD_AREA_ID }], activeMapId())
+    await rightClick(viewport)
+
+    expect(isEnabled(openCanvasMenu(), 'Delete')).toBe(false)
+  })
+
   it('disables an item whose action nothing has registered', async () => {
     const viewport = await mountCanvas()
     registerVerbHandlers()
@@ -679,6 +741,55 @@ describe('Edit menu', () => {
     expect(isEnabled(menu, 'Deselect')).toBe(true)
   })
 
+  // The tree is mode-independent, so an area selected there is deletable from
+  // wherever the user happens to be standing.
+  it('enables Delete alone for an area selection, in every mode', async () => {
+    for (const mode of ['draw', 'select', 'door', 'markup'] as const) {
+      setActivePinia(createTestPinia())
+      const room = paint(['0,0'])
+      const area = addArea('Crateria', [room.id])
+      useSelectionStore().set([{ kind: 'area', id: area.id }], activeMapId())
+      await setMode(mode)
+      await mountMenuBar()
+      registerVerbHandlers()
+
+      const menu = await openEditMenu()
+      expect([mode, isEnabled(menu, 'Delete')]).toEqual([mode, true])
+      expect([mode, isEnabled(menu, 'Copy')]).toEqual([mode, false])
+      wrapper?.unmount()
+      wrapper = undefined
+    }
+  })
+
+  it('disables Delete for a selection of World alone', async () => {
+    useSelectionStore().set([{ kind: 'area', id: WORLD_AREA_ID }], activeMapId())
+    await mountMenuBar()
+    registerVerbHandlers()
+
+    const menu = await openEditMenu()
+    expect(isEnabled(menu, 'Delete')).toBe(false)
+    // Still a selection, so clearing it still means something.
+    expect(isEnabled(menu, 'Deselect')).toBe(true)
+  })
+
+  // An area is project-wide and its selection is not: the selection belongs to
+  // the tab it was made on, areas included, so another tab's keys and menus
+  // cannot reach it.
+  it('treats an area selected on another tab as no selection', async () => {
+    const tabs = useTabsStore()
+    const home = tabs.activeTabId
+    tabs.addTab()
+    const other = tabs.activeTabId
+    const room = paint(['0,0'], other)
+    const area = addArea('Crateria', [room.id])
+    tabs.activate(home)
+    useSelectionStore().set([{ kind: 'area', id: area.id }], other)
+    await mountMenuBar()
+    registerVerbHandlers()
+
+    expect(isEnabled(await openEditMenu(), 'Delete')).toBe(false)
+  })
+
   it('runs the action behind an enabled item', async () => {
     await mountMenuBar()
     registerVerbHandlers()
@@ -803,5 +914,134 @@ describe('the deleteSelection action', () => {
     const map = model.project.mapsById.get(activeMapId())!
     expect(map.transitions.size).toBe(0)
     expect(map.rooms.size).toBe(2)
+  })
+  // ---------------------------------------------------------------------
+  // Areas: the one kind the key asks about first
+  // ---------------------------------------------------------------------
+
+  // An area's rooms are project-wide, so a delete pressed on one tab moves
+  // rooms on tabs the user cannot see. Nothing happens until they say so.
+  it('asks before deleting an area, and changes nothing until confirmed', async () => {
+    await mountCanvas()
+    await setMode('draw')
+    const room = paint(['0,0'])
+    const area = addArea('Crateria', [room.id])
+    const model = useModelStore()
+    useSelectionStore().set([{ kind: 'area', id: area.id }], activeMapId())
+
+    expect(runAction('deleteSelection')).toBe(true)
+    await nextTick()
+    expect(model.project.areas.has(area.id)).toBe(true)
+
+    const dialog = document.querySelector('[role="alertdialog"]')
+    expect(dialog).not.toBeNull()
+    expect(dialog!.textContent).toContain('Crateria')
+    expect(dialog!.textContent).toContain('1')
+  })
+
+  it('reassigns the rooms to World on confirm, moving nobody between tabs', async () => {
+    await mountCanvas()
+    await setMode('draw')
+    const room = paint(['0,0'])
+    const area = addArea('Crateria', [room.id])
+    const model = useModelStore()
+    useSelectionStore().set([{ kind: 'area', id: area.id }], activeMapId())
+
+    runAction('deleteSelection')
+    await nextTick()
+    await confirmDelete()
+
+    expect(model.project.areas.has(area.id)).toBe(false)
+    expect(model.project.mapsById.get(activeMapId())!.rooms.get(room.id)!.areaId).toBe(
+      WORLD_AREA_ID,
+    )
+    expect(model.status.undoLabel).toBe('Delete Area')
+  })
+
+  it('changes nothing when the confirmation is dismissed', async () => {
+    await mountCanvas()
+    await setMode('draw')
+    const room = paint(['0,0'])
+    const area = addArea('Crateria', [room.id])
+    const model = useModelStore()
+    useSelectionStore().set([{ kind: 'area', id: area.id }], activeMapId())
+
+    runAction('deleteSelection')
+    await nextTick()
+    cancelDelete()
+    await nextTick()
+
+    expect(model.project.areas.has(area.id)).toBe(true)
+    expect(model.status.undoLabel).not.toBe('Delete Area')
+  })
+
+  // World is what every room falls back to. Deleting it would leave rooms
+  // pointing at an area that is gone, so the key does not even ask.
+  it('refuses World without asking', async () => {
+    await mountCanvas()
+    await setMode('draw')
+    paint(['0,0'])
+    useSelectionStore().set([{ kind: 'area', id: WORLD_AREA_ID }], activeMapId())
+
+    runAction('deleteSelection')
+    await nextTick()
+
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(useModelStore().project.areas.has(WORLD_AREA_ID)).toBe(true)
+  })
+
+  // One keypress, one undo step, whichever kinds it spans.
+  it('deletes an area and a room together as one step', async () => {
+    await mountCanvas()
+    await setMode('select')
+    const first = paint(['0,0'])
+    const second = paint(['5,5'])
+    const area = addArea('Crateria', [first.id, second.id])
+    const model = useModelStore()
+    useSelectionStore().set(
+      [
+        { kind: 'area', id: area.id },
+        { kind: 'room', id: first.id },
+      ],
+      activeMapId(),
+    )
+
+    runAction('deleteSelection')
+    await nextTick()
+    // The room going with it is not one that moves, so the count is the other.
+    expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain('1 room')
+    await confirmDelete()
+
+    const map = model.project.mapsById.get(activeMapId())!
+    expect(model.project.areas.has(area.id)).toBe(false)
+    expect(map.rooms.has(first.id)).toBe(false)
+    expect(map.rooms.get(second.id)!.areaId).toBe(WORLD_AREA_ID)
+    expect(model.status.undoLabel).toBe('Delete Selection')
+
+    model.undo()
+    expect(model.project.areas.has(area.id)).toBe(true)
+    expect(model.project.mapsById.get(activeMapId())!.rooms.has(first.id)).toBe(true)
+  })
+
+  // Every other kind answers per-tab, and an area is no different: the
+  // selection belongs to the tab it was made on.
+  it('leaves an area selected on another tab alone', async () => {
+    await mountCanvas()
+    await setMode('draw')
+    const tabs = useTabsStore()
+    const home = tabs.activeTabId
+    tabs.addTab()
+    const other = tabs.activeTabId
+    const room = paint(['0,0'], other)
+    const area = addArea('Crateria', [room.id])
+    tabs.activate(home)
+    await nextTick()
+    useSelectionStore().set([{ kind: 'area', id: area.id }], other)
+
+    runAction('deleteSelection')
+    await nextTick()
+
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(useModelStore().project.areas.has(area.id)).toBe(true)
   })
 })

@@ -9,6 +9,8 @@ import {
 } from 'reka-ui'
 import { useSelectionStore } from '@/stores/selection'
 import { useTabsStore } from '@/stores/tabs'
+import { useToolsStore } from '@/stores/tools'
+import { isEmptyPlan, planDelete } from '@/selection/deletePlan'
 import { hasAction, runAction } from '@/hotkeys/actions'
 import { useDialogEscTier } from '@/hotkeys/useDialogEscTier'
 import { t, type MessageKey } from '@/i18n'
@@ -29,20 +31,29 @@ const props = defineProps<{ disabled: boolean }>()
 
 const selection = useSelectionStore()
 const tabsStore = useTabsStore()
+const tools = useToolsStore()
 
 // What the menu reports about itself, not what drives it: `ContextMenuRoot`
 // owns its open state and only emits, so this follows and never leads.
 const open = ref(false)
 useDialogEscTier(open, false)
 
-// `payload` items need something a clipboard can hold; the rest need only a
-// selection to act on.
+// `payload` items need something a clipboard can hold; Delete needs a selection
+// its own key would act on, which is not the same as a selection: World has no
+// delete behind it, so an area-only selection of World offers nothing here.
 const ITEMS = [
   { action: 'cut', label: 'menu.edit.cut', payload: true },
   { action: 'copy', label: 'menu.edit.copy', payload: true },
   { action: 'duplicate', label: 'menu.edit.duplicate', payload: true },
   { action: 'deleteSelection', label: 'menu.edit.delete', payload: false },
 ] as const satisfies readonly { action: ActionId; label: MessageKey; payload: boolean }[]
+
+// The same answer `Delete` itself acts on, so no item here is enabled for a
+// selection its action would refuse.
+const deletes = computed(() => {
+  const mapId = tabsStore.activeTabId
+  return !isEmptyPlan(planDelete(selection.refsOn(mapId), { erasesCells: tools.erasesCells }))
+})
 
 const items = computed(() =>
   ITEMS.map((item) => ({
@@ -52,9 +63,7 @@ const items = computed(() =>
     // owns them mounts, which is always before a menu can be opened.
     enabled:
       hasAction(item.action) &&
-      (item.payload
-        ? selection.hasCopyableOn(tabsStore.activeTabId)
-        : !selection.isEmpty && selection.mapId === tabsStore.activeTabId),
+      (item.payload ? selection.hasCopyableOn(tabsStore.activeTabId) : deletes.value),
   })),
 )
 </script>

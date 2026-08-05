@@ -1064,7 +1064,7 @@ describe('HierarchyPanel', () => {
       const panel = mountTree()
       await openDeleteDialog(panel, 2)
 
-      const confirm = document.querySelector('.hierarchy-delete-confirm') as HTMLElement
+      const confirm = document.querySelector('.confirm-delete-confirm') as HTMLElement
       confirm.click()
       await nextTick()
 
@@ -1084,7 +1084,7 @@ describe('HierarchyPanel', () => {
       useSelectionStore().set([{ kind: 'area', id: crateria }], mapId)
       await openDeleteDialog(panel, 2)
 
-      const confirm = document.querySelector('.hierarchy-delete-confirm') as HTMLElement
+      const confirm = document.querySelector('.confirm-delete-confirm') as HTMLElement
       confirm.click()
       await nextTick()
 
@@ -1096,7 +1096,7 @@ describe('HierarchyPanel', () => {
       const panel = mountTree()
       await openDeleteDialog(panel, 2)
 
-      const cancel = document.querySelector('.hierarchy-delete-cancel') as HTMLElement
+      const cancel = document.querySelector('.confirm-delete-cancel') as HTMLElement
       cancel.click()
       await nextTick()
 

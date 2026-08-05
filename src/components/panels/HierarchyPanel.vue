@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import {
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogOverlay,
-  AlertDialogPortal,
-  AlertDialogRoot,
-  AlertDialogTitle,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuPortal,
@@ -16,6 +8,7 @@ import {
   ContextMenuTrigger,
 } from 'reka-ui'
 import HierarchyIcon from './HierarchyIcon.vue'
+import ConfirmAreaDelete from '../modals/ConfirmAreaDelete.vue'
 import { PROJECT_SCOPE, dependOn, useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
 import { useTabsStore } from '@/stores/tabs'
@@ -785,34 +778,12 @@ function handleKeydown(event: KeyboardEvent, index: number) {
     </ContextMenuPortal>
   </ContextMenuRoot>
 
-  <AlertDialogRoot v-model:open="confirmingDelete">
-    <AlertDialogPortal>
-      <AlertDialogOverlay class="modal-overlay" />
-      <AlertDialogContent class="modal-content" style="--modal-width: 22rem">
-        <AlertDialogTitle class="hierarchy-delete-title">
-          {{ t('hierarchy.deleteAreaTitle', { name: deleteImpact?.name ?? '' }) }}
-        </AlertDialogTitle>
-        <AlertDialogDescription class="hierarchy-delete-description">
-          <span>
-            {{
-              deleteImpact?.rooms
-                ? t('hierarchy.deleteAreaRooms', { count: deleteImpact.rooms })
-                : t('hierarchy.deleteAreaEmpty')
-            }}
-          </span>
-          <span class="hierarchy-delete-note">{{ t('tab.deleteUndoable') }}</span>
-        </AlertDialogDescription>
-        <div class="hierarchy-delete-actions">
-          <AlertDialogCancel class="hierarchy-delete-cancel">
-            {{ t('common.cancel') }}
-          </AlertDialogCancel>
-          <AlertDialogAction class="hierarchy-delete-confirm" @click="confirmDeleteArea">
-            {{ t('hierarchy.menu.delete') }}
-          </AlertDialogAction>
-        </div>
-      </AlertDialogContent>
-    </AlertDialogPortal>
-  </AlertDialogRoot>
+  <ConfirmAreaDelete
+    v-model:open="confirmingDelete"
+    :names="deleteImpact ? [deleteImpact.name] : []"
+    :rooms="deleteImpact?.rooms ?? 0"
+    @confirm="confirmDeleteArea"
+  />
 </template>
 
 <style scoped>
@@ -964,58 +935,6 @@ function handleKeydown(event: KeyboardEvent, index: number) {
   font-size: 0.6875rem;
   cursor: pointer;
   padding: 0;
-}
-
-.hierarchy-delete-title {
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0 0 0.5rem;
-}
-
-.hierarchy-delete-description {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  opacity: 0.8;
-  margin: 0 0 1rem;
-}
-
-.hierarchy-delete-note {
-  opacity: 0.85;
-}
-
-.hierarchy-delete-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.hierarchy-delete-cancel,
-.hierarchy-delete-confirm {
-  border-radius: 0.25rem;
-  padding: 0.375rem 0.75rem;
-  font: inherit;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.hierarchy-delete-cancel {
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--fg);
-}
-.hierarchy-delete-cancel:hover {
-  background: var(--surface-active);
-}
-
-.hierarchy-delete-confirm {
-  border: none;
-  background: #d64545;
-  color: #fff;
-}
-.hierarchy-delete-confirm:hover {
-  background: #b83a3a;
 }
 
 .hierarchy-rename {
