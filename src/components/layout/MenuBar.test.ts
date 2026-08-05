@@ -20,6 +20,9 @@ import { ok } from '@/core/testUtils'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { ActionId } from '@/hotkeys/keymap'
 import type { MapId } from '@/core/ids'
+import { useFileStore } from '@/stores/file'
+import { setStorageProvider } from '@/storage'
+import type { StorageEntry, StorageHandle, StorageProvider } from '@/storage'
 
 describe('MenuBar', () => {
   let wrapper: VueWrapper
@@ -565,6 +568,92 @@ describe('MenuBar', () => {
       expect(github?.getAttribute('target')).toBe('_blank')
       expect(github?.getAttribute('rel')).toBe('noopener noreferrer')
       expect(wiki).not.toBeNull()
+    })
+  })
+  // Absent rather than empty, which is the whole of what a download-only
+  // provider gets: it issues no handle that survives the call, so there is
+  // nothing it could offer to reopen.
+  describe('Recent', () => {
+    function entry(name: string, lastOpenedAt = 1): StorageEntry {
+      return { handle: { providerId: 'fake', name }, name, lastOpenedAt }
+    }
+
+    // The real chain, from what storage lists to what the menu renders.
+    async function listing(entries: StorageEntry[], over: Partial<StorageProvider> = {}) {
+      setStorageProvider({
+        id: 'fake',
+        label: 'Fake',
+        canSaveInPlace: true,
+        list: async () => entries,
+        remember: async () => {},
+        forget: async () => {},
+        open: async () => null,
+        save: async (handle) => handle,
+        saveAs: async () => null,
+        ...over,
+      })
+      await useFileStore().refreshRecent()
+      await nextTick()
+    }
+
+    async function openFileMenu() {
+      const trigger = wrapper.findAll('.menu-item').find((el) => el.text() === 'File')!
+      await trigger.trigger('click')
+      await nextTick()
+    }
+
+    function fileMenuLabels() {
+      return Array.from(document.querySelectorAll('.popover-item')).map((el) =>
+        el.textContent?.trim(),
+      )
+    }
+
+    afterEach(() => {
+      setStorageProvider(null)
+    })
+
+    it('is not in the menu at all while there is nothing to list', async () => {
+      await listing([])
+      await openFileMenu()
+      expect(fileMenuLabels()).not.toContain('Recent')
+    })
+
+    it('appears once there is something to reopen', async () => {
+      await listing([entry('world.mvm')])
+      await openFileMenu()
+      expect(fileMenuLabels()).toContain('Recent')
+    })
+
+    it('lists the files in the order storage gave them', async () => {
+      await listing([entry('newest.mvm', 3), entry('older.mvm', 2)])
+      await openFileMenu()
+      await openSubmenu('Recent')
+
+      const names = Array.from(document.querySelectorAll('.recent-item')).map((el) =>
+        el.textContent?.trim(),
+      )
+      expect(names).toEqual(['newest.mvm', 'older.mvm'])
+    })
+
+    // The same verb Open uses, handle and all, so the guard and the load
+    // dialogs cannot come to differ between the two.
+    it('reopens by handle rather than through the picker', async () => {
+      const asked: (StorageHandle | undefined)[] = []
+      await listing([entry('world.mvm')], {
+        open: async (from?: StorageHandle) => {
+          asked.push(from)
+          return null
+        },
+      })
+
+      await openFileMenu()
+      await openSubmenu('Recent')
+      const item = document.querySelector('.recent-item') as HTMLElement
+      item.click()
+      await nextTick()
+      await nextTick()
+
+      expect(asked.map((handle) => handle?.name)).toEqual(['world.mvm'])
     })
   })
 })

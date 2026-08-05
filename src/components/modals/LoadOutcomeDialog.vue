@@ -26,7 +26,7 @@ import type { LimitName } from '@/core/serialize/limits'
 import type { LoadOutcome } from '@/stores/file'
 
 const props = defineProps<{ outcome: LoadOutcome | null }>()
-const emit = defineEmits<{ accept: []; dismiss: [] }>()
+const emit = defineEmits<{ accept: []; dismiss: []; forget: [] }>()
 
 // One message per repair kind. A `Record` rather than a lookup with a
 // fallback, so a kind added to the loader is a type error here rather than a
@@ -75,6 +75,13 @@ const LIMIT_LABELS: Record<LimitName, MessageKey> = {
 
 const isRepair = computed(() => props.outcome?.kind === 'repaired')
 
+// The two failures that name a file the app already knew about. They are the
+// only ones with something to do besides closing: drop the entry that led
+// here, since an entry that no longer opens is worth nothing to anyone.
+const canForget = computed(
+  () => props.outcome?.kind === 'missing' || props.outcome?.kind === 'permission-refused',
+)
+
 const repairs = computed(() => {
   if (props.outcome?.kind !== 'repaired') return []
   return [...props.outcome.counts.entries()].map(([kind, count]) =>
@@ -97,6 +104,10 @@ const failure = computed(() => {
         version: props.outcome.version,
         supported: props.outcome.supported,
       })
+    case 'missing':
+      return t('load.missing', { name: props.outcome.name })
+    case 'permission-refused':
+      return t('load.permissionRefused', { name: props.outcome.name })
     case 'failed':
       return t('load.error', { message: props.outcome.message })
     default:
@@ -133,6 +144,9 @@ function onOpenChange(open: boolean) {
           </button>
           <button v-if="isRepair" type="button" class="outcome-accept" @click="emit('accept')">
             {{ t('load.repaired.accept') }}
+          </button>
+          <button v-if="canForget" type="button" class="outcome-accept" @click="emit('forget')">
+            {{ t('load.forget') }}
           </button>
         </div>
       </AlertDialogContent>

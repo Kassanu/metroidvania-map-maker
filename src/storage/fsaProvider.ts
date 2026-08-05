@@ -10,13 +10,21 @@
 // project untouched and undirty-marked when someone changes their mind.
 
 import { checkByteLength } from '@/core/serialize/limits'
-import { FILE_EXTENSION, StorageError, safeFileName } from '@/core/storage/provider'
+import {
+  FILE_EXTENSION,
+  FileMissingError,
+  PermissionDeniedError,
+  StorageError,
+  safeFileName,
+} from '@/core/storage/provider'
 import type {
   OpenedProject,
   StorageEntry,
   StorageHandle,
   StorageProvider,
 } from '@/core/storage/provider'
+import { createRecentFiles } from './recentFiles'
+import type { RecentFiles } from './recentFiles'
 
 export const FSA_PROVIDER_ID = 'fsa'
 
@@ -87,6 +95,26 @@ async function ensurePermission(
   }
 }
 
+// Whether two handles name the same file on disk. The only correct answer
+// comes from the API itself: two files called `world.mvm` in two folders are
+// different projects, and one file reached twice through the picker is one.
+export async function sameFile(a: StorageHandle, b: StorageHandle): Promise<boolean> {
+  const left = a as FsaHandle
+  const right = b as FsaHandle
+  if (!left.file || !right.file) return false
+  try {
+    return await left.file.isSameEntry(right.file)
+  } catch {
+    return false
+  }
+}
+
+// A file that is no longer where the handle points: moved, renamed, or
+// deleted. Chromium raises `NotFoundError` from `getFile()`.
+function isMissing(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'NotFoundError'
+}
+
 // Bytes to `unknown`, with the size checked before the read.
 //
 // The cap has to be enforced on `File.size` rather than after: a file past it
@@ -115,27 +143,44 @@ async function writeProject(file: FileSystemFileHandle, data: unknown): Promise<
   await writable.close()
 }
 
-export function createFsaProvider(): StorageProvider {
+// The API cannot enumerate anything on its own, so the recent list is one this
+// app keeps; its entries arrive back here as handles to `open`. It is a
+// parameter because a real `FileSystemFileHandle` is the one thing no test
+// double can be: a fake carries functions, and functions do not
+// structured-clone, so a fake handle put into IndexedDB silently does not
+// persist.
+export function createFsaProvider(
+  recent: RecentFiles = createRecentFiles(sameFile),
+): StorageProvider {
   return {
     id: FSA_PROVIDER_ID,
     label: 'This device',
     canSaveInPlace: true,
 
-    // The API cannot enumerate anything on its own. Recent files are a list
-    // this app keeps, and they arrive as handles to `open`.
-    async list(): Promise<StorageEntry[]> {
-      return []
+    list(): Promise<StorageEntry[]> {
+      return recent.list()
+    },
+
+    remember(handle: StorageHandle): Promise<void> {
+      return recent.remember(handle)
+    },
+
+    forget(handle: StorageHandle): Promise<void> {
+      return recent.forget(handle)
     },
 
     async open(handle?: StorageHandle): Promise<OpenedProject | null> {
       if (handle) {
         const file = unwrap(handle)
-        if (!(await ensurePermission(file, 'read'))) {
-          throw new StorageError('permission to read the file was refused')
-        }
+        // Permission does not survive a reload, so this is the prompt a
+        // recent entry costs. It needs the click that led here to still count
+        // as a user gesture, which is why nothing may await a dialog between
+        // the two.
+        if (!(await ensurePermission(file, 'read'))) throw new PermissionDeniedError()
         try {
           return await readProject(file)
         } catch (error) {
+          if (isMissing(error)) throw new FileMissingError(error)
           throw asStorageError(error, 'could not read the file')
         }
       }
@@ -157,12 +202,11 @@ export function createFsaProvider(): StorageProvider {
 
     async save(handle: StorageHandle, data: unknown): Promise<StorageHandle> {
       const file = unwrap(handle)
-      if (!(await ensurePermission(file, 'readwrite'))) {
-        throw new StorageError('permission to write the file was refused')
-      }
+      if (!(await ensurePermission(file, 'readwrite'))) throw new PermissionDeniedError()
       try {
         await writeProject(file, data)
       } catch (error) {
+        if (isMissing(error)) throw new FileMissingError(error)
         throw asStorageError(error, 'could not write the file')
       }
       return wrap(file)

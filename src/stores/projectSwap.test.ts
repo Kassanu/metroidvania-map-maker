@@ -60,6 +60,8 @@ function providerServing(data: unknown): StorageProvider {
     label: 'Fake',
     canSaveInPlace: true,
     list: async () => [],
+    remember: async () => {},
+    forget: async () => {},
     open: async () => opened,
     save: async (handle) => handle,
     saveAs: async () => ({ providerId: 'fake', name: 'next.mvm' }),

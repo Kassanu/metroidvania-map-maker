@@ -29,7 +29,17 @@ const recovery = useRecoveryStore()
 
 // Once, and only at startup. What is in the store at this moment is a previous
 // session's work; anything written after this is this session's own.
-onMounted(() => void recovery.scan())
+//
+// Work to recover displaces the welcome screen, which is otherwise shown on
+// every launch and would sit stacked underneath it. Somebody who crashed
+// mid-project is not being introduced to the app.
+onMounted(async () => {
+  await recovery.scan()
+  if (recovery.offered.length > 0) ui.closeWelcome()
+})
+
+// Read once into memory, so the File menu renders the list it already has.
+onMounted(() => void file.refreshRecent())
 
 // The File verbs are always available, so they register here rather than in a
 // mode that owns them. Each runs the same store action the menu item runs, so
@@ -46,6 +56,15 @@ useUnloadGuard()
 function acceptRepairedLoad() {
   const outcome = file.outcome
   if (outcome?.kind === 'repaired') outcome.accept()
+  file.dismissOutcome()
+}
+
+// Dropping the recent entry that led to a file which no longer opens. Carried
+// on the outcome for the same reason as `accept`: the dialog says which file
+// without being told which list it came from.
+function forgetFailedFile() {
+  const outcome = file.outcome
+  if (outcome?.kind === 'missing' || outcome?.kind === 'permission-refused') outcome.forget()
   file.dismissOutcome()
 }
 </script>
@@ -74,6 +93,7 @@ function acceptRepairedLoad() {
     <LoadOutcomeDialog
       :outcome="file.outcome"
       @accept="acceptRepairedLoad"
+      @forget="forgetFailedFile"
       @dismiss="file.dismissOutcome()"
     />
     <RecoveryOffer

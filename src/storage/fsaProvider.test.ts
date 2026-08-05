@@ -1,8 +1,42 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { StorageError } from '@/core/storage/provider'
+import { FileMissingError, PermissionDeniedError, StorageError } from '@/core/storage/provider'
+import type { KeyValueStore } from '@/lib/idb'
 import type { StorageHandle } from '@/core/storage/provider'
 import { LIMITS } from '@/core/serialize/limits'
-import { FSA_PROVIDER_ID, createFsaProvider, supportsFileSystemAccess } from './fsaProvider'
+import { createRecentFiles } from './recentFiles'
+import {
+  FSA_PROVIDER_ID,
+  createFsaProvider,
+  sameFile,
+  supportsFileSystemAccess,
+} from './fsaProvider'
+
+// A handle carrying `vi.fn()` methods cannot be structured-cloned, so no fake
+// of one survives IndexedDB. The recent list is given somewhere that keeps
+// objects as they are.
+function memoryStore(): KeyValueStore {
+  const values = new Map<string, unknown>()
+  return {
+    async put(key, value) {
+      values.set(key, value)
+    },
+    async get<T>(key: string) {
+      return (values.get(key) as T) ?? null
+    },
+    async remove(key) {
+      values.delete(key)
+    },
+    async keys() {
+      return [...values.keys()]
+    },
+    async entries<T>() {
+      return [...values].map(([key, value]) => ({ key, value: value as T }))
+    },
+    async clear() {
+      values.clear()
+    },
+  }
+}
 
 // A fake handle that records what was written to it and can be told to
 // misbehave the way a real one does: refuse permission, fail the write, or
@@ -21,6 +55,9 @@ function fakeFile(options: { name?: string; contents?: string; size?: number } =
 
   const handle = {
     name: state.name,
+    // Identity is the object, which is what the real call answers: two files
+    // of the same name in two folders are two different entries.
+    isSameEntry: vi.fn(async (other: FileSystemFileHandle) => other === handle),
     queryPermission: vi.fn(async () => state.permission),
     requestPermission: vi.fn(async () => {
       state.requested += 1
@@ -106,10 +143,19 @@ describe('open', () => {
     expect(showOpenFilePicker).not.toHaveBeenCalled()
   })
 
-  it('reports a refused read permission rather than returning nothing', async () => {
+  // Told apart by type, because both have their own sentence and their own
+  // way out, and discriminating on a message is how a reword changes
+  // behaviour silently.
+  it('reports a refused read permission as its own kind of failure', async () => {
     const { handle, state } = fakeFile()
     state.permission = 'denied'
-    await expect(provider.open(handleFor(handle))).rejects.toThrow(StorageError)
+    await expect(provider.open(handleFor(handle))).rejects.toThrow(PermissionDeniedError)
+  })
+
+  it('reports a file that has been moved or deleted as its own kind', async () => {
+    const { handle } = fakeFile()
+    vi.mocked(handle.getFile).mockRejectedValue(new DOMException('gone', 'NotFoundError'))
+    await expect(provider.open(handleFor(handle))).rejects.toThrow(FileMissingError)
   })
 
   it('turns unreadable bytes into a StorageError', async () => {
@@ -216,5 +262,74 @@ describe('saveAs', () => {
     await provider.saveAs({}, 'n'.repeat(5_000))
     const options = vi.mocked(showSaveFilePicker).mock.calls.at(-1)?.[0]
     expect(options!.suggestedName!.length).toBeLessThanOrEqual(130)
+  })
+})
+
+// Whether two handles name the same file. Names cannot answer it and neither
+// can object identity across a reload, so the API's own call is the whole
+// implementation and the only thing worth checking here is that it is asked.
+describe('telling two files apart', () => {
+  it('asks the handle rather than comparing names', async () => {
+    const { handle: left } = fakeFile({ name: 'world.mvm' })
+    const { handle: right } = fakeFile({ name: 'world.mvm' })
+
+    expect(await sameFile(handleFor(left), handleFor(left))).toBe(true)
+    expect(await sameFile(handleFor(left), handleFor(right))).toBe(false)
+    expect(left.isSameEntry).toHaveBeenCalled()
+  })
+
+  it('answers no rather than throwing when a handle carries no file', async () => {
+    const { handle } = fakeFile()
+    const foreign = { providerId: 'somewhere-else', name: 'x.mvm' } as StorageHandle
+    expect(await sameFile(handleFor(handle), foreign)).toBe(false)
+  })
+
+  it('answers no when the call itself fails', async () => {
+    const { handle: left } = fakeFile()
+    const { handle: right } = fakeFile()
+    vi.mocked(left.isSameEntry).mockRejectedValue(new DOMException('nope'))
+    expect(await sameFile(handleFor(left), handleFor(right))).toBe(false)
+  })
+})
+
+// The list the API cannot produce on its own. What matters here is that the
+// provider wires its three verbs to it; the list's own rules are checked
+// against real storage in `recentFiles.test.ts`.
+describe('the recent list', () => {
+  function withRecent() {
+    return createFsaProvider(createRecentFiles(sameFile, memoryStore()))
+  }
+
+  it('is empty until something has been opened', async () => {
+    expect(await withRecent().list()).toEqual([])
+  })
+
+  it('holds a handle that opens the file again with no picker', async () => {
+    const listed = withRecent()
+    const { handle } = fakeFile({ contents: '{"reopened":true}' })
+    await listed.remember(handleFor(handle))
+
+    const [entry] = await listed.list()
+    expect(entry.name).toBe('project.mvm')
+
+    const opened = await listed.open(entry.handle)
+    expect(opened?.data).toEqual({ reopened: true })
+    expect(showOpenFilePicker).not.toHaveBeenCalled()
+  })
+
+  it('answers the same file once, however many times it is remembered', async () => {
+    const listed = withRecent()
+    const { handle } = fakeFile()
+    await listed.remember(handleFor(handle))
+    await listed.remember(handleFor(handle))
+    expect(await listed.list()).toHaveLength(1)
+  })
+
+  it('forgets an entry when asked', async () => {
+    const listed = withRecent()
+    const { handle } = fakeFile()
+    await listed.remember(handleFor(handle))
+    await listed.forget(handleFor(handle))
+    expect(await listed.list()).toEqual([])
   })
 })

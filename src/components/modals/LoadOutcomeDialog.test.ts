@@ -173,6 +173,53 @@ describe('a refused load', () => {
     expect(text()).toContain('this build reads 2')
   })
 
+  // A file picked off the recent list that no longer opens. Naming it matters
+  // because the user chose it from several, and the way out is dropping the
+  // entry rather than closing and finding it still there.
+  it('names a file that has moved, and offers to drop the entry', async () => {
+    const { text } = await show({ kind: 'missing', name: 'sunken-city.mvm', forget: () => {} })
+    expect(text()).toContain('sunken-city.mvm')
+    expect(text()).toContain('moved, renamed, or deleted')
+    expect(text()).toContain('Remove from Recent')
+  })
+
+  it('says a refused permission is a refused permission, not a missing file', async () => {
+    const { text } = await show({
+      kind: 'permission-refused',
+      name: 'sunken-city.mvm',
+      forget: () => {},
+    })
+    expect(text()).toContain('not given permission')
+    expect(text()).not.toContain('deleted')
+    expect(text()).toContain('Remove from Recent')
+  })
+
+  it('emits forget alone when the entry is dropped', async () => {
+    const { wrapper } = await show({ kind: 'missing', name: 'gone.mvm', forget: () => {} })
+    const button = [...document.body.querySelectorAll('button')].find(
+      (element) => element.textContent?.trim() === 'Remove from Recent',
+    )!
+    button.click()
+    await nextTick()
+
+    expect(wrapper.emitted('forget')).toHaveLength(1)
+    expect(wrapper.emitted('dismiss')).toBeUndefined()
+  })
+
+  // Nothing else has an entry behind it, so nothing else may offer to drop one.
+  it('offers nothing to forget for a failure that named no file', async () => {
+    for (const outcome of [
+      { kind: 'invalid' },
+      { kind: 'failed', message: 'x' },
+      { kind: 'too-new', version: 9, supported: 2 },
+    ] as LoadOutcome[]) {
+      const { wrapper, text } = await show(outcome)
+      expect(text(), outcome.kind).not.toContain('Remove from Recent')
+      wrapper.unmount()
+      document.body.innerHTML = ''
+    }
+  })
+
   it('passes an unexpected failure through rather than swallowing it', async () => {
     const { text } = await show({ kind: 'failed', message: 'the disk caught fire' })
     expect(text()).toContain('the disk caught fire')

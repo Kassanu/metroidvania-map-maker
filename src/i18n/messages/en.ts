@@ -114,6 +114,9 @@ export const en = {
   'menu.file.open': 'Open\u2026',
   'menu.file.save': 'Save',
   'menu.file.saveAs': 'Save As\u2026',
+  // Absent rather than empty where the provider cannot reopen a file, which is
+  // every engine without File System Access.
+  'menu.file.recent': 'Recent',
 
   // The file the project came from, beside the project name. Absent until a
   // project has been saved or opened, since there is nothing true to say.
@@ -179,6 +182,13 @@ export const en = {
   'load.limit.glyphLength': 'characters in one glyph',
   'load.tooNew':
     'It was saved by a newer version of the app (file version {version}, and this build reads {supported}).',
+  // A file the app already knew about that has stopped opening. Both name it,
+  // because the user picked it off a list and needs to know which one broke,
+  // and both offer to drop the entry rather than leave it there failing.
+  'load.missing': '{name} is no longer where it was. It may have been moved, renamed, or deleted.',
+  'load.permissionRefused':
+    'This app was not given permission to open {name}. Browsers ask again each time the app is reloaded.',
+  'load.forget': 'Remove from Recent',
   'load.error': 'Something went wrong: {message}',
 
   // The offer made at startup when a previous session left work behind.

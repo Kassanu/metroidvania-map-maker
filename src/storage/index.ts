@@ -23,7 +23,14 @@ export type {
   StorageProvider,
 } from '@/core/storage/provider'
 export { getRecoveryStore, setRecoveryStore } from './recoveryStore'
-export { FILE_EXTENSION, StorageError, safeFileName, withExtension } from '@/core/storage/provider'
+export {
+  FILE_EXTENSION,
+  FileMissingError,
+  PermissionDeniedError,
+  StorageError,
+  safeFileName,
+  withExtension,
+} from '@/core/storage/provider'
 
 let active: StorageProvider | null = null
 

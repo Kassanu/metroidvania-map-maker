@@ -89,10 +89,15 @@ export function createDownloadProvider(): StorageProvider {
     canSaveInPlace: false,
 
     // A downloaded file leaves no reference behind, so there is nothing this
-    // could enumerate. Recent files renders an empty list as absent.
+    // could enumerate and nothing worth keeping when asked to. Recent files
+    // renders an empty list as an absent menu rather than an empty one.
     async list(): Promise<StorageEntry[]> {
       return []
     },
+
+    async remember(): Promise<void> {},
+
+    async forget(): Promise<void> {},
 
     async open(handle?: StorageHandle): Promise<OpenedProject | null> {
       // Reopening is what a handle is for, and this provider never issues one

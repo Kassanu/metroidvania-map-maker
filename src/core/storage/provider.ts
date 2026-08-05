@@ -26,8 +26,11 @@ export interface StorageHandle {
 export interface StorageEntry {
   handle: StorageHandle
   name: string
-  // Milliseconds since the epoch, or null where a provider cannot report it.
-  modifiedAt: number | null
+  // When this app last opened the project, in milliseconds since the epoch.
+  // The ordering key for a recent list, and deliberately not the file's own
+  // modification time: reading that costs a permission prompt per entry, which
+  // is the whole thing a recent list exists to avoid.
+  lastOpenedAt: number
 }
 
 // The result of opening: the raw parsed JSON, plus the handle to save back to.
@@ -48,9 +51,19 @@ export interface StorageProvider {
   // degraded story is made visible rather than faked.
   readonly canSaveInPlace: boolean
 
-  // Recent/known projects. May be empty for providers that cannot enumerate
-  // (a download-only local provider has nothing to list).
+  // Recent/known projects, newest first. May be empty for providers that
+  // cannot enumerate: a download-only local provider issues no handle that
+  // survives the call, so it has nothing to list and the menu is absent.
   list(): Promise<StorageEntry[]>
+
+  // Adds a handle to that list, or moves it to the front if it is already
+  // there. Called where a handle has just proved it works, which is the far
+  // side of a successful open or save and nowhere else.
+  remember(handle: StorageHandle): Promise<void>
+
+  // Drops a handle from the list. The user's answer to an entry that no longer
+  // opens, and the only way one leaves other than falling off the end.
+  forget(handle: StorageHandle): Promise<void>
 
   // Prompts the user if the provider needs it (a file picker), or resolves the
   // given handle directly.
@@ -101,6 +114,29 @@ export class StorageError extends Error {
     super(message)
     this.name = 'StorageError'
     this.cause = cause
+  }
+}
+
+// The two ways a handle that worked once stops working. Both are ordinary
+// rather than exceptional: a file gets moved, and permission does not survive
+// a reload. They are separate classes because the caller does different things
+// with them, and because telling failures apart by reading a message is how a
+// reworded string silently changes behaviour.
+
+// The file is not where the handle says it is: moved, renamed, or deleted.
+export class FileMissingError extends StorageError {
+  constructor(cause?: unknown) {
+    super('the file is no longer there', cause)
+    this.name = 'FileMissingError'
+  }
+}
+
+// The user declined the browser's prompt, or the prompt could not be shown
+// because the click that led here was too long ago.
+export class PermissionDeniedError extends StorageError {
+  constructor(cause?: unknown) {
+    super('permission to use the file was refused', cause)
+    this.name = 'PermissionDeniedError'
   }
 }
 

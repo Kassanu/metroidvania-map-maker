@@ -1,8 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia } from 'pinia'
 import { createTestPinia } from '@/test-setup'
-import { StorageError, setStorageProvider } from '@/storage'
-import type { OpenedProject, StorageHandle, StorageProvider } from '@/storage'
+import {
+  FileMissingError,
+  PermissionDeniedError,
+  StorageError,
+  setStorageProvider,
+} from '@/storage'
+import type { OpenedProject, StorageEntry, StorageHandle, StorageProvider } from '@/storage'
 import { FileTooLargeError } from '@/core/serialize/limits'
 import { toJSON } from '@/core/serialize'
 import { PROJECT_SCOPE, useModelStore } from './model'
@@ -18,6 +23,8 @@ function fakeProvider(over: Partial<StorageProvider> = {}): StorageProvider {
     label: 'Fake',
     canSaveInPlace: true,
     list: async () => [],
+    remember: async () => {},
+    forget: async () => {},
     open: async () => null,
     save: async (handle) => handle,
     saveAs: async () => null,
@@ -47,6 +54,13 @@ function repairableFile(): unknown {
   const file = cleanFile() as { project: { maps: { rooms: unknown[] }[] } }
   file.project.maps[0].rooms = [{ id: 'r1', areaId: 'nope', cells: [[0, 0]] }]
   return file
+}
+
+// Lets a fire-and-forget call and everything it awaits finish. The dialog
+// handlers are synchronous, so remembering and forgetting are started rather
+// than awaited.
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 function makeDirty(): void {
@@ -424,6 +438,185 @@ describe('restoring a snapshot', () => {
 
     expect(await answer).toBe(false)
     expect(model.projectName).toBe(before)
+  })
+})
+
+describe('the recent list', () => {
+  // An in-memory provider list, so what the store did with it is visible.
+  function withRecent(over: Partial<StorageProvider> = {}) {
+    const entries: StorageEntry[] = []
+    const provider = fakeProvider({
+      list: async () => [...entries],
+      remember: async (from) => {
+        const at = entries.findIndex((entry) => entry.handle.name === from.name)
+        if (at >= 0) entries.splice(at, 1)
+        entries.unshift({ handle: from, name: from.name, lastOpenedAt: entries.length })
+      },
+      forget: async (from) => {
+        const at = entries.findIndex((entry) => entry.handle.name === from.name)
+        if (at >= 0) entries.splice(at, 1)
+      },
+      ...over,
+    })
+    setStorageProvider(provider)
+    return entries
+  }
+
+  it('is empty until something is asked of storage', () => {
+    withRecent()
+    expect(useFileStore().recent).toEqual([])
+  })
+
+  it('reads what storage has when asked', async () => {
+    const entries = withRecent()
+    entries.push({ handle: handle('old.mvm'), name: 'old.mvm', lastOpenedAt: 1 })
+
+    const file = useFileStore()
+    await file.refreshRecent()
+    expect(file.recent.map((entry) => entry.name)).toEqual(['old.mvm'])
+  })
+
+  // A handle is worth offering again only once it has proved it works, which
+  // is the same rule `markSaved` follows: the far side of real bytes.
+  it('records a file that opened', async () => {
+    withRecent({ open: async () => ({ data: cleanFile(), handle: handle('opened.mvm') }) })
+    const file = useFileStore()
+
+    await file.open()
+    expect(file.recent.map((entry) => entry.name)).toEqual(['opened.mvm'])
+  })
+
+  it('records a file that was written', async () => {
+    withRecent({ saveAs: async () => handle('written.mvm') })
+    const file = useFileStore()
+
+    await file.saveAs()
+    expect(file.recent.map((entry) => entry.name)).toEqual(['written.mvm'])
+  })
+
+  it('records nothing for an open that failed', async () => {
+    withRecent({
+      open: async () => {
+        throw new StorageError('nope')
+      },
+    })
+    const file = useFileStore()
+
+    await file.open()
+    expect(file.recent).toEqual([])
+  })
+
+  it('records nothing for a picker that was dismissed', async () => {
+    withRecent({ saveAs: async () => null })
+    const file = useFileStore()
+
+    await file.saveAs()
+    expect(file.recent).toEqual([])
+  })
+
+  // The repaired project only exists once it is accepted, and so does the
+  // reason to remember where it came from.
+  it('records a repaired file only once the repair is accepted', async () => {
+    withRecent({ open: async () => ({ data: repairableFile(), handle: handle('hurt.mvm') }) })
+    const file = useFileStore()
+
+    await file.open()
+    expect(file.recent).toEqual([])
+
+    const outcome = file.outcome
+    if (outcome?.kind !== 'repaired') throw new Error('expected a repaired outcome')
+    // The dialog's accept handler is synchronous, so remembering is started
+    // rather than awaited.
+    outcome.accept()
+    await settle()
+    expect(file.recent.map((entry) => entry.name)).toEqual(['hurt.mvm'])
+  })
+
+  it('drops an entry when told to forget it', async () => {
+    const entries = withRecent()
+    entries.push({ handle: handle('gone.mvm'), name: 'gone.mvm', lastOpenedAt: 1 })
+    const file = useFileStore()
+    await file.refreshRecent()
+
+    await file.forgetRecent(handle('gone.mvm'))
+    expect(file.recent).toEqual([])
+  })
+})
+
+// A file the app already knew about that has stopped opening. Both cases have
+// their own sentence and their own way out, and both are told apart by type.
+describe('a recent file that no longer opens', () => {
+  it('reports a file that has moved, and offers to drop the entry', async () => {
+    const forget = vi.fn(async () => {})
+    setStorageProvider(
+      fakeProvider({
+        forget,
+        open: async () => {
+          throw new FileMissingError()
+        },
+      }),
+    )
+    const file = useFileStore()
+
+    expect(await file.open(handle('moved.mvm'))).toBe(false)
+    const outcome = file.outcome
+    if (outcome?.kind !== 'missing') throw new Error('expected a missing outcome')
+    expect(outcome.name).toBe('moved.mvm')
+
+    outcome.forget()
+    await settle()
+    expect(forget).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a refused permission separately from a missing file', async () => {
+    setStorageProvider(
+      fakeProvider({
+        open: async () => {
+          throw new PermissionDeniedError()
+        },
+      }),
+    )
+    const file = useFileStore()
+
+    await file.open(handle('locked.mvm'))
+    expect(file.outcome?.kind).toBe('permission-refused')
+  })
+
+  // The same failures reaching a save, where the handle is the one being
+  // written to rather than one picked off the list.
+  it('names the file a failed save was writing to', async () => {
+    setStorageProvider(
+      fakeProvider({
+        saveAs: async () => handle('vanished.mvm'),
+        save: async () => {
+          throw new FileMissingError()
+        },
+      }),
+    )
+    const file = useFileStore()
+    await file.saveAs()
+    makeDirty()
+
+    expect(await file.save()).toBe(false)
+    const outcome = file.outcome
+    if (outcome?.kind !== 'missing') throw new Error('expected a missing outcome')
+    expect(outcome.name).toBe('vanished.mvm')
+  })
+
+  // Nothing was picked off a list, so there is no entry to offer to drop and
+  // the shared wording is what is left.
+  it('falls back to the general failure when no file was named', async () => {
+    setStorageProvider(
+      fakeProvider({
+        open: async () => {
+          throw new PermissionDeniedError()
+        },
+      }),
+    )
+    const file = useFileStore()
+
+    await file.open()
+    expect(file.outcome?.kind).toBe('failed')
   })
 })
 

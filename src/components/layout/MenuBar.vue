@@ -251,6 +251,32 @@ const displayTitle = computed(() =>
             >
               {{ t(item.key) }}
             </DropdownMenuItem>
+            <!-- Absent rather than empty. A provider that cannot reopen a file
+                 has nothing to list, and a submenu that opens onto nothing
+                 reads as a bug. -->
+            <DropdownMenuSub v-if="file.recent.length > 0">
+              <DropdownMenuSubTrigger class="popover-item popover-subtrigger">
+                {{ t('menu.file.recent') }}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent
+                  class="popover-surface"
+                  style="--popover-min-width: 12rem"
+                  :side-offset="4"
+                >
+                  <DropdownMenuItem
+                    v-for="entry in file.recent"
+                    :key="entry.name + entry.lastOpenedAt"
+                    class="popover-item recent-item"
+                    :disabled="file.busy"
+                    :title="entry.name"
+                    @select="file.open(entry.handle)"
+                  >
+                    {{ entry.name }}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenuPortal>
       </DropdownMenuRoot>
@@ -547,6 +573,16 @@ const displayTitle = computed(() =>
 .project-file {
   font-size: 0.75rem;
   opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A file name has no length limit; the menu does. The full name is on the
+   item's title attribute. */
+.recent-item {
+  display: block;
+  max-width: 20rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -30,8 +30,13 @@ import type { LimitName } from '@/core/serialize/limits'
 import { InvalidFileError } from '@/core/serialize/errors'
 import { UnsupportedVersionError } from '@/core/serialize/migrate'
 import { FILE_VERSION } from '@/core/serialize/schema'
-import { StorageError, getStorageProvider } from '@/storage'
-import type { StorageHandle } from '@/storage'
+import {
+  FileMissingError,
+  PermissionDeniedError,
+  StorageError,
+  getStorageProvider,
+} from '@/storage'
+import type { StorageEntry, StorageHandle } from '@/storage'
 import { createProject } from '@/core/factory'
 import type { ProjectModel } from '@/core/types'
 import { t } from '@/i18n'
@@ -50,6 +55,11 @@ export type LoadOutcome =
   // most is 10000" is something a person can act on, where "too large" is not.
   | { kind: 'too-large'; limit: LimitName; found: number; allowed: number }
   | { kind: 'too-new'; version: number; supported: number }
+  // The two ways a file the app already knows about stops opening. Both carry
+  // a way to drop the entry that named it, since an entry that cannot be
+  // opened is one the user wants gone and nothing else.
+  | { kind: 'missing'; name: string; forget: () => void }
+  | { kind: 'permission-refused'; name: string; forget: () => void }
   | { kind: 'failed'; message: string }
 
 function newProjectModel() {
@@ -80,6 +90,11 @@ export const useFileStore = defineStore('file', () => {
   const pendingChoice = shallowRef<((choice: UnsavedChoice) => void) | null>(null)
 
   const outcome = shallowRef<LoadOutcome | null>(null)
+
+  // Files this app has opened or written, newest first. Held in memory so the
+  // menu renders from what is already known: reading storage when the menu
+  // opens would make the list appear a frame after the menu did.
+  const recent = shallowRef<StorageEntry[]>([])
 
   const fileName = computed(() => handle.value?.name ?? null)
   const canSaveInPlace = computed(() => getStorageProvider().canSaveInPlace)
@@ -123,6 +138,25 @@ export const useFileStore = defineStore('file', () => {
     handle.value = from
     // A project that has just been loaded or created is not unsaved work.
     model.markSaved()
+  }
+
+  // Reads the recent list back into memory. Called after anything that can
+  // have changed it, and once at startup.
+  async function refreshRecent(): Promise<void> {
+    recent.value = await getStorageProvider().list()
+  }
+
+  // A handle that has just proved it works, which is the only kind worth
+  // offering again. Called on the far side of a read or a write and nowhere
+  // else, for the same reason `markSaved` follows the bytes.
+  async function remember(from: StorageHandle): Promise<void> {
+    await getStorageProvider().remember(from)
+    await refreshRecent()
+  }
+
+  async function forgetRecent(from: StorageHandle): Promise<void> {
+    await getStorageProvider().forget(from)
+    await refreshRecent()
   }
 
   // The far side of a project that was never written: a crash snapshot,
@@ -188,15 +222,19 @@ export const useFileStore = defineStore('file', () => {
         outcome.value = {
           kind: 'repaired',
           counts: countByKind(pending.report),
-          accept: () => adopt(pending.accept(), opened.handle),
+          accept: () => {
+            adopt(pending.accept(), opened.handle)
+            void remember(opened.handle)
+          },
         }
         return false
       }
 
       adopt(pending.accept(), opened.handle)
+      await remember(opened.handle)
       return true
     } catch (error) {
-      outcome.value = describeFailure(error)
+      outcome.value = failureOf(error, from ?? null)
       return false
     } finally {
       busy.value = false
@@ -212,13 +250,15 @@ export const useFileStore = defineStore('file', () => {
     // and prompts every time.
     if (!handle.value) return await saveAs()
 
+    const writingTo = handle.value
     busy.value = true
     try {
-      handle.value = await getStorageProvider().save(handle.value, toJSON(model.project))
+      handle.value = await getStorageProvider().save(writingTo, toJSON(model.project))
       model.markSaved()
+      await remember(handle.value)
       return true
     } catch (error) {
-      outcome.value = describeFailure(error)
+      outcome.value = failureOf(error, writingTo)
       return false
     } finally {
       busy.value = false
@@ -238,13 +278,36 @@ export const useFileStore = defineStore('file', () => {
 
       handle.value = saved
       model.markSaved()
+      await remember(saved)
       return true
     } catch (error) {
-      outcome.value = describeFailure(error)
+      outcome.value = failureOf(error, null)
       return false
     } finally {
       busy.value = false
     }
+  }
+
+  // A failure that names a file the app already knew about is worth its own
+  // sentence, and its own way out: the entry that led here is what the user
+  // wants rid of. Everything else falls through to the shared wording.
+  //
+  // Tested before the unwrapping in `describeFailure`, which would otherwise
+  // reach past these to the DOMException they carry as their cause.
+  function failureOf(error: unknown, from: StorageHandle | null): LoadOutcome {
+    if (from) {
+      if (error instanceof FileMissingError) {
+        return { kind: 'missing', name: from.name, forget: () => void forgetRecent(from) }
+      }
+      if (error instanceof PermissionDeniedError) {
+        return {
+          kind: 'permission-refused',
+          name: from.name,
+          forget: () => void forgetRecent(from),
+        }
+      }
+    }
+    return describeFailure(error)
   }
 
   return {
@@ -254,12 +317,15 @@ export const useFileStore = defineStore('file', () => {
     busy: computed(() => busy.value),
     unsavedPromptOpen,
     outcome: computed(() => outcome.value),
+    recent: computed(() => recent.value),
 
     newProject,
     open,
     save,
     saveAs,
     restoreSnapshot,
+    refreshRecent,
+    forgetRecent,
     confirmDiscard,
     chooseUnsaved,
     dismissOutcome,

@@ -45,6 +45,9 @@ export const useUiStore = defineStore('ui', {
     openWelcome() {
       this.welcomeOpen = true
     },
+    closeWelcome() {
+      this.welcomeOpen = false
+    },
     setHideWelcomeOnStartup(hide: boolean) {
       this.hideWelcomeOnStartup = hide
     },
