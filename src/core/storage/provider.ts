@@ -122,8 +122,11 @@ export function safeFileName(projectName: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, MAX_STEM)
-    // After the truncation, which can expose a new trailing dot or space.
+    // Trailing, after the truncation, which can expose a new dot or space.
+    // Leading, because a name starting with a dot is a hidden file on Unix,
+    // and `..` from a path-shaped project name reads as one.
     .replace(/[. ]+$/, '')
+    .replace(/^[. ]+/, '')
 
   // Tested against the part before the first dot, since the reservation
   // applies to the device name however the file is suffixed.

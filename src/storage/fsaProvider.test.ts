@@ -183,6 +183,10 @@ describe('saveAs', () => {
       ['maps/world', 'maps world.mvm'],
       ['a\\b:c*d?e', 'a b c d e.mvm'],
       ['trailing dots...', 'trailing dots.mvm'],
+      // A leading dot is a hidden file on Unix, and a path-shaped name reads
+      // as one once the separators have gone.
+      ['.hidden', 'hidden.mvm'],
+      ['../../etc/passwd', 'etc passwd.mvm'],
       ['   ', 'Untitled Project.mvm'],
       ['CON', 'Untitled Project.mvm'],
       ['already.mvm', 'already.mvm'],
