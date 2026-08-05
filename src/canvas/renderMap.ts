@@ -1,4 +1,4 @@
-import { worldToScreen, type Bounds } from './viewport'
+import { screenToWorld, worldToScreen, type Bounds } from './viewport'
 import type { Camera } from './camera'
 import type { CanvasPalette } from './palette'
 import { doorOpening, doorRuns, wallGaps, type DoorRun, type OpenSpan } from './doorRuns'
@@ -391,7 +391,7 @@ export function renderMap(
   // Order matters and is the whole layout of this function: the grid belongs
   // under the rooms, so it reads as the paper they sit on rather than as
   // lines drawn over them.
-  if (scene.showGrid) drawGrid(ctx, scene, topLeft, bottomRight)
+  if (scene.showGrid) drawGrid(ctx, scene, topLeft, bottomRight, width, height)
 
   const map = scene.map
   if (!map) return
@@ -881,8 +881,21 @@ function drawGrid(
   scene: MapScene,
   topLeft: { x: number; y: number },
   bottomRight: { x: number; y: number },
+  width: number,
+  height: number,
 ) {
   const { camera, bounds, tileSize, palette } = scene
+
+  // Only the lines that cross the canvas. The page is as large as the map's
+  // content, which is unbounded, and a line stroked off-screen costs the same
+  // as one on it. The lines still span the page, so they stop at its edge
+  // rather than at the viewport's.
+  const first = screenToWorld(0, 0, camera, tileSize)
+  const last = screenToWorld(width, height, camera, tileSize)
+  const minCol = Math.max(bounds.minCol, Math.floor(first.x))
+  const maxCol = Math.min(bounds.maxCol + 1, Math.ceil(last.x))
+  const minRow = Math.max(bounds.minRow, Math.floor(first.y))
+  const maxRow = Math.min(bounds.maxRow + 1, Math.ceil(last.y))
 
   // One path for every line, stroked once: an order of magnitude fewer
   // canvas state changes than stroking each line separately.
@@ -890,12 +903,12 @@ function drawGrid(
   ctx.lineWidth = 1
   ctx.setLineDash([])
   ctx.beginPath()
-  for (let col = bounds.minCol; col <= bounds.maxCol + 1; col++) {
+  for (let col = minCol; col <= maxCol; col++) {
     const x = worldToScreen(col, 0, camera, tileSize).x
     ctx.moveTo(x, topLeft.y)
     ctx.lineTo(x, bottomRight.y)
   }
-  for (let row = bounds.minRow; row <= bounds.maxRow + 1; row++) {
+  for (let row = minRow; row <= maxRow; row++) {
     const y = worldToScreen(0, row, camera, tileSize).y
     ctx.moveTo(topLeft.x, y)
     ctx.lineTo(bottomRight.x, y)

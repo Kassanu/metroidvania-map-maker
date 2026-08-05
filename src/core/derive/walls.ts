@@ -177,14 +177,16 @@ export function isInteriorVertex(room: Room, x: number, y: number): boolean {
 }
 
 // Interior vertices: the targets Draw/Edit shows for inner-wall drawing.
+//
+// Walks the cells, not the bounding box. Every interior vertex is the top-left
+// corner of a cell the room owns, so the cells are a complete enumeration, and
+// a sparse room's box is arbitrarily larger than its contents. Row-major order,
+// so a set that reordered under an edit still yields the same list.
 export function interiorVertices(room: Room): { x: number; y: number }[] {
-  const bounds = roomBounds(room)
-  if (!bounds) return []
   const vertices: { x: number; y: number }[] = []
-  for (let y = bounds.minRow + 1; y <= bounds.maxRow; y++) {
-    for (let x = bounds.minCol + 1; x <= bounds.maxCol; x++) {
-      if (isInteriorVertex(room, x, y)) vertices.push({ x, y })
-    }
+  for (const cell of room.cells) {
+    const { x, y } = parseCell(cell)
+    if (isInteriorVertex(room, x, y)) vertices.push({ x, y })
   }
-  return vertices
+  return vertices.sort((a, b) => a.y - b.y || a.x - b.x)
 }

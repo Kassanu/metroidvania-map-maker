@@ -235,6 +235,27 @@ describe('renderMap', () => {
     expect(ctx.stroke).toHaveBeenCalledTimes(1)
   })
 
+  // The page is as large as the map's content and the content is unbounded, so
+  // a line per column of the page is a per-frame cost with no ceiling. Only
+  // the lines that cross the canvas are drawn.
+  it('draws only the grid lines the canvas can show', () => {
+    const { ctx } = fakeContext()
+    const bounds = { minCol: 0, minRow: 0, maxCol: 500_000, maxRow: 500_000 }
+    renderMap(ctx as unknown as CanvasRenderingContext2D, 800, 600, scene({ bounds }))
+
+    // 800px and 600px of canvas at 20px a cell: 41 verticals and 31
+    // horizontals, not half a million of each.
+    expect(ctx.moveTo).toHaveBeenCalledTimes(41 + 31)
+  })
+
+  it('still stops the grid at the page edge when the page is smaller than the canvas', () => {
+    const { ctx } = fakeContext()
+    const bounds = { minCol: 0, minRow: 0, maxCol: 3, maxRow: 1 }
+    renderMap(ctx as unknown as CanvasRenderingContext2D, 800, 600, scene({ bounds }))
+
+    expect(ctx.moveTo).toHaveBeenCalledTimes(8)
+  })
+
   it('skips the grid entirely when it is switched off, but still paints the page', () => {
     const { ctx, fills } = fakeContext()
     renderMap(ctx as unknown as CanvasRenderingContext2D, 800, 600, scene({ showGrid: false }))

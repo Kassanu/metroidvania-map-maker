@@ -45,6 +45,7 @@ import type {
   Transition,
   WallStyle,
 } from '../types'
+import { CellBudget, LIMITS, checkLimit, inCoordinateRange } from './limits'
 import { migrate } from './migrate'
 import { FILE_FORMAT, FILE_VERSION } from './schema'
 import type {
@@ -270,6 +271,9 @@ export type LoadEvent =
   // An id that was blank or already claimed, and so was reissued. `from` is
   // empty when the file simply had none.
   | { kind: 'id-remapped'; what: string; from: string; to: string }
+  // Free text longer than the format allows, cut to the cap. `what` names the
+  // field, since the text itself is by definition too long to quote.
+  | { kind: 'text-truncated'; what: string }
 
 export type LoadEventKind = LoadEvent['kind']
 
@@ -346,24 +350,34 @@ function arrayOf<T>(value: T[] | undefined): T[] {
   return Array.isArray(value) ? value : []
 }
 
-// `[x, y]`, or null if it is not a pair of safe integers. `cellKey` on a
-// string or an undefined produces a key like `"undefined,3"`, which then owns
-// cells and indexes transitions.
+// `[x, y]`, or null if it is not a pair of coordinates the grid can hold.
+// `cellKey` on a string or an undefined produces a key like `"undefined,3"`,
+// which then owns cells and indexes transitions.
 //
-// Safe integers specifically, not merely finite numbers: the grid is signed
-// ints, and a coordinate that is not one does not survive the round trip.
-// `1e400` parses to `Infinity`, becomes the key `"Infinity,0"`, and writes
-// back out as `[null, 0]`, so saving and reloading relocates the cell with a
-// clean report both times.
+// Integers in range, not merely finite numbers: the grid is signed ints, and a
+// coordinate that is not one does not survive the round trip. `1e400` parses to
+// `Infinity`, becomes the key `"Infinity,0"`, and writes back out as
+// `[null, 0]`, so saving and reloading relocates the cell with a clean report
+// both times.
 function cellOf(value: JsonCell | undefined): CellKey | null {
   if (!Array.isArray(value) || value.length < 2) return null
   const [x, y] = value
-  if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) return null
+  if (!inCoordinateRange(x) || !inCoordinateRange(y)) return null
   return cellKey(x, y)
 }
 
 function stringOr(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
+}
+
+// Free text, capped. Over-length text is one bad value rather than a file that
+// is not what it claims, so it truncates and reports rather than refusing the
+// whole load.
+function textOf(raw: unknown, fallback: string, cap: number, what: string, log: LoadLog): string {
+  const value = stringOr(raw, fallback)
+  if (value.length <= cap) return value
+  log.add({ kind: 'text-truncated', what })
+  return value.slice(0, cap)
 }
 
 export function fromJSON(raw: unknown): LoadResult {
@@ -375,6 +389,12 @@ export function fromJSON(raw: unknown): LoadResult {
   // represented, and the worst available reading is to treat it as empty.
   const jsonMaps = arrayOf(source.maps)
   if (jsonMaps.length === 0) throw new InvalidFileError('project has no maps')
+  checkLimit('maps', jsonMaps.length)
+
+  const jsonAreas = arrayOf(source.areas)
+  const jsonLockTypes = arrayOf(source.lockTypes)
+  checkLimit('areas', jsonAreas.length)
+  checkLimit('lockTypes', jsonLockTypes.length)
 
   const log = new LoadLog()
 
@@ -382,7 +402,14 @@ export function fromJSON(raw: unknown): LoadResult {
   // all draw from it so a collision across *any* of them is caught.
   const seenIds = new Set<string>()
 
-  const project = createEmptyProject(source.name ?? 'Untitled Project')
+  // Cells are budgeted across the whole project rather than per map, because
+  // the resident cost is the total and a file can spread it over any number
+  // of maps.
+  const budget = new CellBudget()
+
+  const project = createEmptyProject(
+    textOf(source.name, 'Untitled Project', LIMITS.nameLength, 'project name', log),
+  )
   project.settings = loadSettings(source.settings, log)
 
   // The two immutable fallbacks are seeded first and then overwritten only in
@@ -391,28 +418,30 @@ export function fromJSON(raw: unknown): LoadResult {
   project.areas.set(WORLD_AREA_ID, createWorldArea())
   project.lockTypes.set(OPEN_LOCK_ID, createOpenLockType())
 
-  for (const area of arrayOf(source.areas)) {
+  for (const area of jsonAreas) {
+    const name = textOf(area.name, '', LIMITS.nameLength, 'area name', log)
     if (area.id === WORLD_AREA_ID) {
-      project.areas.get(WORLD_AREA_ID)!.name = area.name
+      project.areas.get(WORLD_AREA_ID)!.name = name
       continue
     }
     project.areas.set(area.id as AreaId, {
       id: area.id as AreaId,
-      name: area.name,
+      name,
       cellColor: area.cellColor ?? null,
       wallColor: area.wallColor ?? null,
-      notes: area.notes ?? '',
+      notes: textOf(area.notes, '', LIMITS.notesLength, 'area notes', log),
     })
   }
 
-  for (const lockType of arrayOf(source.lockTypes)) {
+  for (const lockType of jsonLockTypes) {
+    const name = textOf(lockType.name, '', LIMITS.nameLength, 'lock type name', log)
     if (lockType.id === OPEN_LOCK_ID) {
-      project.lockTypes.get(OPEN_LOCK_ID)!.name = lockType.name
+      project.lockTypes.get(OPEN_LOCK_ID)!.name = name
       continue
     }
     project.lockTypes.set(lockType.id as LockTypeId, {
       id: lockType.id as LockTypeId,
-      name: lockType.name,
+      name,
       color: lockType.color ?? null,
       glyph: lockType.glyph ?? null,
     })
@@ -423,10 +452,16 @@ export function fromJSON(raw: unknown): LoadResult {
   // reissue it), so looking it up again would miss or hit the wrong map.
   const loaded: { jsonMap: JsonMap; map: MapModel }[] = []
   for (const jsonMap of jsonMaps) {
-    const mapId = claimId(jsonMap.id, 'map', `map "${jsonMap.name}"`, seenIds, log) as MapId
-    const map = createMap(jsonMap.name, mapId)
-    map.notes = jsonMap.notes ?? ''
-    loadRooms(map, arrayOf(jsonMap.rooms), project, log, seenIds)
+    const name = textOf(jsonMap.name, '', LIMITS.nameLength, 'map name', log)
+    const mapId = claimId(jsonMap.id, 'map', `map "${name}"`, seenIds, log) as MapId
+    const map = createMap(name, mapId)
+    map.notes = textOf(jsonMap.notes, '', LIMITS.notesLength, 'map notes', log)
+    const jsonRooms = arrayOf(jsonMap.rooms)
+    checkLimit('roomsPerMap', jsonRooms.length)
+    checkLimit('iconsPerMap', arrayOf(jsonMap.icons).length)
+    checkLimit('linesPerMap', arrayOf(jsonMap.lines).length)
+    checkLimit('transitionsPerMap', arrayOf(jsonMap.transitions).length)
+    loadRooms(map, jsonRooms, project, log, seenIds, budget)
     loadIcons(map, jsonMap, log, seenIds)
     loadLines(map, jsonMap, log, seenIds)
     project.maps.push(map.id)
@@ -548,13 +583,14 @@ function loadRooms(
   project: ProjectModel,
   log: LoadLog,
   seenIds: Set<string>,
+  budget: CellBudget,
 ): void {
   for (const jsonRoom of arrayOf(jsonRooms)) {
     if (!isPlainObject(jsonRoom)) {
       log.add({ kind: 'room-dropped', map: map.name, room: '', reason: 'malformed' })
       continue
     }
-    const name = stringOr(jsonRoom.name, '')
+    const name = textOf(jsonRoom.name, '', LIMITS.nameLength, 'room name', log)
     const roomId = claimId(jsonRoom.id, 'room', `room "${name}"`, seenIds, log) as RoomId
     // Names are optional, so fall back to the id: an event naming no room at
     // all is not much use in a dialog.
@@ -566,9 +602,16 @@ function loadRooms(
 
     const room = createRoom(areaId, roomId)
     room.name = name
-    room.notes = stringOr(jsonRoom.notes, '')
+    room.notes = textOf(jsonRoom.notes, '', LIMITS.notesLength, 'room notes', log)
 
-    for (const jsonCell of arrayOf(jsonRoom.cells)) {
+    // Both caps are checked before the cells are walked, not after: the walk
+    // is the cost being bounded.
+    const jsonCells = arrayOf(jsonRoom.cells)
+    checkLimit('cellsPerRoom', jsonCells.length)
+    checkLimit('innerWallsPerRoom', arrayOf(jsonRoom.innerWalls).length)
+    budget.spend(jsonCells.length)
+
+    for (const jsonCell of jsonCells) {
       const cell = cellOf(jsonCell)
       if (cell === null) {
         log.add({ kind: 'cell-dropped', map: map.name, room: label, cell, reason: 'malformed' })
@@ -681,8 +724,8 @@ function loadIcons(map: MapModel, jsonMap: JsonMap, log: LoadLog, seenIds: Set<s
       cell,
       plateColor: stringOr(jsonIcon.plateColor, DEFAULT_ICON_PLATE),
       glyphColor: stringOr(jsonIcon.glyphColor, DEFAULT_ICON_GLYPH),
-      label: stringOr(jsonIcon.label, ''),
-      notes: stringOr(jsonIcon.notes, ''),
+      label: textOf(jsonIcon.label, '', LIMITS.nameLength, 'icon label', log),
+      notes: textOf(jsonIcon.notes, '', LIMITS.notesLength, 'icon notes', log),
     }
     map.icons.set(icon.id, icon)
     map.iconAtCell.set(cell, icon.id)
@@ -696,6 +739,7 @@ function loadLines(map: MapModel, jsonMap: JsonMap, log: LoadLog, seenIds: Set<s
       continue
     }
     const raw = arrayOf(jsonLine.points)
+    checkLimit('pointsPerLine', raw.length)
     const points = raw.map(cellOf).filter((cell): cell is CellKey => cell !== null)
     // A bad point would silently change the path shape, jumping a corner the
     // user never drew. The line goes instead.
@@ -714,8 +758,8 @@ function loadLines(map: MapModel, jsonMap: JsonMap, log: LoadLog, seenIds: Set<s
       points,
       arrowStart: jsonLine.arrowStart === true,
       arrowEnd: jsonLine.arrowEnd === true,
-      label: stringOr(jsonLine.label, ''),
-      notes: stringOr(jsonLine.notes, ''),
+      label: textOf(jsonLine.label, '', LIMITS.nameLength, 'line label', log),
+      notes: textOf(jsonLine.notes, '', LIMITS.notesLength, 'line notes', log),
     }
     map.lines.set(line.id, line)
   }
@@ -855,14 +899,16 @@ function deserializeTransition(
       b: resolveLock(json.locks?.b ?? OPEN_LOCK_ID, map, project, log),
     },
     direction: readDirection(json.direction),
-    notes: json.notes ?? '',
+    notes: textOf(json.notes, '', LIMITS.notesLength, 'transition notes', log),
   }
 
   if (!isPlainObject(json.geometry)) return null
   const geometry = json.geometry as Record<string, unknown>
 
   if (json.type === 'edge') {
-    const segments = arrayOf(geometry.segments as JsonDoorSegment[] | undefined)
+    const jsonSegments = arrayOf(geometry.segments as JsonDoorSegment[] | undefined)
+    checkLimit('segmentsPerDoor', jsonSegments.length)
+    const segments = jsonSegments
       .map((segment) => {
         if (!isPlainObject(segment)) return null
         const cell = cellOf(segment.cell as JsonCell | undefined)

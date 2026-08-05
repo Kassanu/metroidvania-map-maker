@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { edgeOfCell } from './cell'
+import { cellKey, edgeOfCell } from './cell'
 import {
   connectedComponents,
   originalGroupIndex,
@@ -14,7 +14,9 @@ import {
   resizableRuns,
 } from './derive/walls'
 import { areaBoundsOnMap, contentBounds, ownedCellsIn, roomsOverlapping } from './derive/bounds'
+import { createRoom } from './factory'
 import { WORLD_AREA_ID } from './ids'
+import type { RoomId } from './ids'
 import { grid, makeRoom, rect, setup, sorted } from './testUtils'
 
 describe('connectivity', () => {
@@ -290,6 +292,38 @@ describe('interior vertices', () => {
   it('finds none in a single-cell room', () => {
     const { project, map } = setup()
     expect(interiorVertices(makeRoom(project, map, rect(0, 0, 1, 1)))).toHaveLength(0)
+  })
+
+  it('reports them in row-major order', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 3))
+    expect(interiorVertices(room)).toEqual([
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+      { x: 1, y: 2 },
+      { x: 2, y: 2 },
+    ])
+  })
+
+  // A staircase's bounding box grows as the square of its cell count, so a
+  // sweep of the box rather than the cells is unbounded work for a room a
+  // user can actually draw. The budget is generous: it separates a walk of
+  // 40,000 cells from one of 4x10^8 grid positions, not two similar numbers.
+  //
+  // The room is assembled directly rather than painted, because painting it
+  // is the slow part and it is not what this measures.
+  it('costs the cells rather than the bounding box', () => {
+    const room = createRoom(WORLD_AREA_ID, 'staircase' as RoomId)
+    for (let i = 0; i < 20_000; i++) {
+      room.cells.add(cellKey(i, i))
+      room.cells.add(cellKey(i + 1, i))
+    }
+
+    const started = performance.now()
+    const vertices = interiorVertices(room)
+    expect(performance.now() - started).toBeLessThan(5_000)
+    // A staircase one cell thick never encloses a vertex.
+    expect(vertices).toHaveLength(0)
   })
 })
 
