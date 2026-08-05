@@ -69,13 +69,29 @@ export interface StorageProvider {
 // Kept as its own interface rather than bolted onto StorageProvider, because
 // a cloud provider has no business implementing autosave and the local one has
 // no business implementing it twice.
+// What the recovery offer has to say about a snapshot before anyone decides
+// whether they want it. Stored beside the payload rather than read out of it,
+// so listing what is there does not mean parsing every snapshot to find out.
+export interface SnapshotAbout {
+  projectName: string
+  // The file the work came from, or null for a project that was never saved.
+  fileName: string | null
+}
+
+export interface SnapshotInfo extends SnapshotAbout {
+  key: string
+  // Milliseconds since the epoch.
+  savedAt: number
+}
+
 export interface RecoveryStore {
   // `key` identifies the project, not the file location. A project saved to a
   // new location keeps its recovery history.
-  put(key: string, data: unknown): Promise<void>
+  put(key: string, data: unknown, about: SnapshotAbout): Promise<void>
   get(key: string): Promise<unknown | null>
   remove(key: string): Promise<void>
-  list(): Promise<{ key: string; savedAt: number }[]>
+  // Newest first.
+  list(): Promise<SnapshotInfo[]>
 }
 
 export class StorageError extends Error {

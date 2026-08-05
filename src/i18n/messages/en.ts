@@ -180,6 +180,21 @@ export const en = {
   'load.tooNew':
     'It was saved by a newer version of the app (file version {version}, and this build reads {supported}).',
   'load.error': 'Something went wrong: {message}',
+
+  // The offer made at startup when a previous session left work behind.
+  // Worded so it cannot be read as "your file was changed": nothing here has
+  // been anywhere near the file on disk.
+  'recovery.title': 'Recover unsaved work?',
+  'recovery.body':
+    'The app closed before these changes were saved. Recover the ones you want to keep.',
+  'recovery.from': 'From {file}',
+  'recovery.noFile': 'Never saved to a file',
+  'recovery.savedAt': 'Autosaved {when}',
+  'recovery.recover': 'Recover',
+  'recovery.discard': 'Discard',
+  // Leaves the snapshots alone, so they are offered again next time.
+  // Discarding is the only thing that stops the question coming back.
+  'recovery.dismiss': 'Not Now',
   'menu.edit': 'Edit',
   'menu.view': 'View',
   'menu.help': 'Help',

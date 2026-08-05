@@ -347,6 +347,86 @@ describe('Open', () => {
   })
 })
 
+describe('restoring a snapshot', () => {
+  it('adopts the project the snapshot holds', async () => {
+    const file = useFileStore()
+    const model = useModelStore()
+
+    expect(await file.restoreSnapshot(cleanFile(), 'proj_old')).toBe(true)
+    expect(model.projectName).toBe('From disk')
+  })
+
+  // It is work that was never written anywhere, and the title bar, the unload
+  // guard and autosave all read that off the dirty flag.
+  it('adopts it as unsaved work in no file', async () => {
+    const file = useFileStore()
+    const model = useModelStore()
+    await file.restoreSnapshot(cleanFile(), 'proj_old')
+
+    expect(model.status.isDirty).toBe(true)
+    expect(file.fileName).toBeNull()
+  })
+
+  // Autosave writes under this, so a snapshot that is recovered must go on
+  // being the same snapshot rather than spawning a second one beside it.
+  it('carries the snapshot identity onto the recovered project', async () => {
+    const file = useFileStore()
+    const model = useModelStore()
+    await file.restoreSnapshot(cleanFile(), 'proj_old')
+    expect(model.projectKey).toBe('proj_old')
+  })
+
+  // A snapshot is written by this build, which is the argument people use to
+  // skip validation and exactly why a corrupted store would load unchecked.
+  it('runs the full loader over it, gate and all', async () => {
+    const file = useFileStore()
+    const model = useModelStore()
+    const before = model.projectName
+
+    expect(await file.restoreSnapshot(repairableFile(), 'proj_old')).toBe(false)
+    expect(file.outcome?.kind).toBe('repaired')
+    expect(model.projectName).toBe(before)
+  })
+
+  it('adopts a repaired snapshot as unsaved work once it is accepted', async () => {
+    const file = useFileStore()
+    const model = useModelStore()
+    await file.restoreSnapshot(repairableFile(), 'proj_old')
+
+    const outcome = file.outcome
+    if (outcome?.kind !== 'repaired') throw new Error('expected a repaired outcome')
+    outcome.accept()
+
+    expect(model.projectName).toBe('From disk')
+    expect(model.projectKey).toBe('proj_old')
+    expect(model.status.isDirty).toBe(true)
+    expect(file.fileName).toBeNull()
+  })
+
+  it('refuses a snapshot that is not a project, and keeps the one in hand', async () => {
+    const file = useFileStore()
+    const model = useModelStore()
+    const before = model.projectName
+
+    expect(await file.restoreSnapshot({ format: 'something else' }, 'proj_old')).toBe(false)
+    expect(file.outcome?.kind).toBe('invalid')
+    expect(model.projectName).toBe(before)
+  })
+
+  it('asks about unsaved work before replacing it', async () => {
+    const file = useFileStore()
+    const model = useModelStore()
+    makeDirty()
+    const before = model.projectName
+
+    const answer = file.restoreSnapshot(cleanFile(), 'proj_old')
+    file.chooseUnsaved('cancel')
+
+    expect(await answer).toBe(false)
+    expect(model.projectName).toBe(before)
+  })
+})
+
 describe('the current file indicator', () => {
   it('has nothing to name until a project has been written or opened', async () => {
     setStorageProvider(fakeProvider({ saveAs: async () => handle('named.mvm') }))

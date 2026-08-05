@@ -125,6 +125,45 @@ export const useFileStore = defineStore('file', () => {
     model.markSaved()
   }
 
+  // The far side of a project that was never written: a crash snapshot,
+  // adopted through the same gate a file gets.
+  //
+  // Adopted dirty and with no file, because that is exactly what it is. It
+  // cannot use `adopt`, whose whole job is to say the opposite. The identity
+  // comes from the snapshot so that later autosaves overwrite it rather than
+  // starting a second snapshot of the same work.
+  async function restoreSnapshot(data: unknown, key: string): Promise<boolean> {
+    if (busy.value) return false
+    if (!(await confirmDiscard())) return false
+
+    busy.value = true
+    try {
+      const pending = openPending(data)
+      if (pending.requiresConfirmation) {
+        outcome.value = {
+          kind: 'repaired',
+          counts: countByKind(pending.report),
+          accept: () => adoptRecovered(pending.accept(), key),
+        }
+        return false
+      }
+
+      adoptRecovered(pending.accept(), key)
+      return true
+    } catch (error) {
+      outcome.value = describeFailure(error)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  function adoptRecovered(next: ProjectModel, key: string): void {
+    model.replaceProject(next, key)
+    handle.value = null
+    model.markNeverSaved()
+  }
+
   async function newProject(): Promise<boolean> {
     if (busy.value) return false
     if (!(await confirmDiscard())) return false
@@ -220,6 +259,7 @@ export const useFileStore = defineStore('file', () => {
     open,
     save,
     saveAs,
+    restoreSnapshot,
     confirmDiscard,
     chooseUnsaved,
     dismissOutcome,

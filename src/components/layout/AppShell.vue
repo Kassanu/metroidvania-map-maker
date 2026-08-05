@@ -10,15 +10,26 @@ import WelcomeModal from '../modals/WelcomeModal.vue'
 import AboutModal from '../modals/AboutModal.vue'
 import ConfirmUnsavedChanges from '../modals/ConfirmUnsavedChanges.vue'
 import LoadOutcomeDialog from '../modals/LoadOutcomeDialog.vue'
+import RecoveryOffer from '../modals/RecoveryOffer.vue'
+import { onMounted } from 'vue'
 import { useUiStore } from '@/stores/ui'
 import { useModelStore } from '@/stores/model'
 import { useFileStore } from '@/stores/file'
+import { useRecoveryStore } from '@/stores/recovery'
 import { useHotkeyAction } from '@/hotkeys/useHotkeyAction'
 import { useUnloadGuard } from '@/composables/useUnloadGuard'
 
 const ui = useUiStore()
 const model = useModelStore()
 const file = useFileStore()
+// Instantiated here rather than lazily, because autosave is watchers the store
+// registers: nothing else would ever ask for it, and a snapshot that is only
+// taken once someone opens a dialog is no snapshot at all.
+const recovery = useRecoveryStore()
+
+// Once, and only at startup. What is in the store at this moment is a previous
+// session's work; anything written after this is this session's own.
+onMounted(() => void recovery.scan())
 
 // The File verbs are always available, so they register here rather than in a
 // mode that owns them. Each runs the same store action the menu item runs, so
@@ -64,6 +75,12 @@ function acceptRepairedLoad() {
       :outcome="file.outcome"
       @accept="acceptRepairedLoad"
       @dismiss="file.dismissOutcome()"
+    />
+    <RecoveryOffer
+      :snapshots="recovery.offered"
+      @recover="recovery.recover($event)"
+      @discard="recovery.discard($event)"
+      @dismiss="recovery.dismiss()"
     />
   </div>
 </template>

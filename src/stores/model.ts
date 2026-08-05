@@ -38,6 +38,7 @@ import { PROJECT_SCOPE } from '@/core/journal'
 import { t } from '@/i18n'
 import type { HistoryEffect } from '@/core/history'
 import type { Transaction, TransactionScope } from '@/core/journal'
+import { newId } from '@/core/ids'
 import type { MapId } from '@/core/ids'
 import type { ProjectModel } from '@/core/types'
 
@@ -106,6 +107,10 @@ export interface HistoryStatus {
 
 // Core takes every user-visible name as a parameter so it never holds a second
 // copy of what i18n owns. This is the caller that knows the locale.
+function newProjectKey(): string {
+  return newId('proj')
+}
+
 function newProject(): ProjectModel {
   return createProject({
     projectName: t('name.project'),
@@ -119,6 +124,20 @@ function newProject(): ProjectModel {
 export const useModelStore = defineStore('model', () => {
   const model = shallowRef(markRaw(newProject()))
   const stack = shallowRef(markRaw(new History(model.value)))
+
+  // Which project is loaded, for anything that has to keep something beside
+  // it. Core carries no project id and should not grow one: a file that is
+  // copied is not the same project as its original, and two windows on the
+  // same file are two projects to anything storing per-project state.
+  //
+  // It changes exactly when the project object does, so it is also the
+  // cheapest thing to watch for "the project was swapped".
+  const projectKeyState = ref(newProjectKey())
+
+  // How many gestures are mid-drag. Non-zero means the model is holding
+  // speculative state that has not been committed and may yet be cancelled,
+  // so anything reading the project for storage has to wait.
+  const liveGestures = ref(0)
 
   // The published projection. Private refs behind computeds: a caller that can
   // assign to `rev` can desynchronise the UI from the model in a way that looks
@@ -233,6 +252,7 @@ export const useModelStore = defineStore('model', () => {
   function beginGesture(label: string, scope: TransactionScope): Gesture {
     const transaction = stack.value.begin(label, scope)
     let live = true
+    liveGestures.value++
 
     return {
       reapply(body) {
@@ -245,18 +265,21 @@ export const useModelStore = defineStore('model', () => {
           // journaled is the one state the model cannot recover from.
           transaction.rollback()
           live = false
+          liveGestures.value--
           throw error
         }
       },
       commit() {
         if (!live) return
         live = false
+        liveGestures.value--
         stack.value.commit(transaction)
         sync()
       },
       cancel() {
         if (!live) return
         live = false
+        liveGestures.value--
         transaction.rollback()
         // Deliberately no `sync()`. Rolling back restores exactly the state the
         // published counters already describe, so republishing would spend a
@@ -290,14 +313,23 @@ export const useModelStore = defineStore('model', () => {
   // Deliberately does not prompt about unsaved work. `History.clear` is
   // explicit that whoever calls it owns that question, because afterwards there
   // is nothing left to warn about.
-  function replaceProject(next: ProjectModel): void {
+  // `key` carries an identity forward instead of minting one, which is what a
+  // recovered snapshot needs: further autosaves have to overwrite the snapshot
+  // that was recovered rather than start a second one beside it.
+  function replaceProject(next: ProjectModel, key = newProjectKey()): void {
     model.value = markRaw(next)
     stack.value = markRaw(new History(model.value))
+    projectKeyState.value = key
     sync()
   }
 
   function markSaved(): void {
     stack.value.markSaved()
+    sync()
+  }
+
+  function markNeverSaved(): void {
+    stack.value.markNeverSaved()
     sync()
   }
 
@@ -314,6 +346,8 @@ export const useModelStore = defineStore('model', () => {
     // than from a constant the renderer owns.
     tileSize: computed(() => tileSizeState.value),
     status: computed(() => statusState.value),
+    projectKey: computed(() => projectKeyState.value),
+    gestureActive: computed(() => liveGestures.value > 0),
     // A map that has never been touched reads 0, the same as a fresh one, so a
     // caller never has to distinguish "no entry" from "no changes".
     mapRev: computed(() => (mapId: MapId) => mapRevState.value.get(mapId) ?? 0),
@@ -324,6 +358,7 @@ export const useModelStore = defineStore('model', () => {
     redo,
     replaceProject,
     markSaved,
+    markNeverSaved,
     onActivateMap,
     pushNavigation,
   }

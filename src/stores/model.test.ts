@@ -368,4 +368,80 @@ describe('useModelStore', () => {
       expect(checkInvariants(store.project)).toEqual([])
     })
   })
+
+  // What anything keeping something beside the project keys off. Core carries
+  // no project id: a copied file is not the same project as its original.
+  describe('projectKey', () => {
+    it('is a fresh one for a project swapped in', () => {
+      const store = useModelStore()
+      const before = store.projectKey
+
+      store.replaceProject(blankProject('From Disk'))
+      expect(store.projectKey).not.toBe(before)
+    })
+
+    it('carries an identity forward when one is given', () => {
+      const store = useModelStore()
+      store.replaceProject(blankProject('Recovered'), 'proj_old')
+      expect(store.projectKey).toBe('proj_old')
+    })
+
+    it('survives editing and saving, which change no identity', () => {
+      const store = useModelStore()
+      const key = store.projectKey
+
+      store.run('Rename', PROJECT_SCOPE, (tx) => renameProject(tx, store.project, 'Zebes'))
+      store.markSaved()
+      expect(store.projectKey).toBe(key)
+    })
+  })
+
+  // Non-zero means the model is holding speculative state: the ghost of a drag
+  // that has not been committed and may still be cancelled.
+  describe('gestureActive', () => {
+    it('is false with nothing being dragged', () => {
+      expect(useModelStore().gestureActive).toBe(false)
+    })
+
+    it('is true from the start of a gesture until it commits', () => {
+      const store = useModelStore()
+      const gesture = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      expect(store.gestureActive).toBe(true)
+
+      gesture.commit()
+      expect(store.gestureActive).toBe(false)
+    })
+
+    it('is false again once a gesture is cancelled', () => {
+      const store = useModelStore()
+      const gesture = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      gesture.cancel()
+      expect(store.gestureActive).toBe(false)
+    })
+
+    // Esc followed by the eventual pointerup is the normal abort sequence, so
+    // settling twice must not leave the count reading below zero.
+    it('is unmoved by settling twice', () => {
+      const store = useModelStore()
+      const gesture = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      gesture.cancel()
+      gesture.commit()
+
+      const second = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      expect(store.gestureActive).toBe(true)
+      second.cancel()
+      expect(store.gestureActive).toBe(false)
+    })
+
+    it('is false again after a gesture body throws', () => {
+      const store = useModelStore()
+      const gesture = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      expect(() =>
+        gesture.reapply(() => {
+          throw new Error('bad op')
+        }),
+      ).toThrow('bad op')
+      expect(store.gestureActive).toBe(false)
+    })
+  })
 })

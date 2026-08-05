@@ -47,6 +47,10 @@ interface Entry {
 // core never holds a copy of what i18n owns. A hardcoded 'Switch tab' would
 // render untranslated beside translated labels in the Edit menu.
 
+// A saved position that no entry can ever equal, so `isDirty` stays true down
+// to an empty stack.
+const NEVER_SAVED = Symbol('never saved')
+
 export class History {
   private readonly project: ProjectModel
   private past: Entry[] = []
@@ -62,7 +66,11 @@ export class History {
   // the top entry is exact in both directions: undo back to the saved point is
   // clean, and a different edit from that point is dirty even though the stack
   // depth matches.
-  private savedEntry: Entry | null
+  //
+  // `NEVER_SAVED` is the third state: a project whose contents exist nowhere
+  // but in memory, which `null` cannot express because `null` is also "saved
+  // while the history was empty".
+  private savedEntry: Entry | null | typeof NEVER_SAVED
   // Set while `applyEffect` is driving the view, so the tab change it causes
   // is not recorded as a fresh navigation.
   private replayingNavigation = false
@@ -100,6 +108,13 @@ export class History {
 
   markSaved(): void {
     this.savedEntry = this.lastEdit()
+  }
+
+  // The opposite: this project matches no file, and undoing back to an empty
+  // stack does not make it match one. A recovered crash snapshot is the case
+  // that needs it, since its contents were never written anywhere.
+  markNeverSaved(): void {
+    this.savedEntry = NEVER_SAVED
   }
 
   // The top entry that is not a tab switch.

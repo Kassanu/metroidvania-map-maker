@@ -184,6 +184,41 @@ describe('History', () => {
     expect(history.isDirty).toBe(true)
   })
 
+  // A project whose contents were never written anywhere: a recovered crash
+  // snapshot is the case. A fresh history reads clean, which is right for a
+  // new project and wrong for this one.
+  describe('markNeverSaved', () => {
+    it('makes a project with no history dirty', () => {
+      const { history } = setup()
+      expect(history.isDirty).toBe(false)
+
+      history.markNeverSaved()
+      expect(history.isDirty).toBe(true)
+    })
+
+    // The state `null` cannot express: undoing every edit gets back to an
+    // empty stack, which still matches no file.
+    it('stays dirty after undoing everything', () => {
+      const { project, map, history } = setup()
+      history.markNeverSaved()
+
+      const transaction = history.begin('Paint room', { kind: 'map', mapId: map.id })
+      paintCells(transaction, project, map, ['0,0'], { areaId: WORLD_AREA_ID })
+      history.commit(transaction)
+      history.undo()
+
+      expect(history.canUndo).toBe(false)
+      expect(history.isDirty).toBe(true)
+    })
+
+    it('is undone by saving', () => {
+      const { history } = setup()
+      history.markNeverSaved()
+      history.markSaved()
+      expect(history.isDirty).toBe(false)
+    })
+  })
+
   // `clear()` is the new-project / open / revert path. It had no callers yet,
   // which is exactly why it was worth fixing before one exists.
   describe('clear', () => {

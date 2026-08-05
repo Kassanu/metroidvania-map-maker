@@ -15,10 +15,14 @@ import type { StorageProvider } from '@/core/storage/provider'
 
 export type {
   OpenedProject,
+  RecoveryStore,
+  SnapshotAbout,
+  SnapshotInfo,
   StorageEntry,
   StorageHandle,
   StorageProvider,
 } from '@/core/storage/provider'
+export { getRecoveryStore, setRecoveryStore } from './recoveryStore'
 export { FILE_EXTENSION, StorageError, safeFileName, withExtension } from '@/core/storage/provider'
 
 let active: StorageProvider | null = null
