@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test'
 // against a real browser.
 
 async function dismissWelcome(page: Page) {
-  await page.goto('/')
+  await page.goto('/?sample=one-of-everything')
   await page.getByRole('button', { name: 'Get started' }).click()
 }
 

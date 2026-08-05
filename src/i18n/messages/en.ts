@@ -110,6 +110,51 @@ export const en = {
 
   'menu.main': 'Main menu',
   'menu.file': 'File',
+  'menu.file.new': 'New',
+  'menu.file.open': 'Open\u2026',
+  'menu.file.save': 'Save',
+  'menu.file.saveAs': 'Save As\u2026',
+
+  // The file the project came from, beside the project name. Absent until a
+  // project has been saved or opened, since there is nothing true to say.
+  'file.noFile': 'Not saved to a file',
+
+  // The three-way question every replacement asks first. Worded as the
+  // desktop convention, because that is what people already know.
+  'unsaved.title': 'Save changes to {name}?',
+  'unsaved.body': 'Your changes will be lost if you do not save them.',
+  'unsaved.save': 'Save',
+  'unsaved.discard': "Don't Save",
+
+  // What a repaired load reports. Counts by kind rather than a list: a
+  // damaged file produces thousands of events and a wall of them informs
+  // nobody.
+  'load.repaired.title': 'This file needed repairs',
+  'load.repaired.body':
+    'Opening it will change your data as listed. The file on disk is not modified.',
+  'load.repaired.accept': 'Open Anyway',
+  'load.cellDropped': '{count} cells dropped',
+  'load.innerWallDropped': '{count} inner walls dropped',
+  'load.roomDropped': '{count} rooms dropped',
+  'load.roomSplit': '{count} rooms split apart',
+  'load.iconDropped': '{count} icons dropped',
+  'load.lineDropped': '{count} lines dropped',
+  'load.transitionDropped': '{count} transitions dropped',
+  'load.doorTrimmed': '{count} doors trimmed',
+  'load.areaRemapped': '{count} rooms moved to World',
+  'load.lockRemapped': '{count} locks reset to Open',
+  'load.settingReset': '{count} settings reset',
+  'load.colorReset': '{count} colours reset',
+  'load.iconTypeReset': '{count} icons of an unknown type',
+  'load.assumedDefault': '{count} missing values assumed',
+  'load.idRemapped': '{count} duplicate ids reissued',
+  'load.textTruncated': '{count} over-long text fields shortened',
+
+  'load.failed.title': 'Could not open that file',
+  'load.invalid': 'It is not a Metroidvania Map Maker project, or it is damaged.',
+  'load.tooLarge': 'It is larger than this app can open ({limit}).',
+  'load.tooNew': 'It was saved by a newer version of the app.',
+  'load.error': 'Something went wrong: {message}',
   'menu.edit': 'Edit',
   'menu.view': 'View',
   'menu.help': 'Help',
@@ -383,6 +428,9 @@ export const en = {
   'action.undo': 'Undo',
   'action.redo': 'Redo',
   'action.save': 'Save',
+  'action.saveAs': 'Save As',
+  'action.openProject': 'Open',
+  'action.newProject': 'New',
   'action.deleteSelection': 'Delete selection',
   'action.copy': 'Copy',
   'action.cut': 'Cut',

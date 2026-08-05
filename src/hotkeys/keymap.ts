@@ -9,6 +9,12 @@ export type ActionId =
   | 'undo'
   | 'redo'
   | 'save'
+  | 'saveAs'
+  | 'openProject'
+  // Bound to nothing, like `deselect`. Every browser reserves Ctrl+N for a new
+  // window and does not let a page have it, so offering a binding that silently
+  // did something else would be worse than the menu item alone.
+  | 'newProject'
   | 'deleteSelection'
   | 'copy'
   | 'cut'
@@ -42,6 +48,8 @@ export const defaultKeymap: Record<string, ActionId> = {
   'mod+shift+z': 'redo',
   'mod+y': 'redo',
   'mod+s': 'save',
+  'mod+shift+s': 'saveAs',
+  'mod+o': 'openProject',
   delete: 'deleteSelection',
   backspace: 'deleteSelection',
 

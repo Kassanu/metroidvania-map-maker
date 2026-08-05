@@ -1,0 +1,291 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "name": "Sunken City",
+    "settings": {
+      "tileSize": 32,
+      "backgroundColor": null,
+      "gridColor": null,
+      "gridInExports": true
+    },
+    "lockTypes": [
+      {
+        "id": "open",
+        "name": "Open",
+        "color": null,
+        "glyph": null
+      },
+      {
+        "id": "locked",
+        "name": "Locked",
+        "color": "#e23b3b",
+        "glyph": null
+      },
+      {
+        "id": "lock_fc2z60fv",
+        "name": "Grapple",
+        "color": "#7fd97f",
+        "glyph": "G"
+      },
+      {
+        "id": "lock_707cktap",
+        "name": "Flood Gate",
+        "color": "#3b7dd8",
+        "glyph": "F"
+      }
+    ],
+    "areas": [
+      {
+        "id": "world",
+        "name": "World",
+        "cellColor": null,
+        "wallColor": null,
+        "notes": ""
+      },
+      {
+        "id": "area_8zst1xym",
+        "name": "Drowned Quarter",
+        "cellColor": "#1b4b5a",
+        "wallColor": "#8fd3e8",
+        "notes": ""
+      },
+      {
+        "id": "area_e97sxyc3",
+        "name": "Spires",
+        "cellColor": "#4a2f5e",
+        "wallColor": "#d8b3ff",
+        "notes": ""
+      }
+    ],
+    "maps": [
+      {
+        "id": "map_gw5j0eaw",
+        "name": "Harbour",
+        "notes": "",
+        "rooms": [
+          {
+            "id": "room_njdzs3z2",
+            "areaId": "area_8zst1xym",
+            "name": "",
+            "notes": "",
+            "cells": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                2,
+                0
+              ],
+              [
+                3,
+                0
+              ],
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                3,
+                1
+              ],
+              [
+                0,
+                2
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                2
+              ],
+              [
+                3,
+                2
+              ]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_0bsnc0qp",
+            "areaId": "area_e97sxyc3",
+            "name": "",
+            "notes": "",
+            "cells": [
+              [
+                6,
+                0
+              ],
+              [
+                7,
+                0
+              ],
+              [
+                8,
+                0
+              ],
+              [
+                6,
+                1
+              ],
+              [
+                7,
+                1
+              ],
+              [
+                8,
+                1
+              ],
+              [
+                6,
+                2
+              ],
+              [
+                7,
+                2
+              ],
+              [
+                8,
+                2
+              ]
+            ],
+            "innerWalls": []
+          }
+        ],
+        "transitions": [],
+        "icons": [
+          {
+            "id": "ic_45krxnvq",
+            "iconType": "save",
+            "cell": [
+              1,
+              1
+            ],
+            "plateColor": "#3b7dd8",
+            "glyphColor": "#f5f7fa",
+            "label": "",
+            "notes": ""
+          }
+        ],
+        "lines": []
+      },
+      {
+        "id": "map_ccbzkpg5",
+        "name": "The Depths",
+        "notes": "",
+        "rooms": [
+          {
+            "id": "room_qbffy2jj",
+            "areaId": "area_8zst1xym",
+            "name": "",
+            "notes": "",
+            "cells": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                2,
+                0
+              ],
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                0,
+                2
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                2
+              ],
+              [
+                0,
+                3
+              ],
+              [
+                1,
+                3
+              ],
+              [
+                2,
+                3
+              ]
+            ],
+            "innerWalls": []
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      },
+      {
+        "id": "map_ss2t69kb",
+        "name": "Vault",
+        "notes": "",
+        "rooms": [
+          {
+            "id": "room_dve8cz8e",
+            "areaId": "area_e97sxyc3",
+            "name": "",
+            "notes": "",
+            "cells": [
+              [
+                2,
+                2
+              ],
+              [
+                3,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                3
+              ]
+            ],
+            "innerWalls": []
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      }
+    ]
+  }
+}

@@ -8,9 +8,35 @@ import TabBar from './TabBar.vue'
 import CheatSheetModal from '../modals/CheatSheetModal.vue'
 import WelcomeModal from '../modals/WelcomeModal.vue'
 import AboutModal from '../modals/AboutModal.vue'
+import ConfirmUnsavedChanges from '../modals/ConfirmUnsavedChanges.vue'
+import LoadOutcomeDialog from '../modals/LoadOutcomeDialog.vue'
 import { useUiStore } from '@/stores/ui'
+import { useModelStore } from '@/stores/model'
+import { useFileStore } from '@/stores/file'
+import { useHotkeyAction } from '@/hotkeys/useHotkeyAction'
+import { useUnloadGuard } from '@/composables/useUnloadGuard'
 
 const ui = useUiStore()
+const model = useModelStore()
+const file = useFileStore()
+
+// The File verbs are always available, so they register here rather than in a
+// mode that owns them. Each runs the same store action the menu item runs, so
+// a shortcut and its item cannot come to mean different things.
+useHotkeyAction('newProject', () => void file.newProject())
+useHotkeyAction('openProject', () => void file.open())
+useHotkeyAction('save', () => void file.save())
+useHotkeyAction('saveAs', () => void file.saveAs())
+
+useUnloadGuard()
+
+// The repaired project is reachable only through the closure the store put on
+// the outcome, so accepting is the one way past the gate.
+function acceptRepairedLoad() {
+  const outcome = file.outcome
+  if (outcome?.kind === 'repaired') outcome.accept()
+  file.dismissOutcome()
+}
 </script>
 
 <template>
@@ -29,6 +55,16 @@ const ui = useUiStore()
     <CheatSheetModal />
     <WelcomeModal />
     <AboutModal />
+    <ConfirmUnsavedChanges
+      :open="file.unsavedPromptOpen"
+      :name="model.projectName"
+      @choose="file.chooseUnsaved($event)"
+    />
+    <LoadOutcomeDialog
+      :outcome="file.outcome"
+      @accept="acceptRepairedLoad"
+      @dismiss="file.dismissOutcome()"
+    />
   </div>
 </template>
 

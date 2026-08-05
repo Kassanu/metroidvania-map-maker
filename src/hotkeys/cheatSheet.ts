@@ -16,7 +16,10 @@ const CATEGORIES: ShortcutCategory[] = [
     labelKey: 'cheatSheet.section.modes',
     actions: ['mode.draw', 'mode.select', 'mode.door', 'mode.markup'],
   },
-  { labelKey: 'cheatSheet.section.general', actions: ['undo', 'redo', 'save', 'deleteSelection'] },
+  {
+    labelKey: 'cheatSheet.section.general',
+    actions: ['undo', 'redo', 'newProject', 'openProject', 'save', 'saveAs', 'deleteSelection'],
+  },
   {
     labelKey: 'cheatSheet.section.clipboard',
     actions: ['copy', 'cut', 'paste', 'selectAll', 'deselect', 'duplicate'],
@@ -34,6 +37,9 @@ const ACTION_LABEL_KEYS: Record<ActionId, MessageKey> = {
   undo: 'action.undo',
   redo: 'action.redo',
   save: 'action.save',
+  saveAs: 'action.saveAs',
+  openProject: 'action.openProject',
+  newProject: 'action.newProject',
   deleteSelection: 'action.deleteSelection',
   copy: 'action.copy',
   cut: 'action.cut',

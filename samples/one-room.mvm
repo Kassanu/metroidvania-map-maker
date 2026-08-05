@@ -1,0 +1,73 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 2,
+  "project": {
+    "name": "One Room",
+    "settings": {
+      "tileSize": 32,
+      "backgroundColor": null,
+      "gridColor": null,
+      "gridInExports": true
+    },
+    "lockTypes": [
+      {
+        "id": "open",
+        "name": "Open",
+        "color": null,
+        "glyph": null
+      },
+      {
+        "id": "locked",
+        "name": "Locked",
+        "color": "#e23b3b",
+        "glyph": null
+      }
+    ],
+    "areas": [
+      {
+        "id": "world",
+        "name": "World",
+        "cellColor": null,
+        "wallColor": null,
+        "notes": ""
+      }
+    ],
+    "maps": [
+      {
+        "id": "map_zwedcyh8",
+        "name": "Map 1",
+        "notes": "",
+        "rooms": [
+          {
+            "id": "room_dp4a8gpz",
+            "areaId": "world",
+            "name": "",
+            "notes": "",
+            "cells": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ]
+            ],
+            "innerWalls": []
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      }
+    ]
+  }
+}

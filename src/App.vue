@@ -5,7 +5,6 @@ import { useHotkeys } from './hotkeys/useHotkeys'
 import { useApplyTheme } from './theme/useApplyTheme'
 import { useApplyLocale } from './i18n/useApplyLocale'
 import { useModelStore } from './stores/model'
-import { seedDevProject } from './dev/seed'
 import { t } from './i18n'
 
 useHotkeys()
@@ -17,9 +16,6 @@ useApplyLocale()
 // work in it without switching to each. It lives here rather than in the
 // MenuBar because it is a property of the document, not of a component.
 const model = useModelStore()
-
-// Development only, and compiled out of a production build. See dev/seed.ts.
-seedDevProject(model)
 
 watchEffect(() => {
   const title = model.status.isDirty

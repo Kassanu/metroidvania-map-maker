@@ -12,7 +12,7 @@ async function openApp(page: Page) {
   })
   page.on('pageerror', (error) => errors.push(String(error)))
 
-  await page.goto('/')
+  await page.goto('/?sample=one-of-everything')
   await page.getByRole('button', { name: 'Get started' }).click()
   return { errors }
 }

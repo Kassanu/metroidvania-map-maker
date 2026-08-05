@@ -27,6 +27,7 @@ import { useClipboardStore } from '@/stores/clipboard'
 import { useModeStore } from '@/stores/mode'
 import { useTabsStore } from '@/stores/tabs'
 import { useToolsStore } from '@/stores/tools'
+import { useFileStore } from '@/stores/file'
 import { isEmptyPlan, planDelete } from '@/selection/deletePlan'
 import { hasAction, runAction } from '@/hotkeys/actions'
 import type { ActionId } from '@/hotkeys/keymap'
@@ -44,6 +45,7 @@ const clipboard = useClipboardStore()
 const modeStore = useModeStore()
 const tabsStore = useTabsStore()
 const tools = useToolsStore()
+const file = useFileStore()
 
 // Destructured so the template gets plain (auto-unwrapped) bindings, and so
 // `ref="titleInput"` resolves: a template ref attribute takes the name of a
@@ -81,9 +83,11 @@ const WIKI_URL = `${GITHUB_URL}/wiki`
 // `dialog` tier while it is open. Reka's own DismissableLayer is what actually
 // closes the menu on Escape; this only tells the global dispatcher a menu is
 // open, so a lower-tier handler does not also respond to the same press.
+const fileMenuOpen = ref(false)
 const editMenuOpen = ref(false)
 const viewMenuOpen = ref(false)
 const helpMenuOpen = ref(false)
+useDialogEscTier(fileMenuOpen)
 useDialogEscTier(editMenuOpen)
 useDialogEscTier(viewMenuOpen)
 useDialogEscTier(helpMenuOpen)
@@ -102,9 +106,25 @@ function resetSidebars() {
   panelsStore.resetLayout()
 }
 
-// File is still an inert placeholder: it needs file I/O, which does not exist
-// yet.
-const inertMenus: MessageKey[] = ['menu.file']
+// Each item names the one predicate its own handler would refuse by, so the
+// enabled state and the handler cannot come to disagree. `busy` is on all four
+// because a second operation started mid-write would race the handle.
+//
+// New, Open and Save As are always available: New and Open guard unsaved work
+// themselves, and Save As has nothing to refuse over. Save falls through to
+// Save As when there is no file, so it is live for an unsaved project too.
+const fileItems = computed(() => [
+  { key: 'menu.file.new' as MessageKey, run: () => void file.newProject(), enabled: !file.busy },
+  { key: 'menu.file.open' as MessageKey, run: () => void file.open(), enabled: !file.busy },
+  { key: 'menu.file.save' as MessageKey, run: () => void file.save(), enabled: !file.busy },
+  { key: 'menu.file.saveAs' as MessageKey, run: () => void file.saveAs(), enabled: !file.busy },
+])
+
+// The file the project came from, beside its name. It says nothing rather than
+// guessing when the project has never been written: on a provider that cannot
+// save in place, every save is a fresh download and there is no file to name
+// until one has been made.
+const currentFile = computed(() => file.fileName ?? t('file.noFile'))
 
 // "Undo Rename Map" rather than a bare "Undo": the label is the transaction's
 // own, so the menu names the step it will actually revert. It falls back to the
@@ -210,11 +230,30 @@ const displayTitle = computed(() =>
       <button v-else type="button" class="project-title-button" @click="startTitleEdit">
         {{ displayTitle }}
       </button>
+      <span class="project-file" :title="currentFile">{{ currentFile }}</span>
     </div>
     <nav class="menu-list" :aria-label="t('menu.main')">
-      <button v-for="menu in inertMenus" :key="menu" type="button" class="menu-item">
-        {{ t(menu) }}
-      </button>
+      <DropdownMenuRoot v-model:open="fileMenuOpen">
+        <DropdownMenuTrigger class="menu-item">{{ t('menu.file') }}</DropdownMenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuContent
+            class="popover-surface"
+            style="--popover-min-width: 12rem"
+            :side-offset="4"
+            align="start"
+          >
+            <DropdownMenuItem
+              v-for="item in fileItems"
+              :key="item.key"
+              class="popover-item"
+              :disabled="!item.enabled"
+              @select="item.run()"
+            >
+              {{ t(item.key) }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenuPortal>
+      </DropdownMenuRoot>
       <DropdownMenuRoot v-model:open="editMenuOpen">
         <DropdownMenuTrigger class="menu-item">{{ t('menu.edit') }}</DropdownMenuTrigger>
         <DropdownMenuPortal>
@@ -499,6 +538,18 @@ const displayTitle = computed(() =>
 .project-title {
   grid-column: 2;
   grid-row: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.project-file {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-title-button {

@@ -9,14 +9,16 @@
 
 import type { Page } from '@playwright/test'
 
-export async function openApp(page: Page) {
+export async function openApp(page: Page, sample = 'one-of-everything') {
   const errors: string[] = []
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text())
   })
   page.on('pageerror', (error) => errors.push(String(error)))
 
-  await page.goto('/')
+  // The app starts blank, so a spec that needs content asks for a sample by
+  // name. `one-of-everything` is the project these specs were written against.
+  await page.goto(`/?sample=${sample}`)
   await page.getByRole('button', { name: 'Get started' }).click()
   return { errors }
 }
