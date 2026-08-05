@@ -27,7 +27,10 @@ import {
   renameArea,
   roomsInArea,
 } from '@/core/ops/project'
-import { deleteRooms, renameRoom } from '@/core/ops/rooms'
+import { assignRoomArea, deleteRooms, renameRoom, reorderRoom } from '@/core/ops/rooms'
+import { dropTargetAt, planDrop, type DropTarget } from '@/panels/hierarchyDrop'
+import { startPointerDrag } from '@/composables/pointerDrag'
+import { DRAG_DEAD_ZONE } from '@/config/constants'
 import { duplicateRooms } from '@/core/ops/clipboard'
 import { useDialogEscTier } from '@/hotkeys/useDialogEscTier'
 import { mapScope } from '@/stores/model'
@@ -268,6 +271,98 @@ watch(
   },
   { flush: 'post' },
 )
+
+// Drag a room onto an area to join it, or between two rooms to place it.
+//
+// Its own drag rather than `useDragReorder`, which reorders a flat list of ids
+// and commits live as the pointer crosses each midpoint. This needs two drop
+// semantics, a preview that says which one is about to happen, and a single
+// transaction on release: a live splice per crossed midpoint would put a row of
+// undo entries behind one gesture.
+const draggingRoom = ref<RoomId | null>(null)
+const dropTarget = ref<DropTarget | null>(null)
+// A completed drag still ends in a synthetic click; this swallows exactly that
+// one, so dropping a row does not also select it.
+let justDragged = false
+
+function dropRows() {
+  return rows.value.flatMap((row, index) => {
+    const el = rowRefs.value[index]
+    if (!el) return []
+    const rect = el.getBoundingClientRect()
+    return [{ kind: row.kind, id: row.id, top: rect.top, height: rect.height }]
+  })
+}
+
+function startRowDrag(event: PointerEvent, row: Row) {
+  if (row.kind !== 'room' || editing.value) return
+  if ((event.target as HTMLElement).closest('.hierarchy-rename, .hierarchy-twisty')) return
+
+  // Capture at press, not deferred. The drag primitive listens on the element
+  // the press began on, and a row drag leaves that row almost immediately: with
+  // capture deferred, a fast drag to a distant area never reports a move back
+  // to the row and no drag ever starts. Capturing costs nothing here, since a
+  // completed drag already swallows its own click.
+  startPointerDrag(event, {
+    deadZone: DRAG_DEAD_ZONE,
+    deadZoneAxis: 'y',
+    onStart: () => {
+      draggingRoom.value = row.id
+    },
+    onMove: ({ event: current }) => {
+      if (!draggingRoom.value) return
+      dropTarget.value = dropTargetAt(current.clientY, dropRows())
+    },
+    onEnd: ({ dragged }) => {
+      justDragged = dragged
+      const target = dropTarget.value
+      const roomId = draggingRoom.value
+      draggingRoom.value = null
+      dropTarget.value = null
+      if (dragged && roomId && target) applyDrop(roomId, target)
+    },
+  })
+}
+
+function applyDrop(roomId: RoomId, target: DropTarget) {
+  const mapId = tabsStore.activeTabId
+  const map = model.project.mapsById.get(mapId)
+  if (!map) return
+  const plan = planDrop(target, roomId, map.roomOrder, (id) => map.rooms.get(id)?.areaId)
+  if (!plan) return
+
+  const from = map.rooms.get(roomId)?.areaId
+  const reassigning = from !== undefined && from !== plan.areaId
+  // Reassign and placement are one transaction, because a cross-area drop is
+  // one gesture and one undo step: dropping a room into another area between
+  // two of its rooms does both, and the user asked for it once.
+  model.run(
+    reassigning ? t('history.assignArea') : t('history.reorderRoom'),
+    mapScope(mapId),
+    (tx) => {
+      if (reassigning) assignRoomArea(tx, map, roomId, plan.areaId)
+      if (plan.toIndex !== null) reorderRoom(tx, map, roomId, plan.toIndex)
+    },
+  )
+}
+
+// The two previews, which must never both show: an area row fills, a room row
+// grows a line on the edge the drop would land against.
+function dropClass(row: Row): string | null {
+  const target = dropTarget.value
+  if (!target || !draggingRoom.value) return null
+  if (target.kind === 'intoArea') {
+    return row.kind === 'area' && row.id === target.areaId ? 'drop-into' : null
+  }
+  if (row.kind !== 'room' || row.id !== target.roomId) return null
+  return target.after ? 'drop-after' : 'drop-before'
+}
+
+function swallowClickAfterDrag(event: MouseEvent) {
+  if (!justDragged) return
+  justDragged = false
+  event.stopPropagation()
+}
 
 function keyOf(row: Row): string {
   return `${row.kind}:${row.id}`
@@ -598,14 +693,26 @@ function handleKeydown(event: KeyboardEvent, index: number) {
 
   <ContextMenuRoot>
     <ContextMenuTrigger as-child>
-      <ul class="hierarchy-tree" role="tree" :aria-label="t('hierarchy.tree')">
+      <ul
+        class="hierarchy-tree"
+        role="tree"
+        :aria-label="t('hierarchy.tree')"
+        @click.capture="swallowClickAfterDrag"
+      >
         <li
           v-for="(row, index) in rows"
           :key="`${row.kind}:${row.id}`"
           :ref="(el) => setRowRef(el as Element | null, index)"
           role="treeitem"
           class="hierarchy-row"
-          :class="{ selected: row.selected, area: row.kind === 'area' }"
+          :class="[
+            {
+              selected: row.selected,
+              area: row.kind === 'area',
+              dragging: draggingRoom === row.id,
+            },
+            dropClass(row),
+          ]"
           :style="{ '--depth': row.level - 1 }"
           :data-row-kind="row.kind"
           :data-row-id="row.id"
@@ -622,6 +729,7 @@ function handleKeydown(event: KeyboardEvent, index: number) {
           @click="selectRow(row, index, $event.shiftKey)"
           @dblclick="beginRename(row, index)"
           @contextmenu="aimAt(row, index)"
+          @pointerdown="startRowDrag($event, row)"
           @keydown="handleKeydown($event, index)"
         >
           <button
@@ -794,6 +902,36 @@ function handleKeydown(event: KeyboardEvent, index: number) {
 }
 .hierarchy-row:hover {
   background: var(--surface-active);
+}
+.hierarchy-row.dragging {
+  opacity: 0.5;
+}
+
+/* The two drop previews. An area fills, so "this row is the destination"; a
+   room grows a line on one edge, so "the gap here is the destination". */
+.hierarchy-row.drop-into {
+  background: var(--accent);
+  color: #fff;
+}
+.hierarchy-row.drop-before,
+.hierarchy-row.drop-after {
+  position: relative;
+}
+.hierarchy-row.drop-before::after,
+.hierarchy-row.drop-after::after {
+  content: '';
+  position: absolute;
+  left: calc(0.25rem + var(--depth) * var(--row-indent));
+  right: 0.25rem;
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.hierarchy-row.drop-before::after {
+  top: -1px;
+}
+.hierarchy-row.drop-after::after {
+  bottom: -1px;
 }
 .hierarchy-row:focus-visible {
   outline: 1px solid var(--accent);

@@ -1103,4 +1103,218 @@ describe('HierarchyPanel', () => {
       expect(useModelStore().project.areas.has(crateria)).toBe(true)
     })
   })
+
+  describe('drag to reassign and reorder', () => {
+    function treeitems(panel: VueWrapper) {
+      return panel.findAll('[role="treeitem"]')
+    }
+
+    // jsdom has no layout, so every row measures zero. Stubbing the rects is
+    // what lets the wiring be tested here; the geometry itself is tested as a
+    // pure function in `panels/hierarchyDrop.test.ts`.
+    function stubRects(panel: VueWrapper, height = 20) {
+      treeitems(panel).forEach((row, index) => {
+        ;(row.element as HTMLElement).getBoundingClientRect = () =>
+          ({ top: index * height, height, bottom: (index + 1) * height }) as DOMRect
+      })
+    }
+
+    async function dragRow(panel: VueWrapper, fromIndex: number, toY: number) {
+      const el = treeitems(panel)[fromIndex].element as HTMLElement
+      el.setPointerCapture = () => {}
+      el.releasePointerCapture = () => {}
+      el.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientY: 0 }),
+      )
+      el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientY: toY }))
+      await nextTick()
+      return el
+    }
+
+    async function dropRow(panel: VueWrapper, fromIndex: number, toY: number) {
+      const el = await dragRow(panel, fromIndex, toY)
+      el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientY: toY }))
+      await nextTick()
+    }
+
+    it('dropping a room on an area row reassigns it', async () => {
+      const { mapId, vault } = setup()
+      const panel = mountTree()
+      stubRects(panel)
+
+      // Row 1 is Vault (World); row 2 is the Crateria area row.
+      await dropRow(panel, 1, 50)
+
+      const model = useModelStore()
+      expect(model.project.mapsById.get(mapId)!.rooms.get(vault)!.areaId).not.toBe(WORLD_AREA_ID)
+      expect(model.status.undoLabel).toBe('Change Area')
+    })
+
+    it('lands it at the end of the area it joined', async () => {
+      setup()
+      const panel = mountTree()
+      stubRects(panel)
+
+      await dropRow(panel, 1, 50)
+      await nextTick()
+
+      expect(rows(panel).map((row) => row.label)).toEqual([
+        'World',
+        'Crateria',
+        'Landing Site',
+        'Corridor',
+        'Vault',
+      ])
+    })
+
+    it('dropping between two rooms reorders within the area', async () => {
+      const { mapId, corridor } = setup()
+      const panel = mountTree()
+      stubRects(panel)
+
+      // Row 4 is Corridor; drop it on the top half of row 3 (Landing Site).
+      await dropRow(panel, 4, 61)
+
+      const model = useModelStore()
+      expect(model.project.mapsById.get(mapId)!.roomOrder.indexOf(corridor)).toBe(0)
+      expect(model.status.undoLabel).toBe('Reorder Room')
+      expect(rows(panel).map((row) => row.label)).toEqual([
+        'World',
+        'Vault',
+        'Crateria',
+        'Corridor',
+        'Landing Site',
+      ])
+    })
+
+    // One gesture, one undo step, even though it does two things.
+    it('a cross-area drop reassigns and places in one step', async () => {
+      const { mapId, vault, crateria } = setup()
+      const panel = mountTree()
+      stubRects(panel)
+
+      // Drop Vault on the top half of Landing Site, which is in Crateria.
+      await dropRow(panel, 1, 61)
+
+      const model = useModelStore()
+      const map = model.project.mapsById.get(mapId)!
+      expect(map.rooms.get(vault)!.areaId).toBe(crateria)
+      expect(rows(panel).map((row) => row.label)).toEqual([
+        'World',
+        'Crateria',
+        'Vault',
+        'Landing Site',
+        'Corridor',
+      ])
+
+      model.undo()
+      await nextTick()
+      expect(map.rooms.get(vault)!.areaId).toBe(WORLD_AREA_ID)
+      expect(rows(panel).map((row) => row.label)).toEqual([
+        'World',
+        'Vault',
+        'Crateria',
+        'Landing Site',
+        'Corridor',
+      ])
+    })
+
+    it('previews the area row it would join, and only that row', async () => {
+      setup()
+      const panel = mountTree()
+      stubRects(panel)
+
+      await dragRow(panel, 1, 50)
+
+      const marked = treeitems(panel).filter((row) => row.classes().includes('drop-into'))
+      expect(marked).toHaveLength(1)
+      expect(marked[0].attributes('aria-label')).toBe('Crateria')
+      expect(treeitems(panel).some((row) => row.classes().includes('drop-before'))).toBe(false)
+    })
+
+    it('previews an insertion line on the edge it would land against', async () => {
+      setup()
+      const panel = mountTree()
+      stubRects(panel)
+
+      await dragRow(panel, 4, 61)
+      expect(treeitems(panel)[3].classes()).toContain('drop-before')
+
+      await dragRow(panel, 4, 75)
+      expect(treeitems(panel)[3].classes()).toContain('drop-after')
+      expect(treeitems(panel)[3].classes()).not.toContain('drop-before')
+    })
+
+    // Asserted on the drag never starting rather than on the model not moving:
+    // an area id handed to a room op throws, jsdom swallows exceptions inside
+    // event listeners, and "nothing changed" is then true either way.
+    it('an area row cannot be dragged', async () => {
+      setup()
+      const panel = mountTree()
+      stubRects(panel)
+
+      await dragRow(panel, 2, 25)
+
+      expect(treeitems(panel).some((row) => row.classes().includes('dragging'))).toBe(false)
+      expect(
+        treeitems(panel).some((row) =>
+          ['drop-into', 'drop-before', 'drop-after'].some((each) => row.classes().includes(each)),
+        ),
+      ).toBe(false)
+    })
+
+    it('a press that never moves still selects, and leaves the order alone', async () => {
+      const { mapId, vault } = setup()
+      const panel = mountTree()
+      stubRects(panel)
+      const model = useModelStore()
+      const before = model.status.undoLabel
+
+      const el = treeitems(panel)[1].element as HTMLElement
+      el.setPointerCapture = () => {}
+      el.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          clientY: 25,
+        }),
+      )
+      el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientY: 25 }))
+      await treeitems(panel)[1].trigger('click')
+
+      expect(model.status.undoLabel).toBe(before)
+      expect(useSelectionStore().roomsOn(mapId)).toEqual([vault])
+    })
+
+    // A drag ends in a synthetic click, which would otherwise select whatever
+    // the row was dropped on top of.
+    it('a completed drag does not also select', async () => {
+      setup()
+      const panel = mountTree()
+      stubRects(panel)
+      expect(useSelectionStore().isEmpty).toBe(true)
+
+      await dropRow(panel, 1, 50)
+      // Whatever row now sits where the pointer released. Asserted on the
+      // selection being empty rather than on a kind, since the drop reorders
+      // the tree under the release point.
+      await treeitems(panel)[1].trigger('click')
+
+      expect(useSelectionStore().isEmpty).toBe(true)
+    })
+
+    it('dropping outside every row changes nothing', async () => {
+      const { mapId, vault } = setup()
+      const panel = mountTree()
+      stubRects(panel)
+      const model = useModelStore()
+      const before = model.status.undoLabel
+
+      await dropRow(panel, 1, 500)
+
+      expect(model.status.undoLabel).toBe(before)
+      expect(model.project.mapsById.get(mapId)!.rooms.get(vault)!.areaId).toBe(WORLD_AREA_ID)
+    })
+  })
 })

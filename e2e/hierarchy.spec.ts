@@ -274,4 +274,56 @@ test.describe('Hierarchy', () => {
     expect(await undoLabel(page)).toBe('Undo Delete Area')
     expect(errors).toEqual([])
   })
+
+  // The only place the real geometry runs: jsdom has no layout, so the unit
+  // tests stub every row's rect and the decision itself is a pure function.
+  test('drags a room onto another area, and it lands there', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    const room = tree.getByRole('treeitem', { name: 'Corridor' })
+    const area = tree.getByRole('treeitem', { name: 'Crateria' })
+    const from = await room.boundingBox()
+    const to = await area.boundingBox()
+    if (!from || !to) throw new Error('no rows')
+
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 })
+    await expect(area).toHaveClass(/drop-into/)
+    await page.mouse.up()
+
+    expect(await undoLabel(page)).toBe('Undo Change Area')
+    const labels = await tree
+      .getByRole('treeitem')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+    // Last under Crateria, which is where a drop on the area row appends.
+    expect(labels.at(-1)).toBe('Corridor')
+    expect(errors).toEqual([])
+  })
+
+  test('drags a room between two rooms to reorder it', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
+
+    const moving = tree.getByRole('treeitem', { name: 'West Wing' })
+    const anchor = tree.getByRole('treeitem', { name: 'Landing Site' })
+    const from = await moving.boundingBox()
+    const to = await anchor.boundingBox()
+    if (!from || !to) throw new Error('no rows')
+
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+    await page.mouse.down()
+    // The top quarter of Landing Site: above its midpoint, so "before it".
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 4, { steps: 8 })
+    await expect(anchor).toHaveClass(/drop-before/)
+    await page.mouse.up()
+
+    expect(await undoLabel(page)).toBe('Undo Reorder Room')
+    const labels = await tree
+      .getByRole('treeitem')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+    expect(labels.indexOf('West Wing')).toBe(labels.indexOf('Landing Site') - 1)
+    expect(errors).toEqual([])
+  })
 })

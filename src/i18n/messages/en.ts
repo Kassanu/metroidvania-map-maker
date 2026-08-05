@@ -69,6 +69,7 @@ export const en = {
   'history.renameRoom': 'Rename Room',
   'history.roomNotes': 'Edit Room Notes',
   'history.assignArea': 'Change Area',
+  'history.reorderRoom': 'Reorder Room',
   'history.addArea': 'Add Area',
   'history.renameArea': 'Rename Area',
   'history.recolorArea': 'Recolor Area',
