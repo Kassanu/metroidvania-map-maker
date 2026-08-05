@@ -14,6 +14,16 @@ export function createTestPinia() {
   return pinia
 }
 
+// jsdom doesn't implement IndexedDB, which the recent-files and recovery
+// stores are built on. A file-handle and a multi-megabyte snapshot are both
+// things localStorage cannot hold, so there is no simpler backend to fall back
+// to in tests.
+if (typeof globalThis.indexedDB === 'undefined') {
+  const { indexedDB, IDBKeyRange } = await import('fake-indexeddb')
+  globalThis.indexedDB = indexedDB
+  globalThis.IDBKeyRange = IDBKeyRange
+}
+
 // jsdom doesn't implement ResizeObserver.
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
