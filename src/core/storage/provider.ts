@@ -91,6 +91,42 @@ export class StorageError extends Error {
 // Appends the extension if the user did not type it, so a suggested filename
 // is always a `.mvm`.
 export function withExtension(name: string): string {
-  const trimmed = name.trim() || 'Untitled Project'
+  const trimmed = name.trim() || FALLBACK_NAME
   return trimmed.toLowerCase().endsWith(FILE_EXTENSION) ? trimmed : `${trimmed}${FILE_EXTENSION}`
+}
+const FALLBACK_NAME = 'Untitled Project'
+
+// Path separators, the punctuation Windows refuses in a filename, and every
+// control character. Spaces are legitimate and are kept.
+const UNSAFE_IN_FILENAME = /[<>:"/\\|?*\u0000-\u001f\u007f]/g
+
+// Device names Windows refuses whatever follows them, so `con.mvm` cannot be
+// created there either.
+const RESERVED_STEM = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
+
+// Long enough for any name a person types, short enough that the whole path
+// stays inside the shortest limit a common filesystem imposes.
+const MAX_STEM = 120
+
+// A project name turned into something a file picker will accept.
+//
+// The picker is stricter than the name field: a project called `a/b`, or one
+// carrying a tab character, makes `showSaveFilePicker` throw a TypeError. Save
+// As would then fail permanently for a project the user can still rename but
+// has no reason to suspect. Trailing dots and spaces go for the same reason:
+// Windows strips them silently, and the file no longer matches the name that
+// was asked for.
+export function safeFileName(projectName: string): string {
+  let stem = projectName
+    .replace(UNSAFE_IN_FILENAME, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_STEM)
+    // After the truncation, which can expose a new trailing dot or space.
+    .replace(/[. ]+$/, '')
+
+  // Tested against the part before the first dot, since the reservation
+  // applies to the device name however the file is suffixed.
+  if (!stem || RESERVED_STEM.test(stem.split('.')[0])) stem = FALLBACK_NAME
+  return withExtension(stem)
 }
