@@ -12,8 +12,6 @@
 
 import { computed } from 'vue'
 import {
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogOverlay,
@@ -24,6 +22,7 @@ import {
 import { t } from '@/i18n'
 import type { MessageKey } from '@/i18n'
 import type { LoadEventKind } from '@/core/serialize'
+import type { LimitName } from '@/core/serialize/limits'
 import type { LoadOutcome } from '@/stores/file'
 
 const props = defineProps<{ outcome: LoadOutcome | null }>()
@@ -51,6 +50,29 @@ const REPAIR_LABELS: Record<LoadEventKind, MessageKey> = {
   'text-truncated': 'load.textTruncated',
 }
 
+// What each cap is, said in words a person can act on. A `Record` for the
+// same reason as the repairs above: a limit added to the table is a type error
+// here rather than a sentence naming a code identifier.
+const LIMIT_LABELS: Record<LimitName, MessageKey> = {
+  bytes: 'load.limit.bytes',
+  maps: 'load.limit.maps',
+  areas: 'load.limit.areas',
+  lockTypes: 'load.limit.lockTypes',
+  roomsPerMap: 'load.limit.roomsPerMap',
+  cellsPerRoom: 'load.limit.cellsPerRoom',
+  cellsPerProject: 'load.limit.cellsPerProject',
+  innerWallsPerRoom: 'load.limit.innerWallsPerRoom',
+  transitionsPerMap: 'load.limit.transitionsPerMap',
+  segmentsPerDoor: 'load.limit.segmentsPerDoor',
+  iconsPerMap: 'load.limit.iconsPerMap',
+  linesPerMap: 'load.limit.linesPerMap',
+  pointsPerLine: 'load.limit.pointsPerLine',
+  coordinate: 'load.limit.coordinate',
+  nameLength: 'load.limit.nameLength',
+  notesLength: 'load.limit.notesLength',
+  glyphLength: 'load.limit.glyphLength',
+}
+
 const isRepair = computed(() => props.outcome?.kind === 'repaired')
 
 const repairs = computed(() => {
@@ -65,9 +87,16 @@ const failure = computed(() => {
     case 'invalid':
       return t('load.invalid')
     case 'too-large':
-      return t('load.tooLarge', { limit: props.outcome.limit })
+      return t('load.tooLarge', {
+        found: props.outcome.found.toLocaleString(),
+        allowed: props.outcome.allowed.toLocaleString(),
+        what: t(LIMIT_LABELS[props.outcome.limit]),
+      })
     case 'too-new':
-      return t('load.tooNew')
+      return t('load.tooNew', {
+        version: props.outcome.version,
+        supported: props.outcome.supported,
+      })
     case 'failed':
       return t('load.error', { message: props.outcome.message })
     default:
@@ -75,6 +104,10 @@ const failure = computed(() => {
   }
 })
 
+// Neither button closes the dialog: Reka's Action and Cancel do, and the close
+// fires before the button's own handler, so the dismissal arrived first and
+// cleared the outcome that `accept` was about to read. Accepting a repaired
+// file then did nothing at all. Escape and the overlay are what reach this.
 function onOpenChange(open: boolean) {
   if (!open) emit('dismiss')
 }
@@ -95,12 +128,12 @@ function onOpenChange(open: boolean) {
           <li v-for="line in repairs" :key="line">{{ line }}</li>
         </ul>
         <div class="outcome-actions">
-          <AlertDialogCancel class="outcome-cancel" @click="emit('dismiss')">
+          <button type="button" class="outcome-cancel" @click="emit('dismiss')">
             {{ isRepair ? t('common.cancel') : t('common.close') }}
-          </AlertDialogCancel>
-          <AlertDialogAction v-if="isRepair" class="outcome-accept" @click="emit('accept')">
+          </button>
+          <button v-if="isRepair" type="button" class="outcome-accept" @click="emit('accept')">
             {{ t('load.repaired.accept') }}
-          </AlertDialogAction>
+          </button>
         </div>
       </AlertDialogContent>
     </AlertDialogPortal>

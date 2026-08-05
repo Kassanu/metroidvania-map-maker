@@ -7,13 +7,15 @@
 // people already know: Save writes and then continues, Don't Save continues
 // without writing, Cancel abandons the whole operation.
 //
-// The choice is emitted rather than stored here. Reka closes the dialog before
-// running the handler of the button that was picked, so state living in the
-// open flag would be cleared a beat before anything could read it.
+// Every button is a plain one, and none of them closes the dialog. This is
+// load-bearing rather than stylistic: Reka's own Action and Cancel close on
+// click, and the close fires `update:open(false)` *before* the button's
+// handler runs. With the close also meaning cancel, picking Save emitted
+// `cancel` first and the caller settled on it, so Save silently behaved as
+// Cancel. Here the choice is the only event a click produces, and the store
+// closing the dialog is what follows from it.
 
 import {
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogOverlay,
@@ -27,8 +29,9 @@ import type { UnsavedChoice } from '@/stores/file'
 defineProps<{ open: boolean; name: string }>()
 const emit = defineEmits<{ choose: [choice: UnsavedChoice] }>()
 
-// Escape and the overlay both mean cancel, which is the safe answer: it is
-// the only one of the three that loses nothing.
+// Escape and the overlay are the only things left that close it, and both
+// mean cancel: the safe answer, and the only one of the three that loses
+// nothing.
 function onOpenChange(open: boolean) {
   if (!open) emit('choose', 'cancel')
 }
@@ -50,12 +53,12 @@ function onOpenChange(open: boolean) {
             {{ t('unsaved.discard') }}
           </button>
           <span class="unsaved-spacer" />
-          <AlertDialogCancel class="unsaved-cancel" @click="emit('choose', 'cancel')">
+          <button type="button" class="unsaved-cancel" @click="emit('choose', 'cancel')">
             {{ t('common.cancel') }}
-          </AlertDialogCancel>
-          <AlertDialogAction class="unsaved-save" @click="emit('choose', 'save')">
+          </button>
+          <button type="button" class="unsaved-save" @click="emit('choose', 'save')">
             {{ t('unsaved.save') }}
-          </AlertDialogAction>
+          </button>
         </div>
       </AlertDialogContent>
     </AlertDialogPortal>

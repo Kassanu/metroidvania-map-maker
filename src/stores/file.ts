@@ -26,8 +26,10 @@ import { openProject as openPending, toJSON } from '@/core/serialize'
 import type { LoadEventKind } from '@/core/serialize'
 import { countByKind } from '@/core/serialize'
 import { FileTooLargeError } from '@/core/serialize/limits'
+import type { LimitName } from '@/core/serialize/limits'
 import { InvalidFileError } from '@/core/serialize/errors'
 import { UnsupportedVersionError } from '@/core/serialize/migrate'
+import { FILE_VERSION } from '@/core/serialize/schema'
 import { StorageError, getStorageProvider } from '@/storage'
 import type { StorageHandle } from '@/storage'
 import { createProject } from '@/core/factory'
@@ -44,8 +46,10 @@ export type UnsavedChoice = 'save' | 'discard' | 'cancel'
 export type LoadOutcome =
   | { kind: 'repaired'; counts: Map<LoadEventKind, number>; accept: () => void }
   | { kind: 'invalid' }
-  | { kind: 'too-large'; limit: string }
-  | { kind: 'too-new' }
+  // Carries the numbers, not just the fact: "10001 rooms on one map, and the
+  // most is 10000" is something a person can act on, where "too large" is not.
+  | { kind: 'too-large'; limit: LimitName; found: number; allowed: number }
+  | { kind: 'too-new'; version: number; supported: number }
   | { kind: 'failed'; message: string }
 
 function newProjectModel() {
@@ -228,8 +232,12 @@ export const useFileStore = defineStore('file', () => {
 function describeFailure(error: unknown): LoadOutcome {
   const inner = error instanceof StorageError && error.cause ? error.cause : error
 
-  if (inner instanceof FileTooLargeError) return { kind: 'too-large', limit: inner.limit }
-  if (inner instanceof UnsupportedVersionError) return { kind: 'too-new' }
+  if (inner instanceof FileTooLargeError) {
+    return { kind: 'too-large', limit: inner.limit, found: inner.found, allowed: inner.allowed }
+  }
+  if (inner instanceof UnsupportedVersionError) {
+    return { kind: 'too-new', version: inner.version, supported: FILE_VERSION }
+  }
   if (inner instanceof InvalidFileError) return { kind: 'invalid' }
   if (inner instanceof SyntaxError) return { kind: 'invalid' }
   return { kind: 'failed', message: error instanceof Error ? error.message : String(error) }

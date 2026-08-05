@@ -124,6 +124,29 @@ test.describe('the File menu', () => {
     await expect(page.locator('.project-title-button')).toHaveText('Work In Progress •')
   })
 
+  // The path that had no coverage and was broken: Save inside the guard has to
+  // actually write before the replacement goes ahead. Reka's own Action button
+  // closed the dialog before running its handler, so the dismissal was
+  // answered first and Save behaved as Cancel.
+  test('saving from the guard writes the file and then replaces the project', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== DOWNLOAD_ONLY, 'needs the download provider')
+    await openApp(page)
+    await renameProject(page, 'Rescue Me')
+
+    const downloadPromise = page.waitForEvent('download')
+    await pickFileItem(page, 'New')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+
+    // The save really happened, under the name that was on screen.
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toBe('Rescue Me.mvm')
+
+    // ...and only then did the replacement go ahead.
+    await expect(page.locator('.project-title-button')).toHaveText('Untitled Project')
+  })
+
   test('discarding replaces the project and clears the marker', async ({ page }) => {
     await openApp(page)
     await renameProject(page, 'Throwaway')
