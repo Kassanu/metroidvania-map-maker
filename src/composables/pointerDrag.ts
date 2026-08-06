@@ -14,6 +14,7 @@
 // pointermove reports -1, so every gesture decides what it is at press time
 // and never re-reads it.
 export const PRIMARY_BUTTON = 0
+export const MIDDLE_BUTTON = 1
 export const SECONDARY_BUTTON = 2
 // The eraser end of a stylus. Reported alongside pointerType 'pen', and only
 // where the browser bothers (Chromium solid, elsewhere spotty). The erase

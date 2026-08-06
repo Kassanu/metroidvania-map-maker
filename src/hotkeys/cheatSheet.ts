@@ -66,11 +66,28 @@ export interface CheatSheetSection {
   rows: CheatSheetRow[]
 }
 
+// Pointer gestures: held keys and mouse buttons, which have no keymap entry
+// because they are not bound combos. `defaultKeymap` maps a whole combo to an
+// action on keydown, and a held key with a release is neither.
+//
+// Written out rather than derived, and that does not breach the rule above:
+// the rule exists so a shortcut cannot be listed here and bound differently
+// there, and these have no binding to disagree with. Panning is the whole
+// reason the list exists, since nothing else in the app announces it.
+const GESTURES: CheatSheetSection = {
+  labelKey: 'cheatSheet.section.gestures',
+  rows: [
+    { labelKey: 'action.panDrag', combos: ['Middle-drag'] },
+    { labelKey: 'action.panSpace', combos: ['Space+drag'] },
+  ],
+}
+
 // Derived from defaultKeymap so the cheat sheet can never drift out of sync
-// with the actual engine. No hand-maintained duplicate shortcut list. Rows
-// carry message keys; the modal translates them at render time.
+// with the actual engine. No hand-maintained duplicate shortcut list, with the
+// one documented exception above. Rows carry message keys; the modal
+// translates them at render time.
 export function buildCheatSheet(): CheatSheetSection[] {
-  return CATEGORIES.map((category) => ({
+  const bound = CATEGORIES.map((category) => ({
     labelKey: category.labelKey,
     rows: category.actions
       .map((actionId) => ({
@@ -79,4 +96,6 @@ export function buildCheatSheet(): CheatSheetSection[] {
       }))
       .filter((row) => row.combos.length > 0),
   })).filter((section) => section.rows.length > 0)
+
+  return [...bound, GESTURES]
 }

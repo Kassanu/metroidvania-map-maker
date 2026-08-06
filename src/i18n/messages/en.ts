@@ -480,6 +480,7 @@ export const en = {
   'cheatSheet.section.clipboard': 'Clipboard',
   'cheatSheet.section.drawEdit': 'Draw/Edit',
   'cheatSheet.section.zoom': 'Zoom',
+  'cheatSheet.section.gestures': 'Panning',
   'cheatSheet.section.help': 'Help',
 
   'action.mode.draw': 'Draw/Edit mode',
@@ -506,4 +507,6 @@ export const en = {
   'action.zoomIn': 'Zoom in',
   'action.zoomOut': 'Zoom out',
   'action.zoomReset': 'Reset zoom',
+  'action.panDrag': 'Pan the canvas',
+  'action.panSpace': 'Pan the canvas',
 } as const

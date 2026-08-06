@@ -93,7 +93,14 @@ import {
   type SelectTarget,
 } from '@/canvas/selectTarget'
 import type { VisibleLayers } from '@/canvas/hitTest'
-import { PRIMARY_BUTTON, SECONDARY_BUTTON, startPointerDrag } from '@/composables/pointerDrag'
+import {
+  MIDDLE_BUTTON,
+  PRIMARY_BUTTON,
+  SECONDARY_BUTTON,
+  startPointerDrag,
+} from '@/composables/pointerDrag'
+import { beginCanvasPan } from '@/composables/canvasPan'
+import { useSpacePan } from '@/composables/spacePan'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
 import { cellKey, parseCell } from '@/core/cell'
 import type { GhostGesture } from '@/gestures/ghostGesture'
@@ -158,6 +165,24 @@ let revealCell: { x: number; y: number } | null = null
 // does have to notice it change.
 const zoneCursor = ref<string | null>(null)
 
+// Holding Space arms the canvas for a pan. `isBusy` keeps an armed press from
+// interrupting a gesture already running: a stroke owns the pointer until it
+// settles, and Space during one changes nothing about that.
+const { armed: spacePanArmed } = useSpacePan({
+  hasFocus: () => container.value !== null && document.activeElement === container.value,
+  isBusy: () => gesture !== null,
+})
+
+// What the viewport actually shows, in precedence order. A live pan owns the
+// cursor outright: it runs in every mode and over every zone, so whatever the
+// resolver last said describes a gesture this press is not going to start. An
+// armed Space says the same thing one step earlier, before the press.
+const canvasCursor = computed(() => {
+  if (panning.value) return 'grabbing'
+  if (spacePanArmed.value) return 'grab'
+  return zoneCursor.value
+})
+
 // The gesture in progress: paint, erase or resize. A plain `let`, not a ref: it
 // holds core objects (an open transaction, a live cell set) that must not be
 // wrapped in reactive proxies, and nothing here needs Vue to notice it change,
@@ -185,6 +210,9 @@ let marquee: Marquee | null = null
 // `let` because the cursor is DOM state: unlike the gestures above, this one
 // has to make Vue re-evaluate the binding while the pointer is down.
 const draggingIconId = ref<IconId | null>(null)
+// A pan drag is in flight. DOM state like `draggingIconId`: it owns the cursor
+// while it runs, over whatever the zone resolver would otherwise have said.
+const panning = ref(false)
 
 const { draw, resize, repaintForTheme } = useCanvasRenderer(
   { container, main: canvas, topRuler: topRulerCanvas, leftRuler: leftRulerCanvas },
@@ -973,6 +1001,17 @@ function suppressNativeMenu(event: MouseEvent) {
   event.preventDefault()
 }
 
+// The middle button pans here, so the browser's own middle-click behaviour has
+// to go: Chromium's autoscroll widget, and the paste some Linux builds offer.
+//
+// On `mousedown` rather than on `pointerdown`, and on both events rather than
+// one. Preventing a pointer event's default does not prevent the compatibility
+// mouse event that follows it, which is what the autoscroll actually hangs
+// off; `auxclick` covers the release.
+function suppressMiddleButtonDefault(event: MouseEvent) {
+  if (event.button === MIDDLE_BUTTON) event.preventDefault()
+}
+
 // Right-click points the context menu at what it landed on, and runs before it
 // opens: `pointerdown` precedes `contextmenu`, so by the time the menu is up the
 // selection is already the one it will act on.
@@ -1031,7 +1070,41 @@ function beginFragmentMove(mapId: MapId, target: SelectTarget): CellMove | null 
   return started
 }
 
+// A middle-drag pans, in every mode, ahead of everything else. The button
+// starts no gesture anywhere (`strokeActionFor` answers null for it, and Door
+// and Select decline it too), so taking it here competes with nothing.
+//
+// A held Space adds the primary button to the same route, and that one does
+// compete: while armed the press pans instead of doing whatever the mode would
+// have done with it.
+function handlePanPress(event: PointerEvent): boolean {
+  const tab = tabsStore.activeTab
+  if (!tab) return false
+
+  const started = beginCanvasPan(event, {
+    camera: { pan: tab.pan, zoom: tab.zoom },
+    tileSize: model.tileSize,
+    buttons: spacePanArmed.value ? [MIDDLE_BUTTON, PRIMARY_BUTTON] : [MIDDLE_BUTTON],
+    onPan: (camera) => tabsStore.setCamera(tab.id, camera),
+    onEnd: () => {
+      panning.value = false
+    },
+  })
+  if (started) {
+    panning.value = true
+    event.preventDefault()
+  }
+  return started
+}
+
 function handlePointerDown(event: PointerEvent) {
+  // Any press on the canvas hands it the keyboard, which is what makes a held
+  // Space mean "pan" from here on rather than "press the button I last
+  // clicked". A focused button keeps Space until the canvas is touched.
+  container.value?.focus({ preventScroll: true })
+
+  if (handlePanPress(event)) return
+
   if (modeStore.active === 'select') {
     handleSelectPress(event)
     return
@@ -2136,9 +2209,12 @@ onUnmounted(() => {
       <div
         ref="container"
         class="canvas-viewport"
-        :style="zoneCursor ? { cursor: zoneCursor } : undefined"
+        tabindex="-1"
+        :style="canvasCursor ? { cursor: canvasCursor } : undefined"
         @wheel="handleWheel"
         @contextmenu="suppressNativeMenu"
+        @mousedown="suppressMiddleButtonDefault"
+        @auxclick="suppressMiddleButtonDefault"
         @dblclick="handleDoubleClick"
         @pointerdown="handlePointerDown"
         @pointermove="handlePointerMove"
@@ -2226,6 +2302,13 @@ onUnmounted(() => {
   overflow: hidden;
   min-width: 0;
   min-height: 0;
+}
+
+/* The viewport takes focus so a held Space means "pan" here, but it is
+   `tabindex="-1"`: nothing tabs to it, and the only way in is a pointer press.
+   A ring would mark a target no keyboard user can reach. */
+.canvas-viewport:focus {
+  outline: none;
 }
 
 .canvas {

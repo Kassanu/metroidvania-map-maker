@@ -139,6 +139,268 @@ describe('CanvasRegion wheel pan', () => {
   })
 })
 
+// The mouse's answer to a trackpad's two-finger scroll. Locked in
+// `interaction-and-input.md` alongside wheel-pan, and the button starts no
+// gesture in any mode, so it is taken ahead of all of them.
+describe('CanvasRegion middle-drag pan', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  const MIDDLE = 1
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.setPointerCapture = () => {}
+    return { wrapper, viewport }
+  }
+
+  function pointer(type: string, init: PointerEventInit) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, ...init })
+  }
+
+  function panBy(viewport: HTMLElement, dx: number, dy: number, button = MIDDLE) {
+    viewport.dispatchEvent(pointer('pointerdown', { button, clientX: 200, clientY: 200 }))
+    viewport.dispatchEvent(pointer('pointermove', { clientX: 200 + dx, clientY: 200 + dy }))
+    viewport.dispatchEvent(pointer('pointerup', { button, clientX: 200 + dx, clientY: 200 + dy }))
+  }
+
+  it('pans the camera, moving the map with the pointer', () => {
+    const { wrapper, viewport } = mountCanvas()
+    const tabsStore = useTabsStore()
+    const tile = useModelStore().tileSize
+
+    panBy(viewport, 64, 32)
+
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    // The opposite sign to wheel-pan: a wheel scrolls the view, a drag carries
+    // the map, and the two are the same gesture seen from either end.
+    expect(camera.pan.x).toBeCloseTo(DEFAULT_PAN.x - 64 / tile)
+    expect(camera.pan.y).toBeCloseTo(DEFAULT_PAN.y - 32 / tile)
+    wrapper.unmount()
+  })
+
+  // The camera lives on the tab and survives a remount, so each mode is
+  // measured as a delta rather than against `DEFAULT_PAN`: asserting the
+  // absolute value passes only for whichever mode happens to run first.
+  it('works in every mode', () => {
+    for (const mode of ['draw', 'select', 'door', 'markup'] as const) {
+      const { wrapper, viewport } = mountCanvas()
+      useModeStore().setMode(mode)
+      const tabsStore = useTabsStore()
+      const before = tabsStore.cameraOf(tabsStore.activeTabId).pan.x
+
+      panBy(viewport, 64, 0)
+
+      const moved = tabsStore.cameraOf(tabsStore.activeTabId).pan.x - before
+      expect(moved, mode).toBeCloseTo(-64 / useModelStore().tileSize)
+      wrapper.unmount()
+    }
+  })
+
+  // The button starts nothing anywhere, so a pan over a room must leave the
+  // room alone. Asserted through the undo stack rather than the cell count:
+  // an empty transaction would leave the cells right and the stack wrong.
+  it('draws nothing and leaves no undo step, even over a room', () => {
+    const { wrapper, viewport } = mountCanvas()
+    const model = useModelStore()
+    const tabsStore = useTabsStore()
+    const mapId = tabsStore.activeTabId
+    model.run('Setup', mapScope(mapId), (tx) =>
+      paintCells(tx, model.project, model.project.mapsById.get(mapId)!, ['0,0', '1,0', '0,1'], {
+        areaId: WORLD_AREA_ID,
+      }),
+    )
+    const cells = model.project.mapsById.get(mapId)!.rooms.size
+
+    panBy(viewport, 96, 96)
+
+    expect(model.status.undoLabel).toBe('Setup')
+    expect(model.project.mapsById.get(mapId)!.rooms.size).toBe(cells)
+    wrapper.unmount()
+  })
+
+  it('shows the grabbing cursor for the length of the drag', async () => {
+    const { wrapper, viewport } = mountCanvas()
+
+    viewport.dispatchEvent(pointer('pointerdown', { button: MIDDLE, clientX: 200, clientY: 200 }))
+    await nextTick()
+    expect(viewport.style.cursor).toBe('grabbing')
+
+    viewport.dispatchEvent(pointer('pointerup', { button: MIDDLE, clientX: 200, clientY: 200 }))
+    await nextTick()
+    expect(viewport.style.cursor).not.toBe('grabbing')
+    wrapper.unmount()
+  })
+
+  // Chromium's autoscroll widget hangs off the compatibility mouse event, not
+  // off the pointer event, so preventing the pointerdown does not reach it.
+  it('claims the browser’s own middle-button behaviour', () => {
+    const { wrapper, viewport } = mountCanvas()
+
+    for (const type of ['mousedown', 'auxclick']) {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: MIDDLE })
+      viewport.dispatchEvent(event)
+      expect(event.defaultPrevented, type).toBe(true)
+    }
+    wrapper.unmount()
+  })
+
+  it('leaves the primary button’s own mousedown alone', () => {
+    const { wrapper, viewport } = mountCanvas()
+
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 })
+    viewport.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('does not pan on a primary drag, which is the mode’s own', () => {
+    const { wrapper, viewport } = mountCanvas()
+    const tabsStore = useTabsStore()
+
+    panBy(viewport, 64, 32, 0)
+
+    expect(tabsStore.cameraOf(tabsStore.activeTabId).pan).toEqual(DEFAULT_PAN)
+    wrapper.unmount()
+  })
+})
+
+// The keyboard half of the same affordance. The pan drag itself is chunk 1's
+// and is not re-tested here; what is, is that Space redirects the primary
+// button into it and hands the mode back afterwards.
+describe('CanvasRegion Space pan', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.setPointerCapture = () => {}
+    return { wrapper, viewport }
+  }
+
+  function pointer(type: string, init: PointerEventInit) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, ...init })
+  }
+
+  function holdSpace(down = true) {
+    window.dispatchEvent(
+      new KeyboardEvent(down ? 'keydown' : 'keyup', {
+        bubbles: true,
+        cancelable: true,
+        code: 'Space',
+      }),
+    )
+  }
+
+  // Focus is what makes Space mean "pan" here rather than "press the button I
+  // last clicked", so every armed test needs the canvas focused first.
+  //
+  // Focused directly rather than by pressing: a press on the canvas in Draw
+  // mode paints a room, which is the mode's job and not this block's subject.
+  // That the press is what focuses it is asserted on its own, below.
+  function focusCanvas(viewport: HTMLElement) {
+    viewport.focus()
+  }
+
+  it('takes focus when the canvas is pressed', () => {
+    const { wrapper, viewport } = mountCanvas()
+    viewport.dispatchEvent(pointer('pointerdown', { button: 0, clientX: 200, clientY: 200 }))
+    viewport.dispatchEvent(pointer('pointerup', { button: 0, clientX: 200, clientY: 200 }))
+
+    expect(document.activeElement).toBe(viewport)
+    wrapper.unmount()
+  })
+
+  it('is not a tab stop: focus goes there by pressing, not by tabbing', () => {
+    const { wrapper, viewport } = mountCanvas()
+    expect(viewport.getAttribute('tabindex')).toBe('-1')
+    wrapper.unmount()
+  })
+
+  it('shows the open hand while armed, and hands the cursor back on release', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    focusCanvas(viewport)
+
+    holdSpace()
+    await nextTick()
+    expect(viewport.style.cursor).toBe('grab')
+
+    holdSpace(false)
+    await nextTick()
+    expect(viewport.style.cursor).not.toBe('grab')
+    wrapper.unmount()
+  })
+
+  it('pans on a primary drag while armed', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    const tabsStore = useTabsStore()
+    focusCanvas(viewport)
+    holdSpace()
+    await nextTick()
+    const before = tabsStore.cameraOf(tabsStore.activeTabId).pan.x
+
+    viewport.dispatchEvent(pointer('pointerdown', { button: 0, clientX: 200, clientY: 200 }))
+    viewport.dispatchEvent(pointer('pointermove', { clientX: 264, clientY: 200 }))
+    viewport.dispatchEvent(pointer('pointerup', { button: 0, clientX: 264, clientY: 200 }))
+
+    const moved = tabsStore.cameraOf(tabsStore.activeTabId).pan.x - before
+    expect(moved).toBeCloseTo(-64 / useModelStore().tileSize)
+    wrapper.unmount()
+  })
+
+  // The armed press replaces the mode's gesture rather than running alongside
+  // it: a Space-drag across bare grid in Draw mode must not paint a room.
+  it('draws nothing while armed', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    const model = useModelStore()
+    focusCanvas(viewport)
+    holdSpace()
+    await nextTick()
+
+    viewport.dispatchEvent(pointer('pointerdown', { button: 0, clientX: 200, clientY: 200 }))
+    viewport.dispatchEvent(pointer('pointermove', { clientX: 264, clientY: 232 }))
+    viewport.dispatchEvent(pointer('pointerup', { button: 0, clientX: 264, clientY: 232 }))
+
+    expect(model.project.mapsById.get(useTabsStore().activeTabId)!.rooms.size).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('gives the primary button back to the mode once Space is released', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    const model = useModelStore()
+    focusCanvas(viewport)
+    holdSpace()
+    await nextTick()
+    holdSpace(false)
+    await nextTick()
+
+    viewport.dispatchEvent(pointer('pointerdown', { button: 0, clientX: 200, clientY: 200 }))
+    viewport.dispatchEvent(pointer('pointerup', { button: 0, clientX: 200, clientY: 200 }))
+
+    expect(model.project.mapsById.get(useTabsStore().activeTabId)!.rooms.size).toBe(1)
+    wrapper.unmount()
+  })
+
+  it('does not arm while another element holds focus', async () => {
+    const { wrapper, viewport } = mountCanvas()
+    const button = document.createElement('button')
+    document.body.append(button)
+    button.focus()
+
+    holdSpace()
+    await nextTick()
+
+    expect(viewport.style.cursor).not.toBe('grab')
+    button.remove()
+    wrapper.unmount()
+  })
+})
+
 describe('CanvasRegion drawing', () => {
   beforeEach(() => {
     setActivePinia(createTestPinia())
