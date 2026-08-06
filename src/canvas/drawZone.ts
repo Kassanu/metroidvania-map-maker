@@ -24,7 +24,7 @@ import { screenToWorld, type ScreenPoint } from './viewport'
 import { grabBand } from './hitTest'
 import type { Camera } from './camera'
 import { SIDES, cellKey, edgeOfCell, segmentFromEdge } from '@/core/cell'
-import { isInteriorVertex, resizableRuns } from '@/core/derive/walls'
+import { isWallVertex, resizableRuns } from '@/core/derive/walls'
 import type { CellKey, EdgeKey } from '@/core/cell'
 import type { EdgeRun } from '@/core/derive/walls'
 import type { RoomId } from '@/core/ids'
@@ -101,10 +101,16 @@ export function resolveZone(point: ScreenPoint, scene: ZoneScene): DrawZone {
   const { band, vertexRadius } = zoneTolerances(scene)
   const base = { cell, roomId }
 
-  // Rule 2, 0-D: a vertex beats everything. The case that makes this matter is
-  // an inner wall, which runs between interior vertices and so is in band
-  // wherever a vertex is. Without this order, the vertex targets that walls
-  // are drawn from would be unreachable at their own ends.
+  // Rule 2, 0-D: a vertex beats everything, including a resizable run it sits
+  // on. Two cases need it. An inner wall runs between vertices and so is in
+  // band wherever a vertex is, which would make the targets walls are drawn
+  // from unreachable at their own ends. And a wall vertex on the outer
+  // boundary sits in the middle of a run: yielding to the run there would put
+  // a wall out of reach in any room with no interior vertex, which is every
+  // room one cell thick.
+  //
+  // The run keeps the middle half of each of its cells, since the vertex
+  // radius is clamped to a quarter of the drawn cell at both ends.
   const vertex = nearestVertex(point, cellX, cellY, room, scene, vertexRadius)
   if (vertex) return { ...base, kind: 'vertex', vertex }
 
@@ -117,9 +123,13 @@ export function resolveZone(point: ScreenPoint, scene: ZoneScene): DrawZone {
   return { ...base, kind: 'interior' }
 }
 
-// The nearest of the pointer cell's four corners that is an interior vertex,
-// within the radius. Four tests rather than a search: only corners of this cell
-// can be in range, because the radius is clamped below half a cell.
+// The nearest of the pointer cell's four corners that is a wall vertex, within
+// the radius. Four tests rather than a search: only corners of this cell can be
+// in range, because the radius is clamped below half a cell.
+//
+// A wall vertex on the room's outer boundary is reachable only from inside the
+// room, because rule 1 bounds every test by the pointer's own cell. Standing
+// just outside the wall is empty grid, exactly as it is for a resize handle.
 function nearestVertex(
   point: ScreenPoint,
   cellX: number,
@@ -138,7 +148,7 @@ function nearestVertex(
   let best: Vertex | null = null
   let bestDistance = radius
   for (const corner of corners) {
-    if (!isInteriorVertex(room, corner.x, corner.y)) continue
+    if (!isWallVertex(room, corner.x, corner.y)) continue
     const at = worldToScreenPoint(corner.x, corner.y, scene)
     const distance = Math.hypot(point.x - at.x, point.y - at.y)
     // `<=` so that an exact tie between two corners resolves to the later one

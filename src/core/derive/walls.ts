@@ -9,7 +9,7 @@
 // needs the *runs* to place resize handles. Hence the per-room memo at the
 // bottom, keyed on the room's revision counter.
 
-import { SIDES, cellKey, edgeOfCell, neighborOn, parseCell } from '../cell'
+import { SIDES, cellKey, edgeCells, edgeOfCell, neighborOn, parseCell } from '../cell'
 import type { CellKey, EdgeKey, Side } from '../cell'
 import type { Room } from '../types'
 
@@ -44,6 +44,19 @@ export function boundaryEdges(cells: ReadonlySet<CellKey>): Set<EdgeKey> {
 
 export function computeOuterWalls(room: Room): Set<EdgeKey> {
   return boundaryEdges(room.cells)
+}
+
+// An edge can carry an inner wall exactly when both cells it separates belong
+// to the room. Anything else is an outer boundary, and outer walls are derived
+// from adjacency rather than drawn.
+//
+// Stated once because four things enforce it: the op that draws a wall, the
+// sweep that prunes walls whose cells left the room, and the stroke that walks
+// the lattice. A filter stronger than this one silently makes edges
+// undrawable; a weaker one hands the op something it refuses.
+export function isInnerWallEdge(room: Room, edge: EdgeKey): boolean {
+  const { lo, hi } = edgeCells(edge)
+  return room.cells.has(lo) && room.cells.has(hi)
 }
 
 export function computeEdgeRuns(room: Room): EdgeRun[] {
@@ -160,33 +173,50 @@ export function roomBounds(room: Room): CellBounds | null {
   return derived(room).bounds
 }
 
-// A vertex is interior when all four cells meeting at it belong to the room.
+// A vertex is a wall target when at least one of the four edges meeting at it
+// can carry an inner wall, which is `isInnerWallEdge` on each in turn: the two
+// cells of that edge are the two the vertex separates on one axis.
+//
+// Not "all four cells belong to the room". That is strictly stronger, and the
+// difference is the whole ring of vertices on the outer boundary: a room one
+// cell thick satisfies it nowhere, so it could hold no wall at all.
 //
 // The predicate as well as the list, because the two consumers want different
 // things: the renderer enumerates every target, while the Draw-mode zone
 // resolver only asks about the four corners of one cell and would otherwise
-// scan a 20x20 room's 361 vertices on every pointer move. Both read this one
-// rule, so they cannot disagree.
-export function isInteriorVertex(room: Room, x: number, y: number): boolean {
-  return (
-    room.cells.has(cellKey(x - 1, y - 1)) &&
-    room.cells.has(cellKey(x, y - 1)) &&
-    room.cells.has(cellKey(x - 1, y)) &&
-    room.cells.has(cellKey(x, y))
-  )
+// scan a 20x20 room's 441 vertices on every pointer move. Both read this one
+// rule, so they cannot disagree about where a wall may be started.
+export function isWallVertex(room: Room, x: number, y: number): boolean {
+  const nw = room.cells.has(cellKey(x - 1, y - 1))
+  const ne = room.cells.has(cellKey(x, y - 1))
+  const sw = room.cells.has(cellKey(x - 1, y))
+  const se = room.cells.has(cellKey(x, y))
+  return (nw && ne) || (sw && se) || (nw && sw) || (ne && se)
 }
 
-// Interior vertices: the targets Draw/Edit shows for inner-wall drawing.
+// Wall vertices: the targets Draw/Edit shows for inner-wall drawing.
 //
-// Walks the cells, not the bounding box. Every interior vertex is the top-left
-// corner of a cell the room owns, so the cells are a complete enumeration, and
-// a sparse room's box is arbitrarily larger than its contents. Row-major order,
-// so a set that reordered under an edit still yields the same list.
-export function interiorVertices(room: Room): { x: number; y: number }[] {
+// Walks the cells, not the bounding box: a sparse room's box is arbitrarily
+// larger than its contents. All four corners of each cell, because a wall
+// vertex need only touch the room rather than be surrounded by it, so it can
+// sit at any corner of the cell that reaches it; hence the dedupe. Row-major
+// order, so a set that reordered under an edit still yields the same list.
+export function wallVertices(room: Room): { x: number; y: number }[] {
+  const seen = new Set<string>()
   const vertices: { x: number; y: number }[] = []
   for (const cell of room.cells) {
     const { x, y } = parseCell(cell)
-    if (isInteriorVertex(room, x, y)) vertices.push({ x, y })
+    for (const [vx, vy] of [
+      [x, y],
+      [x + 1, y],
+      [x, y + 1],
+      [x + 1, y + 1],
+    ]) {
+      const key = `${vx},${vy}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (isWallVertex(room, vx, vy)) vertices.push({ x: vx, y: vy })
+    }
   }
   return vertices.sort((a, b) => a.y - b.y || a.x - b.x)
 }

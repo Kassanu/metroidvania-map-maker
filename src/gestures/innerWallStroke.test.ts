@@ -5,7 +5,7 @@ import { beginInnerWallStroke, beginInnerWallErase } from './innerWallStroke'
 import { mapScope, useModelStore } from '@/stores/model'
 import { pushEscHandler, resolveEscape } from '@/hotkeys/escStack'
 import { paintCells, eraseCells, resizeRun } from '@/core/ops/rooms'
-import { resizableRuns } from '@/core/derive/walls'
+import { isInnerWallEdge, resizableRuns } from '@/core/derive/walls'
 import { edgeOfCell } from '@/core/cell'
 import { toJSON } from '@/core/serialize'
 import { checkInvariants } from '@/core/testUtils'
@@ -165,25 +165,26 @@ describe('inner-wall strokes', () => {
   })
 
   describe('staying inside the room', () => {
-    // The lattice the stroke walks is the interior-vertex lattice, so an edge
-    // that is not strictly interior is not reachable: the outer boundary is
-    // never drawable by hand, a rule core also enforces.
-    it('draws nothing where the drag leaves the interior lattice', () => {
+    // The filter is the step's own edge: both cells it divides in the room.
+    // A step is refused only where that fails, which is the room's outer
+    // boundary, and outer walls are never drawable by hand.
+    it('stops where the drag leaves the room', () => {
       const id = square3()
       const stroke = draw(id, vertex(1, 1))
       stroke.extendTo(vertex(1, 9)) // straight out through the floor and away
 
       // The union is asserted, not just the walls that resulted. Core refuses
-      // a non-interior edge anyway, so a stroke that accumulated illegal edges
-      // would still leave the same walls behind and look correct from the
-      // outside. This assertion is what shows the gesture never offered one,
-      // which is what makes core's refusal unreachable rather than load-
-      // bearing.
-      expect([...stroke.edges]).toEqual([edgeOfCell('0,1', 'E')])
+      // an edge with a cell outside the room anyway, so a stroke that
+      // accumulated illegal edges would still leave the same walls behind and
+      // look correct from the outside. This assertion is what shows the
+      // gesture never offered one, which is what makes core's refusal
+      // unreachable rather than load-bearing.
+      expect([...stroke.edges]).toEqual([edgeOfCell('0,1', 'E'), edgeOfCell('0,2', 'E')])
 
       stroke.commit()
-      // Only the one step that stayed on the lattice, (1,1) -> (1,2).
-      expect([...walls(id).keys()]).toEqual([edgeOfCell('0,1', 'E')])
+      // Both steps inside the room, (1,1) -> (1,2) -> (1,3); the third leaves
+      // it. The second is on the boundary ring, which the endpoint test lost.
+      expect([...walls(id).keys()]).toEqual([edgeOfCell('0,1', 'E'), edgeOfCell('0,2', 'E')])
     })
 
     it('resumes from where the pointer is after wandering outside', () => {
@@ -197,28 +198,113 @@ describe('inner-wall strokes', () => {
       stroke.commit()
 
       // The step taken after coming back is drawn; the return journey itself
-      // only draws where it crossed the lattice.
+      // only draws where it crossed the room.
       expect(walls(id).has(edgeOfCell('1,1', 'S'))).toBe(true)
       expect(walls(id).size).toBeGreaterThan(outside)
       expect(checkInvariants(useModelStore().project)).toEqual([])
     })
 
-    // A room with no interior vertex has nowhere for the drag to start, so its
-    // strictly-interior edge is undrawable.
+    // Every edge it offered is one core accepts. Asserted over a wild drag
+    // rather than a chosen one, because the filter and core's rule being the
+    // same sentence is the thing under test.
+    it('never offers an edge core would refuse', () => {
+      const id = square3()
+      const room3 = firstMap().map.rooms.get(id)!
+      const stroke = draw(id, vertex(1, 1))
+      for (let i = -4; i <= 7; i++) {
+        stroke.extendTo(vertex(i, 7 - i))
+        stroke.extendTo(vertex(7 - i, i))
+      }
+      stroke.commit()
+
+      expect(stroke.edges.size).toBeGreaterThan(0)
+      for (const edge of stroke.edges) expect(isInnerWallEdge(room3, edge)).toBe(true)
+      expect(checkInvariants(useModelStore().project)).toEqual([])
+    })
+
+    // A room one cell thick has no interior vertex anywhere, so the endpoint
+    // test made it permanently undrawable. The edge test does not care: the
+    // step across the corridor divides two cells that are both in the room.
     //
-    // Pins current behaviour rather than endorsing it: requiring both
-    // endpoints of a step to be interior also loses the ring of interior
-    // edges next to the outer wall, so a 2x2 room can hold no wall at all.
-    // When that is fixed, this room stays undrawable (it still has no
-    // interior vertex to start from), but the boundary-ring case will need
-    // its own test written at the same time.
-    it('cannot draw in a room too thin to have an interior vertex', () => {
+    // Reaching this from the canvas needs a boundary vertex to press on, which
+    // the zone resolver does not yet offer. The gesture is not what stands in
+    // the way.
+    it('draws across a corridor too thin to have an interior vertex', () => {
       const id = room(['0,0', '0,1'])
       const stroke = draw(id, vertex(0, 1))
       stroke.extendTo(vertex(1, 1))
       stroke.commit()
 
-      expect(walls(id).size).toBe(0)
+      expect([...walls(id).keys()]).toEqual([edgeOfCell('0,0', 'S')])
+    })
+  })
+
+  // What a drag can reach, measured rather than reasoned about.
+  //
+  // With the edge test the answer is "every interior edge, from any starting
+  // vertex", because a step that is refused still advances the drag: a drag
+  // may wander anywhere and resume. So the reachable set is the drawable set,
+  // and the numbers below are what the room's geometry allows.
+  describe('reach', () => {
+    // Serpentine over the whole lattice of the bounding box, rows then
+    // columns, so every grid edge in it is stepped over at least once. Rows
+    // cover the H steps and columns the V steps.
+    function sweep(id: RoomId, start: { x: number; y: number }, size: number): Set<EdgeKey> {
+      const stroke = draw(id, start)
+      for (let y = 0; y <= size; y++) {
+        for (let i = 0; i <= size; i++) {
+          stroke.extendTo(vertex(y % 2 === 0 ? i : size - i, y))
+        }
+      }
+      for (let x = 0; x <= size; x++) {
+        for (let i = 0; i <= size; i++) {
+          stroke.extendTo(vertex(x, x % 2 === 0 ? i : size - i))
+        }
+      }
+      stroke.commit()
+      return new Set(walls(id).keys())
+    }
+
+    function square(size: number): RoomId {
+      const cells: string[] = []
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) cells.push(`${x},${y}`)
+      return room(cells)
+    }
+
+    // 2n(n-1) interior edges in an n x n room. The endpoint test reached
+    // 2(n-1)(n-2) of them, losing the whole ring of 4(n-1) next to the wall.
+    it.each([
+      [2, 4],
+      [3, 12],
+      [4, 24],
+      [6, 60],
+    ])('draws every interior edge of a square room of side %i (%i of them)', (size, expected) => {
+      const id = square(size)
+      const drawn = sweep(id, vertex(1, 1), size)
+
+      expect(drawn.size).toBe(expected)
+      const roomModel = firstMap().map.rooms.get(id)!
+      for (const edge of drawn) expect(isInnerWallEdge(roomModel, edge)).toBe(true)
+      expect(checkInvariants(useModelStore().project)).toEqual([])
+    })
+
+    // An L, one cell thick in both arms: three down the left, four across the
+    // bottom. Nothing in it is an interior vertex, so the endpoint test drew
+    // nothing at all here; the edge test draws all five of its interior edges.
+    it('draws every interior edge of a one-thick L', () => {
+      const id = room(['0,0', '0,1', '0,2', '1,2', '2,2', '3,2'])
+      const drawn = sweep(id, vertex(0, 1), 4)
+
+      expect([...drawn].sort()).toEqual(
+        [
+          edgeOfCell('0,0', 'S'),
+          edgeOfCell('0,1', 'S'),
+          edgeOfCell('0,2', 'E'),
+          edgeOfCell('1,2', 'E'),
+          edgeOfCell('2,2', 'E'),
+        ].sort(),
+      )
+      expect(checkInvariants(useModelStore().project)).toEqual([])
     })
   })
 

@@ -6,11 +6,11 @@
 //
 // Three things this file deliberately does not do:
 //
-//   - It does not validate. An inner wall is legal only while strictly
-//     interior, and core enforces that on every op, including pruning walls
-//     that stop being interior when a room is erased, shrunk or split. The
-//     stroke walks the interior-vertex lattice, which cannot produce an
-//     illegal edge in the first place; see `edgeStroke.ts`.
+//   - It does not validate. An inner wall is legal only while both cells its
+//     edge divides are in the room, and core enforces that on every op,
+//     including pruning walls whose cells leave when a room is erased, shrunk
+//     or split. The stroke filters its steps by the same rule, so it cannot
+//     produce an illegal edge in the first place; see `edgeStroke.ts`.
 //   - It adds no ghost. Both gestures are visible in the speculative result:
 //     the wall is on the canvas, in its new style or gone, while the button is
 //     still down. The overlay exists for what the user could not otherwise

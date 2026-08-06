@@ -7,7 +7,7 @@ import { drawIconBadge, drawIconPlate, UNKNOWN_ICON_ART, type IconArt } from './
 import { cellCentre, type TeleportEnd, type TeleportScene } from './teleports'
 import { parseCell, segmentFromEdge } from '@/core/cell'
 import type { CellKey, EdgeKey } from '@/core/cell'
-import { boundaryEdges, interiorVertices, outerWalls, resizableRuns } from '@/core/derive/walls'
+import { boundaryEdges, outerWalls, resizableRuns, wallVertices } from '@/core/derive/walls'
 import { connectedComponents } from '@/core/derive/connectivity'
 import { clamp } from '@/lib/math'
 import type { AreaId, LockTypeId, RoomId, TransitionId } from '@/core/ids'
@@ -546,7 +546,7 @@ function drawHandles(ctx: CanvasRenderingContext2D, scene: MapScene, active: Han
   // with the same tap that arms the room.
   if (!pointerCell || !handles.vertices) return
 
-  for (const vertex of interiorVertices(room)) {
+  for (const vertex of wallVertices(room)) {
     if (
       Math.abs(vertex.x - pointerCell.x) > VERTEX_REVEAL_CELLS ||
       Math.abs(vertex.y - pointerCell.y) > VERTEX_REVEAL_CELLS

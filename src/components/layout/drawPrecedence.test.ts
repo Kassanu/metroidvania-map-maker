@@ -307,9 +307,9 @@ describe('Draw/Edit precedence table (Auto)', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Row 5: Interior vertex
+  // Row 5: Wall vertex
   // -------------------------------------------------------------------------
-  describe('interior vertex', () => {
+  describe('wall vertex', () => {
     it('click: sets the room active and draws no wall', () => {
       const { wrapper, viewport } = mountCanvas()
       const mapId = useTabsStore().activeTabId
@@ -333,6 +333,39 @@ describe('Draw/Edit precedence table (Auto)', () => {
 
       expect([...room(roomId).innerWalls.keys()]).toEqual([edgeOfCell('3,2', 'S')])
       expect(undoLabel()).toBe('Draw Inner Wall')
+      wrapper.unmount()
+    })
+
+    // A vertex on the outer boundary is a target too, and it outranks the
+    // resize run it sits in the middle of. Without this the ring of edges
+    // beside the wall is unreachable, and a room one cell thick can hold no
+    // wall at all.
+    it('drag: draws from a vertex on the outer boundary, over the run', () => {
+      const { wrapper, viewport } = mountCanvas()
+      const mapId = useTabsStore().activeTabId
+      const roomId = square3(mapId)
+
+      drag(viewport, at(3, 2), at(3, 3))
+
+      expect([...room(roomId).innerWalls.keys()]).toEqual([edgeOfCell('2,2', 'E')])
+      expect(room(roomId).cells.size).toBe(9)
+      expect(undoLabel()).toBe('Draw Inner Wall')
+      wrapper.unmount()
+    })
+
+    // What the precedence above costs, bounded: the vertex radius is clamped
+    // to a quarter of the drawn cell, so a run keeps the middle half of each
+    // of its cells.
+    it('drag: still resizes the run half a cell from the vertex', () => {
+      const { wrapper, viewport } = mountCanvas()
+      const mapId = useTabsStore().activeTabId
+      const roomId = square3(mapId)
+
+      drag(viewport, at(3.5, 2.03), at(3.5, 1.5))
+
+      expect(room(roomId).cells.size).toBe(12)
+      expect(room(roomId).innerWalls.size).toBe(0)
+      expect(undoLabel()).toBe('Resize Room')
       wrapper.unmount()
     })
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderMap, type HoveredHandle, type MapScene } from './renderMap'
 import { DOOR_JAMB } from './doorRuns'
 import { pageBounds } from './page'
-import { interiorVertices, outerWalls, resizableRuns } from '@/core/derive/walls'
+import { outerWalls, resizableRuns, wallVertices } from '@/core/derive/walls'
 import type { CanvasPalette } from './palette'
 import { createProject } from '@/core/factory'
 import { paintCells, drawInnerWall } from '@/core/ops/rooms'
@@ -2233,8 +2233,8 @@ describe('renderMap active room handles', () => {
       draw(ctx, { map, areas: project.areas, handleRoom: activeScene(map, roomId) })
 
       const targets = fills.filter((fill) => fill.style === '#handle')
-      // A 3x3 room's interior vertices are (1,1), (2,1), (1,2), (2,2).
-      expect(targets).toHaveLength(4)
+      // A 3x3 room's 4x4 lattice, less its four corners.
+      expect(targets).toHaveLength(12)
       for (const target of targets) {
         expect(target.rect[2]).toBeLessThan(7 * 2)
         expect(target.rect[2]).toBeCloseTo(TILE * 0.07 * 2)
@@ -2259,13 +2259,13 @@ describe('renderMap active room handles', () => {
     })
   })
 
-  // Interior vertex targets are revealed only in a window around the
-  // pointer's cell, not all of them at once: a 20x20 room has 361 interior
-  // vertices, and drawing every one at once would turn it into a lattice.
+  // Wall-vertex targets are revealed only in a window around the pointer's
+  // cell, not all of them at once: a 20x20 room has 437 of them, and drawing
+  // every one at once would turn it into a lattice.
   describe('vertex reveal window', () => {
-    // 10x10, so its 81 interior vertices comfortably exceed the 25 a single
-    // 5x5 window can hold: a smaller room would fit entirely inside the
-    // window and the filter would look like it worked while doing nothing.
+    // 10x10, so its 117 wall vertices comfortably exceed the 25 a single 5x5
+    // window can hold: a smaller room would fit entirely inside the window and
+    // the filter would look like it worked while doing nothing.
     function room10x10() {
       const cells: string[] = []
       for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) cells.push(`${x},${y}`)
@@ -2295,12 +2295,15 @@ describe('renderMap active room handles', () => {
 
     it('draws only the vertices near the pointer, not all of them', () => {
       const room = [...room10x10().map.rooms.values()][0]
-      expect(interiorVertices(room)).toHaveLength(81)
+      // The full 11x11 lattice bar the room's four corners, which touch one
+      // cell each and so carry no drawable edge.
+      expect(wallVertices(room)).toHaveLength(117)
 
-      // A 5x5 window well inside the room: 25 of the 81.
+      // A 5x5 window well inside the room: 25 of the 117.
       expect(targetsAround({ x: 5, y: 5 })).toHaveLength(25)
-      // Against a corner the window overhangs the room and reveals fewer.
-      expect(targetsAround({ x: 0, y: 0 })).toHaveLength(4)
+      // Against a corner the window overhangs the room and reveals fewer: the
+      // 3x3 of lattice points inside it, less the room's own corner.
+      expect(targetsAround({ x: 0, y: 0 })).toHaveLength(8)
     })
 
     it('moves the window with the pointer', () => {
@@ -2391,8 +2394,8 @@ describe('renderMap active room handles', () => {
       const hovered = fills.filter((fill) => fill.style === '#handlehover')
       expect(hovered).toHaveLength(1)
       expect(hovered[0].rect[2]).toBeCloseTo(14)
-      // The other three interior vertices stay faint.
-      expect(fills.filter((fill) => fill.style === '#handle')).toHaveLength(3)
+      // The other eleven wall vertices stay faint.
+      expect(fills.filter((fill) => fill.style === '#handle')).toHaveLength(11)
     })
 
     // A run is named by its first edge rather than by object identity,

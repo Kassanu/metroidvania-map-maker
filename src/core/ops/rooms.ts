@@ -25,6 +25,7 @@ import {
 import type { CellKey, EdgeKey } from '../cell'
 import { connectedComponents, originalGroupIndex, transformCells } from '../derive/connectivity'
 import type { Transform } from '../derive/connectivity'
+import { isInnerWallEdge } from '../derive/walls'
 import type { EdgeRun } from '../derive/walls'
 import { createRoom } from '../factory'
 import { WORLD_AREA_ID } from '../ids'
@@ -77,16 +78,14 @@ function pruneInnerWalls(
         const edge = edgeOfCell(cell, side)
         if (seen.has(edge) || !room.innerWalls.has(edge)) continue
         seen.add(edge)
-        const { lo, hi } = edgeCells(edge)
-        if (!room.cells.has(lo) || !room.cells.has(hi)) removeInnerWall(tx, map, room, edge)
+        if (!isInnerWallEdge(room, edge)) removeInnerWall(tx, map, room, edge)
       }
     }
     return
   }
 
   for (const edge of [...room.innerWalls.keys()]) {
-    const { lo, hi } = edgeCells(edge)
-    if (!room.cells.has(lo) || !room.cells.has(hi)) removeInnerWall(tx, map, room, edge)
+    if (!isInnerWallEdge(room, edge)) removeInnerWall(tx, map, room, edge)
   }
 }
 
@@ -874,11 +873,10 @@ export function drawInnerWall(
   style: WallStyle,
 ): Outcome {
   const room = mustGet(map.rooms, roomId, 'room')
-  const { lo, hi } = edgeCells(edge)
   // An edge with a cell outside this room is an outer boundary, and outer
   // walls can never be drawn by hand: worth telling the user rather than
   // silently doing nothing when they drag on the wrong vertex.
-  if (!room.cells.has(lo) || !room.cells.has(hi)) return refuse('not-interior')
+  if (!isInnerWallEdge(room, edge)) return refuse('not-interior')
   setInnerWall(tx, map, room, edge, style)
 }
 

@@ -123,17 +123,40 @@ describe('resolveZone', () => {
     })
 
     // Only candidate edges compete. The edge between two cells of the same
-    // room carries no wall and no handle, so it must not shadow a real target
-    // by being nearer.
-    it('is not shadowed by the shared edge between two cells of the room', () => {
+    // room carries no wall and no handle, so it is not a target at all.
+    it('resolves interior alongside the shared edge between two cells', () => {
       const { map } = withMap((tx, project, map) =>
         paintCells(tx, project, map, ['0,0', '1,0', '2,0'], { areaId: WORLD_AREA_ID }),
       )
 
-      // One pixel inside the shared edge at x=32, four pixels under the north
-      // wall: a run of 3 is the only grabbable target.
-      const zone = resolveZone({ x: 33, y: 4 }, sceneFor(map))
+      // One pixel inside the shared edge at x=32, half a cell down so nothing
+      // else is in range.
+      expect(resolveZone({ x: 33, y: 16 }, sceneFor(map)).kind).toBe('interior')
+    })
 
+    // The same rule where it can shadow: a non-candidate nearer than a real
+    // target must not win on distance.
+    //
+    // At zoom 1 this corner belongs to the vertex, which outranks both. The
+    // region where two perpendicular candidate edges are in band lies within
+    // `band x sqrt(2)` of the lattice point they meet at, and the vertex
+    // radius exceeds that from zoom 0.85 up. Below it the clamp on the vertex
+    // radius bites first and the 1-D contest is reachable, which is where this
+    // rule still decides anything.
+    it('is not shadowed by the shared edge, where the vertex leaves room', () => {
+      const { map } = withMap((tx, project, map) =>
+        paintCells(tx, project, map, ['0,0', '1,0', '2,0'], { areaId: WORLD_AREA_ID }),
+      )
+      const scene = sceneFor(map, 0.5)
+      const { band, vertexRadius } = zoneTolerances(scene)
+
+      // 2.5px inside the shared edge at x=16, 3.5px under the north wall, and
+      // 4.3px from the vertex at (16,0): inside both bands, outside the disc.
+      const point = { x: 18.5, y: 3.5 }
+      expect(Math.hypot(point.x - 16, point.y)).toBeGreaterThan(vertexRadius)
+      expect(band).toBeGreaterThan(3.5)
+
+      const zone = resolveZone(point, scene)
       expect(zone.kind).toBe('edgeRun')
       if (zone.kind !== 'edgeRun') throw new Error('unreachable')
       expect(zone.run.side).toBe('N')
@@ -168,7 +191,7 @@ describe('resolveZone', () => {
     })
   })
 
-  describe('interior vertices', () => {
+  describe('wall vertices', () => {
     it('resolves the lattice point where four room cells meet', () => {
       const { map } = room3x3()
       const zone = resolveZone(at(1, 1), sceneFor(map))
@@ -178,23 +201,92 @@ describe('resolveZone', () => {
       expect(zone.vertex).toEqual({ x: 1, y: 1 })
     })
 
-    // A vertex is interior when all four cells meeting at it belong to the
-    // room. A corner is not one.
-    it('ignores a corner of the room, which is not interior', () => {
+    // The ring on the outer boundary. Vertex (1,0) sits in the middle of the
+    // north run, and the edge running down from it into the room is drawable,
+    // so it is a target: 0-D beats 1-D, and the run keeps the rest of its
+    // length.
+    it('resolves a vertex on the outer boundary, over the run it sits on', () => {
+      const { map } = room3x3()
+      const zone = resolveZone(at(1, 0), sceneFor(map))
+
+      expect(zone.kind).toBe('vertex')
+      if (zone.kind !== 'vertex') throw new Error('unreachable')
+      expect(zone.vertex).toEqual({ x: 1, y: 0 })
+    })
+
+    it('leaves the middle of a run grabbable either side of the vertex', () => {
+      const { map } = room3x3()
+      // Half a cell along the north run from the vertex at (1,0).
+      const zone = resolveZone({ x: 1.5 * TILE, y: 1 }, sceneFor(map))
+      expect(zone.kind === 'edgeRun' && zone.run.side).toBe('N')
+    })
+
+    // A room one cell thick has no vertex with four cells around it, and the
+    // old rule therefore made it undrawable. The two across its waist each
+    // have one drawable edge: the edge between the two cells.
+    //
+    // Probed from just inside the room in both cases. The east one is a pixel
+    // west of the lattice point rather than on it, because rule 1 bounds every
+    // test by the pointer's own cell and the cell east of the room is empty.
+    it('resolves the waist vertices of a room one cell thick', () => {
+      const { map } = withMap((tx, project, map) =>
+        paintCells(tx, project, map, ['0,0', '0,1'], { areaId: WORLD_AREA_ID }),
+      )
+
+      for (const [point, x] of [
+        [{ x: 1, y: 1 * TILE }, 0],
+        [{ x: 1 * TILE - 1, y: 1 * TILE }, 1],
+      ] as const) {
+        const zone = resolveZone(point, sceneFor(map))
+        expect(zone.kind).toBe('vertex')
+        if (zone.kind !== 'vertex') throw new Error('unreachable')
+        expect(zone.vertex).toEqual({ x, y: 1 })
+      }
+    })
+
+    // A corner touches one cell of the room, so no edge there can carry a
+    // wall and there is nothing to aim at.
+    it('ignores a corner of the room, which has no drawable edge', () => {
       const { map } = room3x3()
       const zone = resolveZone(at(0, 0), sceneFor(map))
       expect(zone.kind).not.toBe('vertex')
     })
 
-    it('ignores a vertex on the boundary between two rooms', () => {
+    // The lattice point is not the unit: a drawable edge ending there is, and
+    // an edge belongs to one room. Rule 1 makes the pointer's own cell decide
+    // which room is asked, so the same point answers differently either side.
+    it('ignores a lattice point whose only drawable edge belongs to the neighbour', () => {
+      const { map } = withMap((tx, project, map) => {
+        paintCells(tx, project, map, ['0,0'], { areaId: WORLD_AREA_ID })
+        paintCells(tx, project, map, ['1,0', '1,1'], { areaId: WORLD_AREA_ID })
+      })
+
+      // (1,1) is the lone cell's south-east corner, with nothing to draw from.
+      // For the room east of it, it is the south end of the edge across its
+      // waist.
+      expect(resolveZone({ x: 1 * TILE - 1, y: 1 * TILE - 1 }, sceneFor(map)).kind).not.toBe(
+        'vertex',
+      )
+      expect(resolveZone({ x: 1 * TILE + 1, y: 1 * TILE - 1 }, sceneFor(map)).kind).toBe('vertex')
+    })
+
+    // Rule 1 decides the room, and the answer for a shared lattice point is
+    // therefore whichever room the pointer is standing in. Both rooms own a
+    // drawable edge ending at (2,1), so both offer it.
+    it('answers a shared lattice point for the room the pointer is in', () => {
       const { map } = withMap((tx, project, map) => {
         paintCells(tx, project, map, ['0,0', '1,0', '0,1', '1,1'], { areaId: WORLD_AREA_ID })
         paintCells(tx, project, map, ['2,0', '2,1'], { areaId: WORLD_AREA_ID })
       })
 
-      // (2,1) is a corner of the first room, not an interior vertex of it.
-      const zone = resolveZone({ x: 2 * TILE - 1, y: 1 * TILE }, sceneFor(map))
-      expect(zone.kind).not.toBe('vertex')
+      const west = resolveZone({ x: 2 * TILE - 1, y: 1 * TILE }, sceneFor(map))
+      const east = resolveZone({ x: 2 * TILE + 1, y: 1 * TILE }, sceneFor(map))
+
+      expect(west.kind).toBe('vertex')
+      expect(east.kind).toBe('vertex')
+      if (west.kind !== 'vertex' || east.kind !== 'vertex') throw new Error('unreachable')
+      expect(west.vertex).toEqual(east.vertex)
+      expect(west.roomId).not.toBe(east.roomId)
     })
 
     // 0-D beats 1-D: vertices beat walls. An inner wall runs between interior
@@ -262,19 +354,38 @@ describe('resolveZone', () => {
     })
 
     // Ties go to the inner wall: inner walls are drawn on top and hit first.
-    // A 2x1 room with a wall on its shared edge, probed 2px from both wall and
+    // A 2x1 room with a wall on its shared edge, probed 3px from both wall and
     // north run, exactly equal in integer pixels.
+    //
+    // At zoom 0.5 for the same reason as the shared-edge rule above: an inner
+    // wall's own endpoints are always wall vertices, so at zoom 1 the disc
+    // covers every point equidistant from a wall and a run meeting there.
     it('beats a tied outer run, being drawn on top', () => {
       const { map } = withMap((tx, project, map) => {
         const room = paintCells(tx, project, map, ['0,0', '1,0'], { areaId: WORLD_AREA_ID })
         drawInnerWall(tx, map, room.id, edgeKey(1, 0, 'V'), 'solid')
       })
+      const scene = sceneFor(map, 0.5)
 
-      const zone = resolveZone({ x: 30, y: 2 }, sceneFor(map))
+      const point = { x: 13, y: 3 }
+      expect(Math.hypot(point.x - 16, point.y)).toBeGreaterThan(zoneTolerances(scene).vertexRadius)
 
+      const zone = resolveZone(point, scene)
       expect(zone.kind).toBe('innerWall')
       if (zone.kind !== 'innerWall') throw new Error('unreachable')
       expect(zone.edge).toBe(edgeKey(1, 0, 'V'))
+    })
+
+    // And at zoom 1 the same press is the vertex, which is the decided
+    // precedence rather than an accident: an inner wall is aimed at along its
+    // length, and its ends are where the next segment is started from.
+    it('yields to the vertex at its own end', () => {
+      const { map } = withMap((tx, project, map) => {
+        const room = paintCells(tx, project, map, ['0,0', '1,0'], { areaId: WORLD_AREA_ID })
+        drawInnerWall(tx, map, room.id, edgeKey(1, 0, 'V'), 'solid')
+      })
+
+      expect(resolveZone({ x: 30, y: 2 }, sceneFor(map)).kind).toBe('vertex')
     })
 
     it('is interior again once the segment is gone', () => {

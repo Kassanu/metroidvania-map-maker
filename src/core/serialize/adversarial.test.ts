@@ -8,7 +8,7 @@
 // through exactly the same three assertions.
 
 import { describe, expect, it } from 'vitest'
-import { edgeRuns, interiorVertices, outerWalls } from '../derive/walls'
+import { edgeRuns, outerWalls, wallVertices } from '../derive/walls'
 import { checkInvariants } from '../testUtils'
 import { InvalidFileError, fromJSON, toJSON } from './index'
 import { FileTooLargeError, LIMITS } from './limits'
@@ -200,7 +200,7 @@ describe('the adversarial corpus', () => {
         for (const room of project.mapsById.get(mapId)!.rooms.values()) {
           outerWalls(room)
           edgeRuns(room)
-          interiorVertices(room)
+          wallVertices(room)
         }
       }
       expect(performance.now() - started).toBeLessThan(TIME_BUDGET_MS)

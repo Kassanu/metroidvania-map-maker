@@ -6,24 +6,19 @@
 // pristine model. What differs is only what a "unit" is (a grid edge rather
 // than a cell) and one rule that has no cell equivalent:
 //
-// The path is restricted to interior vertices, which is sufficient for
-// legality: an edge is drawable exactly when both cells it borders are in the
-// room, and a step between two adjacent interior vertices always satisfies
-// that, because the four-cell test at each end overlaps in precisely the two
-// cells the edge divides. So walking this lattice cannot produce an illegal
-// edge, and `drawInnerWall`'s refusal is unreachable from here.
+// The path is filtered by the step's own edge rather than by its endpoints:
+// a step is drawn exactly when both cells the edge divides are in the room,
+// which is `isInnerWallEdge`, which is the same rule `drawInnerWall` enforces.
+// Equal to core's rule rather than stronger than it, so no legal edge is lost
+// and `drawInnerWall`'s refusal stays unreachable from here.
 //
-// It is sufficient but far from necessary, and that is a known defect.
-// Requiring both endpoints to be interior loses every interior edge with an
-// endpoint on the room's outer boundary ring: a 2x2 room can hold no inner
-// wall at all, a 3x3 only 4 of its 12, a 10x10 144 of 180. Testing the step's
-// edge (both its cells in the room) instead of its two endpoints recovers
-// everything except rooms with no interior vertex at all. Letting a drag start
-// on a boundary vertex is the harder half of that fix.
+// The lattice itself is unrestricted, so a drag may pass through vertices
+// outside the room entirely. Those steps draw nothing and the drag resumes
+// where the pointer is.
 
 import { beginGhostGesture, type GhostGesture } from './ghostGesture'
 import { nearestVertex, verticesAlong, type Vertex } from '@/canvas/vertexPath'
-import { isInteriorVertex } from '@/core/derive/walls'
+import { isInnerWallEdge } from '@/core/derive/walls'
 import { edgeFromSegment } from '@/core/cell'
 import type { WorldPoint } from '@/canvas/stroke'
 import type { EdgeKey } from '@/core/cell'
@@ -90,7 +85,7 @@ export function beginEdgeStroke(spec: EdgeStrokeSpec): EdgeStroke {
       let grew = false
       let from = previous
       for (const to of path) {
-        const edge = edgeBetweenInterior(room, from, to)
+        const edge = drawableEdge(room, from, to)
         from = to
         if (!edge || edges.has(edge)) continue
         edges.add(edge)
@@ -105,14 +100,14 @@ export function beginEdgeStroke(spec: EdgeStrokeSpec): EdgeStroke {
   }
 }
 
-// The grid edge between two adjacent interior vertices, or null when the step
-// is not one the stroke may draw: off the lattice, a repeat of the same
-// vertex, or a diagonal (which `verticesAlong` never emits, but the type does
-// not say so).
-function edgeBetweenInterior(room: Room, from: Vertex, to: Vertex): EdgeKey | null {
-  if (!isInteriorVertex(room, from.x, from.y) || !isInteriorVertex(room, to.x, to.y)) return null
-  return edgeFromSegment([
+// The grid edge between two adjacent vertices, or null when the step is not
+// one the stroke may draw: a repeat of the same vertex, a diagonal (which
+// `verticesAlong` never emits, but the type does not say so), or an edge with
+// a cell outside the room.
+function drawableEdge(room: Room, from: Vertex, to: Vertex): EdgeKey | null {
+  const edge = edgeFromSegment([
     [from.x, from.y],
     [to.x, to.y],
   ])
+  return edge !== null && isInnerWallEdge(room, edge) ? edge : null
 }

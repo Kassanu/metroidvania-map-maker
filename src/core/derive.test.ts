@@ -10,8 +10,10 @@ import {
   boundaryEdges,
   computeEdgeRuns,
   computeOuterWalls,
-  interiorVertices,
+  isInnerWallEdge,
+  isWallVertex,
   resizableRuns,
+  wallVertices,
 } from './derive/walls'
 import { areaBoundsOnMap, contentBounds, ownedCellsIn, roomsOverlapping } from './derive/bounds'
 import { createRoom } from './factory'
@@ -281,28 +283,122 @@ describe('edge runs', () => {
   })
 })
 
-describe('interior vertices', () => {
-  it('finds the vertices where four of the room’s cells meet', () => {
+describe('inner-wall edges', () => {
+  it('accepts an edge whose two cells are both in the room', () => {
     const { project, map } = setup()
     const room = makeRoom(project, map, rect(0, 0, 3, 3))
-    // A 3x3 has exactly four fully-surrounded interior vertices.
-    expect(interiorVertices(room)).toHaveLength(4)
+    expect(isInnerWallEdge(room, edgeOfCell('1,1', 'E'))).toBe(true)
+  })
+
+  // The whole ring of edges next to the outer wall. Each has both its cells in
+  // the room while one of its endpoints sits on the boundary, which is the
+  // distinction the vertex predicate cannot make.
+  it('accepts an edge with an endpoint on the outer boundary', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 3))
+    expect(isInnerWallEdge(room, edgeOfCell('0,0', 'E'))).toBe(true)
+  })
+
+  it('accepts the only interior edge of a two-cell room', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 1, 2))
+    expect(isInnerWallEdge(room, edgeOfCell('0,0', 'S'))).toBe(true)
+  })
+
+  it('refuses an outer boundary edge', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 3))
+    expect(isInnerWallEdge(room, edgeOfCell('1,0', 'N'))).toBe(false)
+  })
+
+  it('refuses an edge belonging to no cell of the room', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 3))
+    expect(isInnerWallEdge(room, edgeOfCell('9,9', 'E'))).toBe(false)
+  })
+
+  // The edge across the waist of an hourglass: both its cells are in the room,
+  // and neither endpoint is anywhere near interior.
+  it('accepts across a one-cell waist', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, ['0,0', '0,1'])
+    expect(isInnerWallEdge(room, edgeOfCell('0,0', 'S'))).toBe(true)
+  })
+})
+
+describe('wall vertices', () => {
+  // A 3x3 has 16 lattice points in its box; the four corners of the room touch
+  // one cell each and so have no drawable edge. Everything else is a target,
+  // including the whole boundary ring.
+  it('finds every vertex with a drawable edge, boundary ring included', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 3))
+    expect(wallVertices(room)).toHaveLength(12)
+  })
+
+  it('excludes the corners of a rectangular room', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 3))
+    for (const corner of [
+      [0, 0],
+      [3, 0],
+      [0, 3],
+      [3, 3],
+    ]) {
+      expect(isWallVertex(room, corner[0], corner[1])).toBe(false)
+    }
   })
 
   it('finds none in a single-cell room', () => {
     const { project, map } = setup()
-    expect(interiorVertices(makeRoom(project, map, rect(0, 0, 1, 1)))).toHaveLength(0)
+    expect(wallVertices(makeRoom(project, map, rect(0, 0, 1, 1)))).toHaveLength(0)
+  })
+
+  // The case the old predicate could not express: no vertex here has four
+  // cells around it, but the two across the waist each have a drawable edge.
+  it('finds the pair spanning a room one cell thick', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, ['0,0', '0,1'])
+    expect(wallVertices(room)).toEqual([
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+    ])
   })
 
   it('reports them in row-major order', () => {
     const { project, map } = setup()
-    const room = makeRoom(project, map, rect(0, 0, 3, 3))
-    expect(interiorVertices(room)).toEqual([
+    const room = makeRoom(project, map, rect(0, 0, 2, 2))
+    expect(wallVertices(room)).toEqual([
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
       { x: 1, y: 1 },
       { x: 2, y: 1 },
       { x: 1, y: 2 },
-      { x: 2, y: 2 },
     ])
+  })
+
+  // The list and the predicate are one rule, so the list is exactly the
+  // predicate over every lattice point the room can reach. Sweeping the box
+  // here is affordable because the shapes are small; the enumeration itself
+  // must not, which is the next test.
+  it('agrees with the predicate over an awkward shape', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, [
+      '0,0',
+      '0,1',
+      '0,2',
+      '1,2',
+      '2,2',
+      '3,2',
+      '3,1',
+      '2,1',
+      '3,0',
+    ])
+    const expected: { x: number; y: number }[] = []
+    for (let y = -1; y <= 4; y++) {
+      for (let x = -1; x <= 5; x++) if (isWallVertex(room, x, y)) expected.push({ x, y })
+    }
+    expect(wallVertices(room)).toEqual(expected)
   })
 
   // A staircase's bounding box grows as the square of its cell count, so a
@@ -320,10 +416,12 @@ describe('interior vertices', () => {
     }
 
     const started = performance.now()
-    const vertices = interiorVertices(room)
+    const vertices = wallVertices(room)
     expect(performance.now() - started).toBeLessThan(5_000)
-    // A staircase one cell thick never encloses a vertex.
-    expect(vertices).toHaveLength(0)
+    // Every step of the staircase is two cells side by side, so the two ends
+    // of the edge between them are targets: 3 per step, sharing one with the
+    // step below.
+    expect(vertices.length).toBeGreaterThan(20_000)
   })
 })
 
