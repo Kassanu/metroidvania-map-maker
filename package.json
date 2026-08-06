@@ -14,7 +14,8 @@
     "test:e2e": "playwright test",
     "lint": "eslint . --fix",
     "format": "prettier --write src/",
-    "format:check": "prettier --check src/"
+    "format:check": "prettier --check src/",
+    "check:build": "vite build && node scripts/check-build.mjs"
   },
   "dependencies": {
     "pinia": "^4.0.2",
