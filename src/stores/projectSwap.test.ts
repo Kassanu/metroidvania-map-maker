@@ -62,6 +62,7 @@ function providerServing(data: unknown): StorageProvider {
     list: async () => [],
     remember: async () => {},
     forget: async () => {},
+    adoptFileHandle: () => null,
     open: async () => opened,
     save: async (handle) => handle,
     saveAs: async () => ({ providerId: 'fake', name: 'next.mvm' }),

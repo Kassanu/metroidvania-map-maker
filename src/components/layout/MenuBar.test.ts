@@ -587,6 +587,7 @@ describe('MenuBar', () => {
         list: async () => entries,
         remember: async () => {},
         forget: async () => {},
+        adoptFileHandle: () => null,
         open: async () => null,
         save: async (handle) => handle,
         saveAs: async () => null,

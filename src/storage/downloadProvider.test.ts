@@ -77,6 +77,21 @@ describe('it announces what it cannot do', () => {
     expect(await provider.list()).toEqual([])
   })
 
+  // Declined outright, rather than answered with a handle that would then be
+  // refused a line later by `open`. The caller reads null as "not for me" and
+  // says nothing; a handle would surface as a failure the user cannot act on.
+  it('declines a file the operating system launched the app with', () => {
+    const launched = { name: 'launched.mvm' } as FileSystemFileHandle
+    expect(provider.adoptFileHandle(launched)).toBeNull()
+  })
+
+  it('keeps nothing when asked to remember or forget', async () => {
+    const handle = { providerId: DOWNLOAD_PROVIDER_ID, name: 'world.mvm' } as StorageHandle
+    await provider.remember(handle)
+    expect(await provider.list()).toEqual([])
+    await expect(provider.forget(handle)).resolves.toBeUndefined()
+  })
+
   // Silently showing a picker would open something other than what was asked
   // for, which is worse than refusing.
   it('refuses to reopen a handle it never really issued', async () => {

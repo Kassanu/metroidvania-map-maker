@@ -13,7 +13,7 @@
 // snapshots are what cover the difference.
 
 import { checkByteLength } from '@/core/serialize/limits'
-import { FILE_EXTENSION, StorageError, safeFileName } from '@/core/storage/provider'
+import { FILE_EXTENSION, MVM_MEDIA_TYPE, StorageError, safeFileName } from '@/core/storage/provider'
 import type {
   OpenedProject,
   StorageEntry,
@@ -68,7 +68,7 @@ async function readProject(file: File): Promise<unknown> {
 }
 
 function download(data: unknown, filename: string): void {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/x-mvm+json' })
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: MVM_MEDIA_TYPE })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -98,6 +98,12 @@ export function createDownloadProvider(): StorageProvider {
     async remember(): Promise<void> {},
 
     async forget(): Promise<void> {},
+
+    // Nothing here can hold a file handle, so a launch this provider was
+    // asked about is one it has to decline rather than half-answer.
+    adoptFileHandle(): StorageHandle | null {
+      return null
+    },
 
     async open(handle?: StorageHandle): Promise<OpenedProject | null> {
       // Reopening is what a handle is for, and this provider never issues one

@@ -4,6 +4,11 @@ import App from './App.vue'
 import { createAppPinia } from './stores/pinia'
 import { useModelStore } from './stores/model'
 import { loadSampleFromUrl } from './dev/loadSample'
+import { watchForLaunchedFiles } from './pwa/launchFiles'
+
+// Before anything can await, so a file the OS launched the app with is
+// claimed rather than left in the queue.
+watchForLaunchedFiles()
 
 const pinia = createAppPinia()
 const app = createApp(App).use(pinia)

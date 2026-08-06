@@ -11,11 +11,15 @@ import AboutModal from '../modals/AboutModal.vue'
 import ConfirmUnsavedChanges from '../modals/ConfirmUnsavedChanges.vue'
 import LoadOutcomeDialog from '../modals/LoadOutcomeDialog.vue'
 import RecoveryOffer from '../modals/RecoveryOffer.vue'
+import UpdateToast from './UpdateToast.vue'
 import { onMounted } from 'vue'
 import { useUiStore } from '@/stores/ui'
 import { useModelStore } from '@/stores/model'
 import { useFileStore } from '@/stores/file'
 import { useRecoveryStore } from '@/stores/recovery'
+import { useAppUpdateStore } from '@/stores/appUpdate'
+import { onLaunchedFiles } from '@/pwa/launchFiles'
+import { registerServiceWorker } from '@/pwa/serviceWorker'
 import { useHotkeyAction } from '@/hotkeys/useHotkeyAction'
 import { useUnloadGuard } from '@/composables/useUnloadGuard'
 
@@ -26,6 +30,7 @@ const file = useFileStore()
 // registers: nothing else would ever ask for it, and a snapshot that is only
 // taken once someone opens a dialog is no snapshot at all.
 const recovery = useRecoveryStore()
+const update = useAppUpdateStore()
 
 // Once, and only at startup. What is in the store at this moment is a previous
 // session's work; anything written after this is this session's own.
@@ -40,6 +45,15 @@ onMounted(async () => {
 
 // Read once into memory, so the File menu renders the list it already has.
 onMounted(() => void file.refreshRecent())
+
+onMounted(() => {
+  update.watchForUpdates(registerServiceWorker)
+
+  // A `.mvm` double-clicked in the OS. Only the first is taken: opening
+  // several would mean each replacing the last, and the last one winning
+  // silently is worse than opening one and saying nothing about the rest.
+  onLaunchedFiles((files) => void file.openLaunched(files[0]))
+})
 
 // The File verbs are always available, so they register here rather than in a
 // mode that owns them. Each runs the same store action the menu item runs, so
@@ -102,6 +116,7 @@ function forgetFailedFile() {
       @discard="recovery.discard($event)"
       @dismiss="recovery.dismiss()"
     />
+    <UpdateToast :open="update.available" @install="update.install()" @dismiss="update.dismiss()" />
   </div>
 </template>
 

@@ -25,6 +25,7 @@ function fakeProvider(over: Partial<StorageProvider> = {}): StorageProvider {
     list: async () => [],
     remember: async () => {},
     forget: async () => {},
+    adoptFileHandle: () => null,
     open: async () => null,
     save: async (handle) => handle,
     saveAs: async () => null,
@@ -617,6 +618,73 @@ describe('a recent file that no longer opens', () => {
 
     await file.open()
     expect(file.outcome?.kind).toBe('failed')
+  })
+})
+
+// A `.mvm` double-clicked in the operating system. Only the arrival is
+// different; everything after it is Open.
+describe('a launched file', () => {
+  const launched = { name: 'launched.mvm' } as FileSystemFileHandle
+
+  it('opens through the provider handle it was turned into', async () => {
+    const opened: (StorageHandle | undefined)[] = []
+    setStorageProvider(
+      fakeProvider({
+        adoptFileHandle: (file) => handle(file.name),
+        open: async (from) => {
+          opened.push(from)
+          return { data: cleanFile(), handle: handle(from?.name ?? '') }
+        },
+      }),
+    )
+    const file = useFileStore()
+
+    expect(await file.openLaunched(launched)).toBe(true)
+    expect(opened.map((from) => from?.name)).toEqual(['launched.mvm'])
+    expect(useModelStore().projectName).toBe('From disk')
+  })
+
+  // The launch arrives at a window that is already open as well as a cold
+  // one, and that is the window where unsaved work exists.
+  it('asks about unsaved work like any other replacement', async () => {
+    const open = vi.fn(async () => null)
+    setStorageProvider(fakeProvider({ adoptFileHandle: () => handle(), open }))
+    const file = useFileStore()
+    makeDirty()
+
+    const answer = file.openLaunched(launched)
+    expect(file.unsavedPromptOpen).toBe(true)
+    file.chooseUnsaved('cancel')
+
+    expect(await answer).toBe(false)
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  // Only the provider knows what to make of the platform's handle, and the
+  // one that cannot use it says so.
+  it('does nothing where the provider cannot hold a file handle', async () => {
+    const open = vi.fn(async () => null)
+    setStorageProvider(fakeProvider({ adoptFileHandle: () => null, open }))
+    const file = useFileStore()
+
+    expect(await file.openLaunched(launched)).toBe(false)
+    expect(open).not.toHaveBeenCalled()
+    expect(file.outcome).toBeNull()
+  })
+
+  it('reports a launched file that will not open', async () => {
+    setStorageProvider(
+      fakeProvider({
+        adoptFileHandle: () => handle('gone.mvm'),
+        open: async () => {
+          throw new FileMissingError()
+        },
+      }),
+    )
+    const file = useFileStore()
+
+    expect(await file.openLaunched(launched)).toBe(false)
+    expect(file.outcome?.kind).toBe('missing')
   })
 })
 

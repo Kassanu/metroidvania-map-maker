@@ -205,6 +205,17 @@ export const en = {
   // Leaves the snapshots alone, so they are offered again next time.
   // Discarding is the only thing that stops the question coming back.
   'recovery.dismiss': 'Not Now',
+
+  // A new build, waiting. Worded as an offer rather than a warning: nothing
+  // is wrong, and the update keeps until it is taken.
+  //
+  // It asks for a save even though Reload asks about unsaved work anyway. The
+  // guard is the safety net, not the instruction, and a notice that leans on
+  // one the user cannot see is a notice that reads as riskier than it is.
+  'update.title': 'A new version is available',
+  'update.body': 'Please save your work and reload the page to update.',
+  'update.reload': 'Reload',
+  'update.later': 'Later',
   'menu.edit': 'Edit',
   'menu.view': 'View',
   'menu.help': 'Help',

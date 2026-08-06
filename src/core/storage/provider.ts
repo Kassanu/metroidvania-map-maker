@@ -12,7 +12,9 @@
 // via File System Access; Firefox cannot), so the interface models that with
 // `canSaveInPlace` rather than pretending both behave the same.
 
-export const FILE_EXTENSION = '.mvm'
+import { FILE_EXTENSION } from './fileType'
+
+export { FILE_EXTENSION, MVM_MEDIA_TYPE } from './fileType'
 
 // An opaque reference to a stored project. What is inside depends entirely on
 // the provider (an FSA handle, a localStorage key, a cloud file id). The
@@ -65,6 +67,15 @@ export interface StorageProvider {
   // opens, and the only way one leaves other than falling off the end.
   forget(handle: StorageHandle): Promise<void>
 
+  // A file the app was handed rather than one it asked for: the File Handling
+  // API gives a `FileSystemFileHandle` when the operating system launches the
+  // app with a document. Null where a provider has no use for one, which is
+  // the same providers that cannot reopen anything.
+  //
+  // Here rather than at the call site so that nothing above this interface has
+  // to know which provider is running to make sense of a launch.
+  adoptFileHandle(file: FileSystemFileHandle): StorageHandle | null
+
   // Prompts the user if the provider needs it (a file picker), or resolves the
   // given handle directly.
   open(handle?: StorageHandle): Promise<OpenedProject | null>
@@ -77,11 +88,6 @@ export interface StorageProvider {
   saveAs(data: unknown, suggestedName: string): Promise<StorageHandle | null>
 }
 
-// Crash-recovery snapshots are a distinct channel from the project file:
-// keyed per project so New/Open can never clobber another project's recovery.
-// Kept as its own interface rather than bolted onto StorageProvider, because
-// a cloud provider has no business implementing autosave and the local one has
-// no business implementing it twice.
 // What the recovery offer has to say about a snapshot before anyone decides
 // whether they want it. Stored beside the payload rather than read out of it,
 // so listing what is there does not mean parsing every snapshot to find out.
@@ -97,6 +103,11 @@ export interface SnapshotInfo extends SnapshotAbout {
   savedAt: number
 }
 
+// Crash-recovery snapshots are a distinct channel from the project file:
+// keyed per project so New/Open can never clobber another project's recovery.
+// Kept as its own interface rather than bolted onto StorageProvider, because
+// a cloud provider has no business implementing autosave and the local one has
+// no business implementing it twice.
 export interface RecoveryStore {
   // `key` identifies the project, not the file location. A project saved to a
   // new location keeps its recovery history.

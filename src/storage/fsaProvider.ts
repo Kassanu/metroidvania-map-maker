@@ -12,6 +12,7 @@
 import { checkByteLength } from '@/core/serialize/limits'
 import {
   FILE_EXTENSION,
+  MVM_MEDIA_TYPE,
   FileMissingError,
   PermissionDeniedError,
   StorageError,
@@ -34,7 +35,7 @@ export const FSA_PROVIDER_ID = 'fsa'
 const PICKER_TYPES = [
   {
     description: 'Metroidvania Map Maker project',
-    accept: { 'application/x-mvm+json': [FILE_EXTENSION] },
+    accept: { [MVM_MEDIA_TYPE]: [FILE_EXTENSION] },
   },
 ]
 
@@ -167,6 +168,12 @@ export function createFsaProvider(
 
     forget(handle: StorageHandle): Promise<void> {
       return recent.forget(handle)
+    },
+
+    // The same kind of handle the picker produces, so a launched file takes
+    // exactly the path an opened one does.
+    adoptFileHandle(file: FileSystemFileHandle): StorageHandle {
+      return wrap(file)
     },
 
     async open(handle?: StorageHandle): Promise<OpenedProject | null> {

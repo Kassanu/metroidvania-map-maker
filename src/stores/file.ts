@@ -159,6 +159,19 @@ export const useFileStore = defineStore('file', () => {
     await refreshRecent()
   }
 
+  // A `.mvm` the operating system launched the app with. Nothing but the
+  // provider knows what to make of the platform's own handle, and a provider
+  // that cannot use one says so rather than being asked whether it is the
+  // right kind.
+  //
+  // Everything after that is Open: the same guard, the same loader, the same
+  // dialogs. The launch is only a different way of arriving.
+  async function openLaunched(file: FileSystemFileHandle): Promise<boolean> {
+    const adopted = getStorageProvider().adoptFileHandle(file)
+    if (!adopted) return false
+    return await open(adopted)
+  }
+
   // The far side of a project that was never written: a crash snapshot,
   // adopted through the same gate a file gets.
   //
@@ -324,6 +337,7 @@ export const useFileStore = defineStore('file', () => {
     save,
     saveAs,
     restoreSnapshot,
+    openLaunched,
     refreshRecent,
     forgetRecent,
     confirmDiscard,

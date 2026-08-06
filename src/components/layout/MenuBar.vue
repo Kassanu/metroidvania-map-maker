@@ -216,7 +216,7 @@ const displayTitle = computed(() =>
 
 <template>
   <header class="menu-bar">
-    <div class="app-icon" aria-hidden="true">MM</div>
+    <img class="app-icon" src="/favicon-48.png" alt="" aria-hidden="true" width="32" height="32" />
     <div class="project-title">
       <input
         v-if="titleEditing"
@@ -548,17 +548,13 @@ const displayTitle = computed(() =>
   border-bottom: 1px solid var(--border);
 }
 
+/* The 48px source at 32px, so it stays sharp on a 1.5x display without a
+   second file. */
 .app-icon {
   grid-row: 1 / span 2;
-  display: grid;
-  place-items: center;
   width: 2rem;
   height: 2rem;
   border-radius: 0.25rem;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.75rem;
 }
 
 .project-title {

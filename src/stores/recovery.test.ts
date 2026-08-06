@@ -57,6 +57,7 @@ function provider(over: Partial<StorageProvider> = {}): StorageProvider {
     list: async () => [],
     remember: async () => {},
     forget: async () => {},
+    adoptFileHandle: () => null,
     open: async () => null,
     save: async (handle) => handle,
     saveAs: async () => ({ providerId: 'fake', name: 'world.mvm' }),
