@@ -4,18 +4,25 @@
 // `.app-shell` is the viewport-height grid and a full window is a crop like any
 // other.
 //
+// A shot carrying a `gesture` is a GIF and every other shot is a still. That is
+// the only difference between the two kinds: a GIF is the same crop captured
+// once per pointer step.
+//
 // Each page story adds its own entries here as it writes the page, the same way
-// it adds its terms to scripts/check-wiki.py's TERMS. The two below are what the
-// pipeline was proved with.
+// it adds its terms to scripts/check-wiki.py's TERMS. The three below are what
+// the pipeline was proved with.
 //
 // Not a `.spec.ts`, so Playwright collects no tests from it.
 
 import type { Page } from '@playwright/test'
 import { annotateRegions } from './support/annotate'
+import type { Pointer } from './support/cursor'
+import { drawARoom } from './support/gestures'
 
 export interface Shot {
-  // Becomes `images/<name>.png` in the clone. The house style's filename rule:
-  // the subject, prefixed by the page only when the shot is that page's alone.
+  // Becomes `images/<name>.png`, or `.gif` for a gesture, in the clone. The
+  // house style's filename rule: the subject, prefixed by the page only when
+  // the shot is that page's alone.
   name: string
   // A file in samples/, by basename.
   sample: string
@@ -31,6 +38,10 @@ export interface Shot {
   // Runs after the pan and before the capture, for a shot that needs the page
   // arranged or annotated first.
   prepare?: (page: Page) => Promise<void>
+  // Makes this shot a GIF: a synthetic cursor is installed and every pointer
+  // call the gesture makes captures a frame. Gestures are captured at
+  // deviceScaleFactor 1, because GIF weight scales with area.
+  gesture?: (page: Page, pointer: Pointer) => Promise<void>
 }
 
 // Super Metroid opens on Crateria, which leaves most of the window empty grid
@@ -46,5 +57,19 @@ export const SHOTS: Shot[] = [
     crop: '.app-shell',
     pan: ZEBES_SOUTH,
     prepare: annotateRegions,
+  },
+  {
+    // sunken-city rather than Super Metroid: a gesture needs clear grid beside
+    // enough rooms to place it, and a dense map hides the one room being drawn.
+    // Its content sits where the sample opens, so no pan.
+    name: 'room-mode-draw-a-room',
+    sample: 'sunken-city',
+    crop: '.region-canvas',
+    // Smaller than the stills' window, so the canvas region comes out at 560
+    // wide: a GIF is captured at 1x, and GitHub's content column is around
+    // 800, so anything wider would be scaled down on the one format that
+    // cannot afford resampling.
+    viewport: { width: 1120, height: 620 },
+    gesture: drawARoom,
   },
 ]
