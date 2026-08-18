@@ -1,0 +1,50 @@
+// Boots the app into the state every wiki screenshot is taken from.
+//
+// Theme and the welcome modal are seeded as stored preferences rather than
+// driven through the UI. A dismissed dialog leaves a close transition running,
+// and a screenshot taken over a transition differs between runs; a preference
+// read before the app mounts has no such moment. The envelope shape is the
+// persistence plugin's: `mmm:<key>` holding `{v, data}`.
+//
+// The theme seed is what puts the app in Dark, as opposed to System Default
+// resolving to dark. The config's `colorScheme: 'dark'` is a second, separate
+// thing and not a duplicate of this one: see playwright.wiki.config.ts.
+//
+// Not a `.spec.ts`, so Playwright collects no tests from it.
+
+import type { Page } from '@playwright/test'
+
+// Mirrors PREFS_VERSION in src/config/preferences.ts. A mismatch makes the
+// plugin fall back to defaults, which would silently capture the light theme.
+const PREFS_VERSION = 1
+
+const NAMESPACE = 'mmm:'
+
+const SEEDED_PREFS: Record<string, unknown> = {
+  theme: { mode: 'dark' },
+  welcome: { hideWelcomeOnStartup: true },
+}
+
+export async function openForCapture(page: Page, sample: string) {
+  await page.addInitScript(
+    ({ namespace, version, prefs }) => {
+      for (const [key, data] of Object.entries(prefs)) {
+        localStorage.setItem(namespace + key, JSON.stringify({ v: version, data }))
+      }
+    },
+    { namespace: NAMESPACE, version: PREFS_VERSION, prefs: SEEDED_PREFS },
+  )
+
+  // Relative, so it resolves under the Vite base rather than relying on the
+  // dev server to redirect a root path and keep the query string.
+  await page.goto(`?sample=${encodeURIComponent(sample)}`)
+
+  await page.locator('.app-shell').waitFor()
+  // The canvas is sized from its container's rect on mount, so a non-zero
+  // backing store is the signal that layout settled and the first draw ran.
+  await page.waitForFunction(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>('.canvas')
+    return !!canvas && canvas.width > 0 && canvas.height > 0
+  })
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+}

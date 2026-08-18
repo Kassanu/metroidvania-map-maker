@@ -12,6 +12,7 @@
     "test": "vitest",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
+    "wiki:images": "playwright test -c playwright.wiki.config.ts",
     "lint": "eslint . --fix",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
