@@ -24,8 +24,9 @@ export interface Shot {
   // house style's filename rule: the subject, prefixed by the page only when
   // the shot is that page's alone.
   name: string
-  // A file in samples/, by basename.
-  sample: string
+  // A file in samples/, by basename. Omitted boots the app's own project:
+  // Untitled Project, one map, and the World area.
+  sample?: string
   // Selector for the element to capture.
   crop: string
   // Overrides the config's pinned viewport. Region sizes depend on window size,
@@ -50,6 +51,12 @@ export interface Shot {
 const ZEBES_SOUTH = { x: -144, y: 900 }
 
 export const SHOTS: Shot[] = [
+  {
+    // No sample and no pan: the subject is the app with nothing asked of it,
+    // which is the one shot the samples would get in the way of.
+    name: 'app-cold-start',
+    crop: '.app-shell',
+  },
   { name: 'app-window', sample: 'Super Metroid', crop: '.app-shell', pan: ZEBES_SOUTH },
   {
     name: 'regions-numbered',

@@ -1,10 +1,9 @@
 // Boots the app into the state every wiki screenshot is taken from.
 //
 // Theme and the welcome modal are seeded as stored preferences rather than
-// driven through the UI. A dismissed dialog leaves a close transition running,
-// and a screenshot taken over a transition differs between runs; a preference
-// read before the app mounts has no such moment. The envelope shape is the
-// persistence plugin's: `mmm:<key>` holding `{v, data}`.
+// driven through the UI. A preference read before mount needs no selector and
+// no settled pointer, so it cannot capture a dialog mid-open or a frame the
+// click landed in.
 //
 // The theme seed is what puts the app in Dark, as opposed to System Default
 // resolving to dark. The config's `colorScheme: 'dark'` is a second, separate
@@ -22,10 +21,20 @@ const NAMESPACE = 'mmm:'
 
 const SEEDED_PREFS: Record<string, unknown> = {
   theme: { mode: 'dark' },
+  // Stated rather than left out: the persistence plugin derives `welcomeOpen`
+  // from this only when a stored value exists, and the store's default leaves
+  // the modal open. Behind it a gesture aims at NaN, because `gridMapping`
+  // reads a coords overlay the modal stops updating.
   welcome: { hideWelcomeOnStartup: true },
 }
 
-export async function openForCapture(page: Page, sample: string) {
+export interface CaptureOptions {
+  // A file in samples/, by basename. Omitted boots the app's own project:
+  // Untitled Project, one map, and the World area.
+  sample?: string
+}
+
+export async function openForCapture(page: Page, options: CaptureOptions = {}) {
   await page.addInitScript(
     ({ namespace, version, prefs }) => {
       for (const [key, data] of Object.entries(prefs)) {
@@ -36,8 +45,9 @@ export async function openForCapture(page: Page, sample: string) {
   )
 
   // Relative, so it resolves under the Vite base rather than relying on the
-  // dev server to redirect a root path and keep the query string.
-  await page.goto(`?sample=${encodeURIComponent(sample)}`)
+  // dev server to redirect a root path and keep the query string. `.` is the
+  // base itself, which is the app with nothing asked of it.
+  await page.goto(options.sample ? `?sample=${encodeURIComponent(options.sample)}` : '.')
 
   await page.locator('.app-shell').waitFor()
   // The canvas is sized from its container's rect on mount, so a non-zero

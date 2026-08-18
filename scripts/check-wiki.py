@@ -34,7 +34,7 @@ IMAGE_SUFFIXES = (".png", ".gif")
 # the same direction as PENDING: an image named here that IS now referenced
 # fails, which is the signal to delete the entry rather than leave a permanent
 # hole in the orphan check.
-UNREFERENCED = ["regions-numbered.png", "room-mode-draw-a-room.gif"]
+UNREFERENCED = ["app-cold-start.png", "regions-numbered.png", "room-mode-draw-a-room.gif"]
 
 # Material with a name in the tree but no page until it ships.
 FUTURE_SLOTS = ["Exports", "Global find", "Global-find", "Managing lock types", "Managing-lock-types"]

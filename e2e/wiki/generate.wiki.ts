@@ -59,7 +59,7 @@ test('the wiki images regenerate', async ({ browser, contextOptions }) => {
     })
     try {
       const page = await context.newPage()
-      await openForCapture(page, shot.sample)
+      await openForCapture(page, { sample: shot.sample })
       if (shot.pan) await panView(page, shot.pan.x, shot.pan.y)
       await shot.prepare?.(page)
 
