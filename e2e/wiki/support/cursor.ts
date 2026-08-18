@@ -12,7 +12,7 @@
 // `page.mouse.move`, whose intermediate moves would be motion no frame records.
 //
 // The arrow is what the app's own CSS cursor resolves to over an empty cell in
-// Draw mode. A gesture over an edge run or a vertex resolves to a resize or a
+// Room Mode. A gesture over an edge run or a vertex resolves to a resize or a
 // crosshair instead, so the first such GIF turns SPRITE into a lookup keyed on
 // what `cursorAt` computed.
 //

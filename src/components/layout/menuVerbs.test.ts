@@ -303,7 +303,7 @@ describe('canvas context menu', () => {
     expect(items.some((entry) => entry.startsWith('Paste'))).toBe(false)
   })
 
-  it('opens in Select mode', async () => {
+  it('opens in Object Mode', async () => {
     const viewport = await mountCanvas()
     registerVerbHandlers()
     await setMode('select')
@@ -701,11 +701,11 @@ describe('Edit menu', () => {
     expect(isEnabled(await openEditMenu(), 'Paste')).toBe(false)
   })
 
-  // The clipboard and Select All are Select mode's, so the items for them go
-  // dark in the other three. Delete and Deselect stay: a room selection made in
-  // Select is still deletable from Draw, which is where the same click arms the
-  // resize handles.
-  it('withholds the verbs the other modes have nothing behind, outside Select', async () => {
+  // The clipboard and Select All are Object Mode's, so the items for them go
+  // dark in the other three. Delete and Deselect stay: a room selection made
+  // in Object Mode is still deletable from Room Mode, which is where the same
+  // click arms the resize handles.
+  it('withholds the verbs the other modes have nothing behind, outside Object Mode', async () => {
     await setMode('draw')
     await mountMenuBar()
     registerVerbHandlers()
@@ -728,7 +728,7 @@ describe('Edit menu', () => {
   // names objects: there is no op behind Delete for a selection holding cells
   // alone. Deselect is the one verb that still means something, since clearing
   // a selection is not a mode's business.
-  it('withholds Delete from a cell selection carried out of Select mode', async () => {
+  it('withholds Delete from a cell selection carried out of Object Mode', async () => {
     paint(['0,0', '1,0'])
     useToolsStore().setSelectSubMode('cells')
     useSelectionStore().set([{ kind: 'cell', id: '0,0' }], activeMapId())
@@ -846,9 +846,9 @@ describe('the deleteSelection action', () => {
     expect(map.rooms.get(room.id)?.cells.has('1,0')).toBe(true)
   })
 
-  // Draw's own destructive gesture erases cells; the key removes the whole
+  // Room Mode's own destructive gesture erases cells; the key removes the whole
   // room, which is the only way to delete one from the mode that paints it.
-  it('deletes the selected room in Draw mode', async () => {
+  it('deletes the selected room in Room Mode', async () => {
     await mountCanvas()
     await setMode('draw')
     const room = paint(['0,0', '1,0'])
@@ -863,7 +863,7 @@ describe('the deleteSelection action', () => {
   // The other side of the same branch: erasing belongs to the Cells sub-mode,
   // so a cell selection carried into another mode has no op behind the key. The
   // menu item for it is disabled there for this reason.
-  it('leaves a cell selection alone outside Select mode', async () => {
+  it('leaves a cell selection alone outside Object Mode', async () => {
     await mountCanvas()
     await setMode('select')
     useToolsStore().setSelectSubMode('cells')
@@ -877,7 +877,7 @@ describe('the deleteSelection action', () => {
     expect(model.project.mapsById.get(activeMapId())!.rooms.get(room.id)?.cells.size).toBe(2)
   })
 
-  it('deletes selected icons and lines in Markup mode', async () => {
+  it('deletes selected icons and lines in Markup Mode', async () => {
     await mountCanvas()
     await setMode('markup')
     paint(['0,0'])
@@ -900,7 +900,7 @@ describe('the deleteSelection action', () => {
     expect(map.rooms.size).toBe(1) // the room the icon sat on is not the target
   })
 
-  it('deletes a selected transition in Door mode', async () => {
+  it('deletes a selected transition in Door Mode', async () => {
     await mountCanvas()
     await setMode('door')
     paint(['0,0'])

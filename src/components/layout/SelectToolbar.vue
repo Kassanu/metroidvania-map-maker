@@ -3,7 +3,7 @@ import { useToolsStore } from '@/stores/tools'
 import { t, type MessageKey } from '@/i18n'
 import type { SelectSubMode } from '@/canvas/selectTarget'
 
-// Select mode's half of the toolbar's dynamic section: what a press selects,
+// Object Mode's half of the toolbar's dynamic section: what a press selects,
 // and nothing else. A mode toggle, not a selection editor. Editing what is
 // selected is the Inspector's job, and every column of the table is a pointer
 // gesture or a key.

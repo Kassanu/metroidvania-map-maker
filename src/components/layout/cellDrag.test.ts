@@ -19,7 +19,7 @@ import type { MapId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 import type { MapModel, ObjectRef } from '@/core/types'
 
-// The marquee in Select mode's Cells sub-mode: a rubber band dragged over the
+// The marquee in Object Mode's Cells sub-mode: a rubber band dragged over the
 // canvas, and which cells it ends up holding.
 //
 // A cell band takes owned cells only, crosses room boundaries freely, and takes

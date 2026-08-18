@@ -1,4 +1,4 @@
-// Which stroke a press starts: the input half of the Draw/Edit precedence
+// Which stroke a press starts: the input half of the Room Mode precedence
 // table, kept apart from the gestures so it can be read as a table.
 //
 // Secondary click, the pen eraser end, and the toggle each resolve to the

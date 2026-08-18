@@ -1,4 +1,4 @@
-// The Draw/Edit sub-mode: which rows of the precedence table a press can reach.
+// The Room Mode sub-mode: which rows of the precedence table a press can reach.
 //
 //   - Cells only: edge-runs and vertices cannot be reached.
 //   - Resize only: only edge-runs can be reached.

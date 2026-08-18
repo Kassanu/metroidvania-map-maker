@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { openApp, undoLabel, gridMapping, cellAt } from './support/canvas'
 
-// Select mode's drag column in a real browser. The unit suite has the ops and
+// Object Mode's drag column in a real browser. The unit suite has the ops and
 // the batch; what only a browser shows is that a move keeps reporting after the
 // pointer leaves the element it went down on, which every drag of more than a
 // cell or two does.
@@ -10,7 +10,7 @@ import { openApp, undoLabel, gridMapping, cellAt } from './support/canvas'
 const IN_A_ROOM = { x: 1.5, y: 0.5 }
 const BARE_GRID = { x: 9.5, y: 3.5 }
 
-test.describe('Select mode move', () => {
+test.describe('Object Mode move', () => {
   test('drags an unselected room, selecting it first', async ({ page }) => {
     const { errors } = await openApp(page)
     await page.keyboard.press('2')

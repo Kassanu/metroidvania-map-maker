@@ -14,7 +14,7 @@
 // user disarming or by leaving the mode.
 //
 // Why the mode watch is here rather than in the canvas: the same argument
-// `pendingTeleport` makes. "Armed only exists in Markup mode" is a property of
+// `pendingTeleport` makes. "Armed only exists in Markup Mode" is a property of
 // the state, true whatever is mounted. `Esc` stays with the component that owns
 // input wiring, as the other slots' does.
 

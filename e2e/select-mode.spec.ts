@@ -20,7 +20,7 @@ async function pixelAt(page: Page, point: { x: number; y: number }) {
   }, point)
 }
 
-// Select mode's shell in a real browser: the toolbar it grew, and the cursor,
+// Object Mode's shell in a real browser: the toolbar it grew, and the cursor,
 // which is the only part of the resolver a user can see before they commit to a
 // press.
 
@@ -28,7 +28,7 @@ async function pixelAt(page: Page, point: { x: number; y: number }) {
 const IN_A_ROOM = { x: 1.5, y: 0.5 }
 const BARE_GRID = { x: 9.5, y: 3.5 }
 
-test.describe('Select mode', () => {
+test.describe('Object Mode', () => {
   test('offers rooms and cells, starting on rooms', async ({ page }) => {
     const { errors } = await openApp(page)
     await page.keyboard.press('2')

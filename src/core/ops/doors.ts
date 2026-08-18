@@ -1,7 +1,7 @@
-// Transition creation: Door mode's three kinds, and the box-drag
+// Transition creation: Door Mode's three kinds, and the box-drag
 // classification that decides which one a gesture produced.
 //
-// Door mode is fully context-inferred: there are no sub-tool buttons, so the
+// Door Mode is fully context-inferred: there are no sub-tool buttons, so the
 // gesture itself has to say what was meant. A tap starts a teleport; a drag
 // rubber-bands a box whose dimensions plus a walk of its cells decide between
 // an edge door and an elevator, or reject it.
@@ -234,7 +234,7 @@ function classifyElevator(map: MapModel, from: CellKey, to: CellKey): BoxClassif
 // Commits whatever a box drag classified into. Returns the created
 // transitions, which may be several (one drag can cross two room pairs).
 // Refuses rather than returning an empty array: "the box classified to
-// nothing" is a real outcome the Door-mode gesture wants to distinguish from
+// nothing" is a real outcome the Door Mode gesture wants to distinguish from
 // "it made zero doors", and an empty array said both.
 export function createFromBox(
   tx: Transaction,

@@ -28,7 +28,7 @@ const SUB_MODE_OPTIONS = [
   { mode: 'vertex', label: 'toolbar.subMode.vertex' },
 ] as const satisfies readonly { mode: SubMode; label: MessageKey }[]
 
-// Draw mode's toolbar section: brush size, sub-mode lock, wall style, area
+// Room Mode's toolbar section: brush size, sub-mode lock, wall style, area
 // dropdown, and erase. A component per mode rather than a growing switch in
 // Toolbar.vue.
 const tools = useToolsStore()
@@ -57,7 +57,7 @@ const selectedFill = computed(
 )
 
 // `[` and `]` to adjust brush size. Registered here rather than globally
-// because this component is mounted only while Draw mode is active.
+// because this component is mounted only while Room Mode is active.
 useHotkeyAction('brushSizeDown', () => tools.shrinkBrush())
 useHotkeyAction('brushSizeUp', () => tools.growBrush())
 </script>

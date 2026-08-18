@@ -2,7 +2,7 @@
 // A choice from a short fixed list. Commits immediately: a discrete choice has
 // no intermediate states to protect, so there is nothing a draft would buy.
 //
-// A native select, for the same reasons the Draw toolbar's area picker is one:
+// A native select, for the same reasons Room Mode's area picker is one:
 // keyboard support, a real touch picker, and screen-reader semantics without
 // rebuilding any of them.
 

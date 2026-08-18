@@ -520,7 +520,7 @@ function runMenuItem(id: string) {
 }
 
 // The same op and the same locked naming the canvas menu and Ctrl+D run, but
-// not routed through that action: the clipboard verbs belong to Select mode
+// not routed through that action: the clipboard verbs belong to Object Mode
 // alone, and the tree is mode-independent by design.
 function duplicateRoom(row: RoomRow) {
   const mapId = tabsStore.activeTabId
@@ -539,7 +539,7 @@ function duplicateRoom(row: RoomRow) {
 }
 
 // The deferred "I just want to colour one room" fast path. It lives here and
-// nowhere else: creation belongs in one surface, which is why Draw's area
+// nowhere else: creation belongs in one surface, which is why Room Mode's area
 // picker only picks.
 function areaFromRoom(row: RoomRow) {
   const mapId = tabsStore.activeTabId

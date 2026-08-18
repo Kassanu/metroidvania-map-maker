@@ -31,7 +31,7 @@ export const useToolsStore = defineStore('tools', {
     // Dotted and doorway both mean something specific (secret, passage), so
     // the plain wall is the one to reach for without thinking.
     wallStyle: 'solid' as WallStyle,
-    // Which rows of the Draw/Edit precedence table are live. Auto is the full
+    // Which rows of the Room Mode precedence table are live. Auto is the full
     // context-sensitive behaviour and the default; the other three remove
     // inference for focused work.
     //
@@ -48,7 +48,7 @@ export const useToolsStore = defineStore('tools', {
     // erases cells back to bare grid, everywhere else the key names objects.
     //
     // Mode is half the answer because a cell selection survives a mode switch,
-    // and the same selection reached from Draw must not erase.
+    // and the same selection reached from Room Mode must not erase.
     erasesCells(): boolean {
       return useModeStore().active === 'select' && this.selectSubMode === 'cells'
     },

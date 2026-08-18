@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { openApp, gridMapping, undoLabel, type GridMapping } from './support/canvas'
 import type { Page } from '@playwright/test'
 
-// Select mode end to end, on the pair of rooms the dev fixture carries for
+// Object Mode end to end, on the pair of rooms the dev fixture carries for
 // exactly this: band, move, copy, paste. Each step is read back through the
 // undo stack, which is the only thing a canvas gesture leaves in the DOM.
 //
@@ -53,7 +53,7 @@ async function dragUp(page: Page, grid: GridMapping, at: { x: number; y: number 
   await page.mouse.up()
 }
 
-test.describe('Select mode end to end', () => {
+test.describe('Object Mode end to end', () => {
   test('a band takes both rooms, and one drag moves the pair as one step', async ({ page }) => {
     const { errors } = await openApp(page)
     await page.keyboard.press('2')

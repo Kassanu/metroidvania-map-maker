@@ -16,7 +16,7 @@ import { edgeOfCell } from '@/core/cell'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { MapId, TransitionId } from '@/core/ids'
 
-// Door mode's press behaviour, as a matrix: one `describe` per target under the
+// Door Mode's press behaviour, as a matrix: one `describe` per target under the
 // pointer, one `it` per gesture (click, drag, erase), plus the rules that cut
 // across every target.
 //
@@ -232,7 +232,7 @@ describe('Door precedence table', () => {
 
       erase(viewport, at(...CLEAN_CELL))
 
-      // The deliberate opposite of Draw mode's erase-priority rule: falling
+      // The deliberate opposite of Room Mode's erase-priority rule: falling
       // through to it would eat the room.
       expect(undoLabel()).toBe(before)
       expect(useModelStore().project.mapsById.get(mapId)!.cellOwner.has('1,0')).toBe(true)
@@ -488,7 +488,7 @@ describe('Door precedence table', () => {
 
     // Door's drag column is fully spent, so it does not honour the default that
     // a drag beginning on a selected object moves it. The box still starts from
-    // a cell holding a selected transition, which is also the cell Select mode
+    // a cell holding a selected transition, which is also the cell Object Mode
     // documents as dead.
     it('a drag still starts a box from a cell whose transition is selected', () => {
       const { wrapper, viewport } = mountCanvas()
@@ -613,7 +613,7 @@ describe('Door precedence table', () => {
 
       expect(undoLabel()).toBe(before)
       expect(transitionCount()).toBe(3)
-      // Draw mode's erase would have taken the cell; Door mode's must not.
+      // Room Mode's erase would have taken the cell; Door Mode's must not.
       expect(useModelStore().project.mapsById.get(mapId)!.cellOwner.has('1,0')).toBe(true)
       wrapper.unmount()
     })
@@ -711,7 +711,7 @@ describe('Door precedence table', () => {
     })
 
     // A drag that goes out and comes back is still a drag, not a click, which
-    // is why Door mode's click cannot be a DOM `click` listener. The box
+    // is why Door Mode's click cannot be a DOM `click` listener. The box
     // returns to its origin, classifies to nothing, and must not fall back to
     // starting a teleport.
     it('a drag out and back is a drag, not a tap', () => {

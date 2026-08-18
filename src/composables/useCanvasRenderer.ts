@@ -53,7 +53,7 @@ export interface SceneInput {
   ghost: GhostScene | null
   // The brush footprint under the pointer, or null when there is none to show.
   brushPreview: BrushPreview | null
-  // Door mode's rubber-band box, or null when no box drag is live.
+  // Door Mode's rubber-band box, or null when no box drag is live.
   boxPreview: BoxPreview | null
   // The origin cell of a half-finished teleport on *this* map, or null.
   pendingTeleport: CellKey | null

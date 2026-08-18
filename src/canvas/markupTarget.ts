@@ -1,4 +1,4 @@
-// What is under the pointer in Markup mode: which row of the precedence table a
+// What is under the pointer in Markup Mode: which row of the precedence table a
 // gesture can reach.
 //
 // Identifies the target but not what the gesture does, so gestures can be added
@@ -34,7 +34,7 @@ export type MarkupTarget =
   | { kind: 'line-body'; cell: CellKey; roomId: RoomId | null; id: LineId }
   // A room cell with nothing on it: a click opens the picker, a drag draws.
   | { kind: 'room'; cell: CellKey; roomId: RoomId }
-  // Bare grid. Unlike Door mode's empty row this is not inert: a line may be
+  // Bare grid. Unlike Door Mode's empty row this is not inert: a line may be
   // drawn outside every room, so the drag column reaches here.
   | { kind: 'empty'; cell: CellKey }
 
@@ -138,7 +138,7 @@ export function markupCursor(
 
   switch (target.kind) {
     // Both start a line on a drag, so both aim rather than point. `empty` is a
-    // real target here, which is where this parts company with Door mode.
+    // real target here, which is where this parts company with Door Mode.
     case 'empty':
     case 'room':
       return erasing ? null : 'crosshair'

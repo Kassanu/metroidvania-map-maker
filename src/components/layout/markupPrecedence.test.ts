@@ -18,7 +18,7 @@ import { createLine, placeIcon } from '@/core/ops/markup'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { IconId, LineId } from '@/core/ids'
 
-// Markup mode's press behaviour, as a matrix: one `describe` per target under
+// Markup Mode's press behaviour, as a matrix: one `describe` per target under
 // the pointer, one `it` per gesture (click, drag, erase), plus the rules that
 // cut across every target.
 //
@@ -445,7 +445,7 @@ describe('Markup precedence table', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Row 6: bare grid. Unlike Door mode's empty row this is not inert: a line
+  // Row 6: bare grid. Unlike Door Mode's empty row this is not inert: a line
   // may be drawn where no room is.
   // -------------------------------------------------------------------------
   describe('non-room empty cell', () => {

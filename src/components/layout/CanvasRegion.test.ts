@@ -354,7 +354,7 @@ describe('CanvasRegion Space pan', () => {
   })
 
   // The armed press replaces the mode's gesture rather than running alongside
-  // it: a Space-drag across bare grid in Draw mode must not paint a room.
+  // it: a Space-drag across bare grid in Room Mode must not paint a room.
   it('draws nothing while armed', async () => {
     const { wrapper, viewport } = mountCanvas()
     const model = useModelStore()
@@ -574,12 +574,12 @@ describe('CanvasRegion view toggles', () => {
   })
 })
 
-// The transitions layer, and the one policy this component owns: Door mode
+// The transitions layer, and the one policy this component owns: Door Mode
 // overrides the master toggle, since entering it is a statement that you are
 // working on transitions, so the toggle applies to every other mode.
 //
 // The gating itself is `canvas/renderMap.test.ts`; proved here is that the
-// flags reach the scene, changing one repaints, and Door mode overrides the
+// flags reach the scene, changing one repaints, and Door Mode overrides the
 // master while leaving the sub-toggle alone.
 describe('CanvasRegion transition layers', () => {
   beforeEach(() => {
@@ -610,7 +610,7 @@ describe('CanvasRegion transition layers', () => {
     return mapId
   }
 
-  it('paints fewer rects with the layer hidden, outside Door mode', () => {
+  it('paints fewer rects with the layer hidden, outside Door Mode', () => {
     twoRoomsADoorAndATeleport()
     const shown = mountCanvas()
     const withLayer = shown.paints()
@@ -624,9 +624,9 @@ describe('CanvasRegion transition layers', () => {
   })
 
   // The override, and the reason for it: the objects do not stop existing with
-  // the pixels, so a Door-mode press on an invisible door would miss it, start
+  // the pixels, so a Door Mode press on an invisible door would miss it, start
   // a teleport instead, and be refused with nothing on screen to explain why.
-  it('keeps drawing them in Door mode with the layer hidden', () => {
+  it('keeps drawing them in Door Mode with the layer hidden', () => {
     twoRoomsADoorAndATeleport()
     useCanvasViewStore().toggleTransitions()
     useModeStore().setMode('door')
@@ -643,10 +643,10 @@ describe('CanvasRegion transition layers', () => {
     shown.wrapper.unmount()
   })
 
-  // Leaving Door mode gives the toggle back its say, and that is a repaint the
+  // Leaving Door Mode gives the toggle back its say, and that is a repaint the
   // mode watcher already owns: worth pinning, because the override lives in
   // the scene builder rather than in anything that watches.
-  it('drops them again on leaving Door mode', async () => {
+  it('drops them again on leaving Door Mode', async () => {
     twoRoomsADoorAndATeleport()
     useCanvasViewStore().toggleTransitions()
     useModeStore().setMode('door')
@@ -687,9 +687,9 @@ describe('CanvasRegion transition layers', () => {
   })
 
   // Only the master is overridden. A teleport line is not a target in any
-  // mode (Door mode's table has no row for one), so hiding it hides nothing
+  // mode (Door Mode's table has no row for one), so hiding it hides nothing
   // you could act on, and the mode has no reason to override it.
-  it('leaves the teleport-lines sub-toggle honoured in Door mode', () => {
+  it('leaves the teleport-lines sub-toggle honoured in Door Mode', () => {
     twoRoomsADoorAndATeleport()
     useModeStore().setMode('door')
     const shown = mountCanvas()
@@ -809,7 +809,7 @@ describe('CanvasRegion markup layers and labels', () => {
   // The override, and the reason for it: hidden icons and lines are still what
   // a Markup press lands on, so a press on an invisible icon would move
   // something the user cannot see.
-  it('forces every markup layer back on in Markup mode', async () => {
+  it('forces every markup layer back on in Markup Mode', async () => {
     markup()
     const canvasView = useCanvasViewStore()
     canvasView.toggleMarkup()
@@ -893,14 +893,14 @@ describe('CanvasRegion markup layers and labels', () => {
     expect(canvas.repaints()).toBe(before + 1)
   })
 
-  it('does no hover label work outside Markup mode', async () => {
+  it('does no hover label work outside Markup Mode', async () => {
     markup({ iconLabel: 'Save Point' })
     const canvas = mountCanvas()
 
     canvas.viewport.dispatchEvent(pointer('pointermove', at(1.5, 0.5)))
     await nextTick()
 
-    // Draw mode. Reading a map from another mode is the show-all toggle's job.
+    // Room Mode. Reading a map from another mode is the show-all toggle's job.
     expect(canvas.labels()).toEqual([])
   })
 
@@ -1463,7 +1463,7 @@ describe('CanvasRegion handle room', () => {
 
     // Switching modes is not a deselect, so the room selected in Draw is still
     // what the key acts on: one key, one meaning, in every mode.
-    it('deletes the selected room from Door mode and from Markup mode', () => {
+    it('deletes the selected room from Door Mode and from Markup Mode', () => {
       for (const mode of ['door', 'markup'] as const) {
         setActivePinia(createTestPinia())
         const { wrapper, viewport } = mountCanvas()
@@ -1544,7 +1544,7 @@ describe('CanvasRegion handle room', () => {
     // Registered only while something is armed. A permanently registered
     // handler would sit at the top of the selection tier, swallowing every Esc
     // that should have fallen through to the no-op tier now, and to
-    // Select/Move's real deselect later.
+    // Object Mode's real deselect later.
     //
     // The sentinel goes in before mounting on purpose: pushed afterwards it
     // would sit on top of anything the component registered and fire first, so
@@ -1827,11 +1827,11 @@ describe('CanvasRegion edge-run resize', () => {
     wrapper.unmount()
   })
 
-  // The resize gesture is Draw's alone. Select mode answers the same pixel from
+  // The resize gesture is Draw's alone. Object Mode answers the same pixel from
   // its own table, where a drag on a room moves it, so the room does travel:
   // what says no resize happened is that it arrived whole, two cells to the
   // right, rather than having grown a column.
-  it('does not resize outside Draw mode', () => {
+  it('does not resize outside Room Mode', () => {
     const { wrapper, viewport } = mountCanvas()
     const mapId = useTabsStore().activeTabId
     const roomId = strip(mapId, ROOM)
@@ -1956,7 +1956,7 @@ describe('CanvasRegion edge-run resize', () => {
       wrapper.unmount()
     })
 
-    it('stays away outside Draw mode, where the press would not resize', async () => {
+    it('stays away outside Room Mode, where the press would not resize', async () => {
       const { wrapper, viewport } = mountCanvas()
       strip(useTabsStore().activeTabId, ROOM)
       useModeStore().setMode('select')
@@ -1964,7 +1964,7 @@ describe('CanvasRegion edge-run resize', () => {
       viewport.dispatchEvent(new PointerEvent('pointermove', { ...at(3.97, 2.5), bubbles: true }))
       await nextTick()
 
-      // Not "no cursor": Select mode answers the same pixel from its own table,
+      // Not "no cursor": Object Mode answers the same pixel from its own table,
       // where a room's edge is a room and a click on it selects. What must not
       // survive the mode switch is the resize cursor.
       expect(cursorOf(wrapper)).toBe('pointer')
@@ -2142,7 +2142,7 @@ describe('CanvasRegion inner walls', () => {
     wrapper.unmount()
   })
 
-  it('does nothing outside Draw mode', () => {
+  it('does nothing outside Room Mode', () => {
     const { wrapper, viewport } = mountCanvas()
     const mapId = useTabsStore().activeTabId
     const roomId = square3(mapId)
@@ -2636,12 +2636,12 @@ describe('CanvasRegion cross-tab teleport navigation', () => {
     wrapper.unmount()
   })
 
-  it('does nothing outside Door mode', () => {
+  it('does nothing outside Door Mode', () => {
     const { wrapper, viewport } = mountCanvas()
     const { surfaceId } = crossTabTeleport()
     const tabsStore = useTabsStore()
 
-    // Draw mode is the default, and a press there paints rather than navigates.
+    // Room Mode is the default, and a press there paints rather than navigates.
     doubleClick(viewport, at(1, 1))
 
     expect(tabsStore.activeTabId).toBe(surfaceId)
@@ -2705,10 +2705,10 @@ describe('CanvasRegion cross-tab teleport navigation', () => {
   })
 })
 
-// The Door-mode shell. A press in Door mode resolves to a row of the
+// The Door Mode shell. A press in Door Mode resolves to a row of the
 // precedence table, the cursor says which row, and nothing else on the canvas
-// pretends to be Draw mode's.
-describe('CanvasRegion Door mode shell', () => {
+// pretends to be Room Mode's.
+describe('CanvasRegion Door Mode shell', () => {
   beforeEach(() => {
     setActivePinia(createTestPinia())
   })
@@ -2781,13 +2781,13 @@ describe('CanvasRegion Door mode shell', () => {
     wrapper.unmount()
   })
 
-  // Draw mode's cursor over the very same points, to show the two modes are
+  // Room Mode's cursor over the very same points, to show the two modes are
   // reading different tables rather than one leaking into the other.
-  it('does not show Draw mode’s cursors, or the other way round', async () => {
+  it('does not show Room Mode’s cursors, or the other way round', async () => {
     const { wrapper, viewport } = mountCanvas()
     twoRoomsAndADoor()
 
-    // Draw mode: the seam at x=2 is an edge run of both rooms, so it resizes.
+    // Room Mode: the seam at x=2 is an edge run of both rooms, so it resizes.
     expect(await cursorAt(wrapper, viewport, at(2, 0.5))).toBe('ew-resize')
 
     useModeStore().setMode('door')
@@ -2808,7 +2808,7 @@ describe('CanvasRegion Door mode shell', () => {
     wrapper.unmount()
   })
 
-  // A press in Door mode must never fall through to Draw mode's paint: the
+  // A press in Door Mode must never fall through to Room Mode's paint: the
   // failure that would eat the map. None of these four presses touches a cell:
   // three do nothing at all, and the one that does something (a room cell starts
   // a pending teleport) is by definition not a model change.
@@ -2867,7 +2867,7 @@ describe('CanvasRegion Door mode shell', () => {
     wrapper.unmount()
   })
 
-  // A press in Door mode must not arm a room either: the active room is Draw
+  // A press in Door Mode must not arm a room either: the active room is Draw
   // mode's, and its handles are not drawn here.
   it('does not arm a room, and draws no handles', () => {
     const { wrapper, viewport } = mountCanvas()
@@ -2881,17 +2881,17 @@ describe('CanvasRegion Door mode shell', () => {
     wrapper.unmount()
   })
 
-  // A room armed in Draw mode stays armed (switching modes is not a deselect),
-  // but its handles come off the canvas, because in Door mode a press on one
+  // A room armed in Room Mode stays armed (switching modes is not a deselect),
+  // but its handles come off the canvas, because in Door Mode a press on one
   // does nothing.
-  it('takes the armed room’s handles off the canvas in Door mode', async () => {
+  it('takes the armed room’s handles off the canvas in Door Mode', async () => {
     const { wrapper, viewport } = mountCanvas()
     twoRoomsAndADoor()
     const ctx = (wrapper.get('.canvas').element as HTMLCanvasElement).getContext(
       '2d',
     ) as unknown as FakeContext2D
 
-    // Arm the eastern room in Draw mode and put the pointer in it.
+    // Arm the eastern room in Room Mode and put the pointer in it.
     viewport.dispatchEvent(pointer('pointerdown', at(2.5, 0.5)))
     viewport.dispatchEvent(pointer('pointerup', at(2.5, 0.5)))
     viewport.dispatchEvent(new PointerEvent('pointermove', { ...at(2.4, 0.4), bubbles: true }))
@@ -2914,8 +2914,8 @@ describe('CanvasRegion Door mode shell', () => {
     wrapper.unmount()
   })
 
-  // The brush footprint says "a press lands here", which is false in Door mode.
-  it('drops the brush preview in Door mode', async () => {
+  // The brush footprint says "a press lands here", which is false in Door Mode.
+  it('drops the brush preview in Door Mode', async () => {
     const { wrapper, viewport } = mountCanvas()
     twoRoomsAndADoor()
     useToolsStore().setBrushSize(3)
@@ -3049,11 +3049,11 @@ describe('CanvasRegion pending teleport', () => {
     wrapper.unmount()
   })
 
-  it('does nothing outside Door mode', () => {
+  it('does nothing outside Door Mode', () => {
     const { wrapper, viewport } = mountCanvas()
     twoRooms()
 
-    // Draw mode is the default, and a click there paints.
+    // Room Mode is the default, and a click there paints.
     click(viewport, at(0.5, 0.5))
 
     expect(usePendingTeleportStore().isPending).toBe(false)
@@ -3192,9 +3192,9 @@ describe('CanvasRegion pending teleport', () => {
       wrapper.unmount()
     })
 
-    // The tier itself, which nothing in Door mode can distinguish on its own:
+    // The tier itself, which nothing in Door Mode can distinguish on its own:
     // the box drag is also in the gesture tier, so LIFO would give the same
-    // answer wherever this sat, and Door mode never arms a room, so the
+    // answer wherever this sat, and Door Mode never arms a room, so the
     // selection tier is empty here. Pushing a selection handler by hand is the
     // only way to ask the question, and the answer has to be that pending wins,
     // because a tier below `selection` would deselect before cancelling.
@@ -3439,10 +3439,10 @@ describe('CanvasRegion pending teleport', () => {
 // on the other two.
 //
 // That second half is the interesting one, because it is the deliberate
-// opposite of Draw mode's erase-priority rule: there a right-press that misses
+// opposite of Room Mode's erase-priority rule: there a right-press that misses
 // an inner wall still erases the cell under it, and here a miss is simply a
 // miss.
-describe('CanvasRegion Door mode delete', () => {
+describe('CanvasRegion Door Mode delete', () => {
   beforeEach(() => {
     setActivePinia(createTestPinia())
   })
@@ -3529,9 +3529,9 @@ describe('CanvasRegion Door mode delete', () => {
     wrapper.unmount()
   })
 
-  // Erase/right-click on a non-transition does nothing: Door mode never
+  // Erase/right-click on a non-transition does nothing: Door Mode never
   // destroys a room, so a stray right-drag across the map is harmless here
-  // where it would be dangerous in Draw mode.
+  // where it would be dangerous in Room Mode.
   //
   // Watching for a thrown error is half the test: a press on a row with no
   // transition reaches `deleteTransition` with no id, which throws
@@ -3667,14 +3667,14 @@ describe('CanvasRegion Door mode delete', () => {
     wrapper.unmount()
   })
 
-  it('does nothing outside Door mode', () => {
+  it('does nothing outside Door Mode', () => {
     const { wrapper, viewport } = mountCanvas()
     const mapId = allThreeKinds()
     const model = useModelStore()
     useModeStore().setMode('draw')
 
-    // A right-press on a plain cell of the western room. In Draw mode that is
-    // an erase stroke, which takes the cell: the opposite of Door mode, where
+    // A right-press on a plain cell of the western room. In Room Mode that is
+    // an erase stroke, which takes the cell: the opposite of Door Mode, where
     // the same press on the same pixel takes nothing.
     //
     // Deliberately a cell no transition is anchored to. Erasing one that is
@@ -3735,7 +3735,7 @@ describe('CanvasRegion Door mode delete', () => {
 // Select beats create: clicking an existing transition selects it rather than
 // starting a new one. The toolbar controls creation only and is
 // `DoorToolbar`'s business, so what is tested here is only what a click does.
-describe('CanvasRegion Door mode selection', () => {
+describe('CanvasRegion Door Mode selection', () => {
   beforeEach(() => {
     setActivePinia(createTestPinia())
   })
@@ -3796,7 +3796,7 @@ describe('CanvasRegion Door mode selection', () => {
     expect(selection.selected).toEqual([{ kind: 'transition', id: idOfKind(mapId, 'edge') }])
 
     // And swapping one for the other replaces rather than accumulates: click
-    // -select is single-select until shift-click lands with Select/Move.
+    // -select is single-select until shift-click lands with Object Mode.
     click(viewport, at(0.5, 1.5))
     expect(selection.selected).toEqual([{ kind: 'transition', id: idOfKind(mapId, 'teleport') }])
     wrapper.unmount()
@@ -3851,7 +3851,7 @@ describe('CanvasRegion Door mode selection', () => {
 
   // The selection outlives nothing: a room edit that cascades the transition
   // away has to take it with it. The store's prune does the work; what this
-  // checks is that Door mode's selection is subject to it like any other.
+  // checks is that Door Mode's selection is subject to it like any other.
   it('prunes when a room edit cascades the transition away', () => {
     const { wrapper, viewport } = mountCanvas()
     const mapId = twoRoomsADoorAndATeleport()
@@ -3905,7 +3905,7 @@ describe('CanvasRegion Door mode selection', () => {
   })
 })
 
-describe('CanvasRegion Markup mode picker', () => {
+describe('CanvasRegion Markup Mode picker', () => {
   // The popup is portalled to the body, so a test that fails before its own
   // unmount would leave it there for the next one to find. Teardown has to be
   // unconditional.
@@ -4102,7 +4102,7 @@ describe('CanvasRegion Markup mode picker', () => {
   })
 })
 
-describe('CanvasRegion Markup mode placement', () => {
+describe('CanvasRegion Markup Mode placement', () => {
   let mounted: ReturnType<typeof mount> | null = null
 
   beforeEach(() => {
@@ -4316,7 +4316,7 @@ describe('CanvasRegion Markup mode placement', () => {
   })
 })
 
-describe('CanvasRegion Markup mode lines', () => {
+describe('CanvasRegion Markup Mode lines', () => {
   let mounted: ReturnType<typeof mount> | null = null
 
   beforeEach(() => {
@@ -4534,7 +4534,7 @@ describe('CanvasRegion Markup mode lines', () => {
   })
 })
 
-describe('CanvasRegion Markup mode icon drag', () => {
+describe('CanvasRegion Markup Mode icon drag', () => {
   let mounted: ReturnType<typeof mount> | null = null
 
   beforeEach(() => {
@@ -4761,7 +4761,7 @@ describe('CanvasRegion Markup mode icon drag', () => {
   })
 })
 
-describe('CanvasRegion Markup mode erase', () => {
+describe('CanvasRegion Markup Mode erase', () => {
   let mounted: ReturnType<typeof mount> | null = null
 
   beforeEach(() => {

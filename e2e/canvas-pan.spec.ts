@@ -83,7 +83,7 @@ test.describe('canvas pan', () => {
     const probe = grid.at(4.5, 4.5)
 
     // The canvas has to own the keyboard first, which a press is what gives it.
-    // Pressed in Select mode (key 2) so the press itself draws nothing.
+    // Pressed in Object Mode (key 2) so the press itself draws nothing.
     await page.keyboard.press('2')
     await page.mouse.click(probe.x, probe.y)
 

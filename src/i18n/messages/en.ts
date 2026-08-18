@@ -49,7 +49,7 @@ export const en = {
   // the cell granularity. Distinct from `history.erase`, the brush stroke.
   'history.eraseCells': 'Erase Cells',
   // One label for the box drag, whichever kind it turns out to have made: the
-  // undo entry is named when the gesture opens, and Door mode is
+  // undo entry is named when the gesture opens, and Door Mode is
   // context-inferred, so at that moment nobody knows yet.
   'history.addTransition': 'Add Transition',
   // Its own label rather than a second use of the one above, because unlike the
@@ -269,13 +269,14 @@ export const en = {
   'toolbar.redo': 'Redo (Ctrl+Shift+Z)',
   'toolbar.zen': 'Zen',
   'toolbar.zenTitle': 'Zen mode - hide the menu, activity bar, and sidebars',
-  // Draw has a real toolbar now; the rest are still placeholders for the modes
-  // whose tools are unbuilt.
+  // The erase toggle's word is shared by the three modes that can erase; its
+  // title is not, because what each eraser destroys differs. This title is Room
+  // Mode's, and Door and Markup carry their own further down.
   'toolbar.erase': 'Erase',
   'toolbar.eraseTitle':
     'Erase - makes the primary pointer erase cells. Right-click and the stylus eraser always erase.',
-  'toolbar.draw.label': 'Draw options',
-  'toolbar.door.label': 'Door options',
+  'toolbar.draw.label': 'Room Mode options',
+  'toolbar.door.label': 'Door Mode options',
   // The creation strip. Every one of these says what the next transition gets
   // and none of them edits the selected one. The tooltips say outright: this is
   // the question a user will otherwise ask by experiment, on a door they wanted
@@ -288,7 +289,7 @@ export const en = {
     'Draw new transitions as one-way, in the direction you draw them. Does not change what is selected.',
   // Its own title, not a share of the one above: the toggle is the same control
   // and the same store flag, but what it erases is the mode's business.
-  // "erase cells" would be a lie here. Door mode never destroys a room.
+  // "erase cells" would be a lie here. Door Mode never destroys a room.
   'toolbar.door.eraseTitle':
     'Erase - makes the primary pointer delete doors, elevators and teleports. Right-click and the stylus eraser always delete.',
   'toolbar.brush': 'Brush',
@@ -318,8 +319,8 @@ export const en = {
   'toolbar.area': 'Area',
   'toolbar.areaTitle':
     'The area new rooms are drawn into. Growing an existing room keeps its own area.',
-  // Select mode's toolbar: what a press selects, and nothing else.
-  'toolbar.select.label': 'Select options',
+  // Object Mode's toolbar: what a press selects, and nothing else.
+  'toolbar.select.label': 'Object Mode options',
   'toolbar.select.granularity': 'Select',
   'toolbar.select.rooms': 'Rooms',
   'toolbar.select.cells': 'Cells',
@@ -335,10 +336,10 @@ export const en = {
   'zoom.toSelection': 'To Selection',
 
   'activityBar.label': 'Mode switch',
-  'mode.draw': 'Draw/Edit',
-  'mode.select': 'Select/Move',
-  'mode.door': 'Door',
-  'mode.markup': 'Markup',
+  'mode.draw': 'Room Mode',
+  'mode.select': 'Object Mode',
+  'mode.door': 'Door Mode',
+  'mode.markup': 'Markup Mode',
 
   'tabs.list': 'Maps',
   'tabs.new': 'New map',
@@ -436,7 +437,7 @@ export const en = {
   'inspector.directionAToB': 'A to B',
   'inspector.directionBToA': 'B to A',
 
-  'toolbar.markup.label': 'Markup options',
+  'toolbar.markup.label': 'Markup Mode options',
   'toolbar.markup.plate': 'Plate',
   'toolbar.markup.glyph': 'Glyph',
   'toolbar.markup.line': 'Line',
@@ -478,15 +479,15 @@ export const en = {
   'cheatSheet.section.modes': 'Modes',
   'cheatSheet.section.general': 'General',
   'cheatSheet.section.clipboard': 'Clipboard',
-  'cheatSheet.section.drawEdit': 'Draw/Edit',
+  'cheatSheet.section.drawEdit': 'Room Mode',
   'cheatSheet.section.zoom': 'Zoom',
   'cheatSheet.section.gestures': 'Panning',
   'cheatSheet.section.help': 'Help',
 
-  'action.mode.draw': 'Draw/Edit mode',
-  'action.mode.select': 'Select/Move mode',
-  'action.mode.door': 'Door mode',
-  'action.mode.markup': 'Markup mode',
+  'action.mode.draw': 'Room Mode',
+  'action.mode.select': 'Object Mode',
+  'action.mode.door': 'Door Mode',
+  'action.mode.markup': 'Markup Mode',
   'action.undo': 'Undo',
   'action.redo': 'Redo',
   'action.save': 'Save',

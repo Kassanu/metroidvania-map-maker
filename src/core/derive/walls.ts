@@ -5,7 +5,7 @@
 // cannot manually add or remove outer walls, so there is nothing to persist.
 // The cells are the truth and this file reads it.
 //
-// Two consumers, both hot: the renderer draws these every frame, and Draw/Edit
+// Two consumers, both hot: the renderer draws these every frame, and Room Mode
 // needs the *runs* to place resize handles. Hence the per-room memo at the
 // bottom, keyed on the room's revision counter.
 
@@ -182,7 +182,7 @@ export function roomBounds(room: Room): CellBounds | null {
 // cell thick satisfies it nowhere, so it could hold no wall at all.
 //
 // The predicate as well as the list, because the two consumers want different
-// things: the renderer enumerates every target, while the Draw-mode zone
+// things: the renderer enumerates every target, while the Room Mode zone
 // resolver only asks about the four corners of one cell and would otherwise
 // scan a 20x20 room's 441 vertices on every pointer move. Both read this one
 // rule, so they cannot disagree about where a wall may be started.
@@ -194,7 +194,7 @@ export function isWallVertex(room: Room, x: number, y: number): boolean {
   return (nw && ne) || (sw && se) || (nw && sw) || (ne && se)
 }
 
-// Wall vertices: the targets Draw/Edit shows for inner-wall drawing.
+// Wall vertices: the targets Room Mode shows for inner-wall drawing.
 //
 // Walks the cells, not the bounding box: a sparse room's box is arbitrarily
 // larger than its contents. All four corners of each cell, because a wall

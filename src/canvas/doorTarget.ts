@@ -1,11 +1,11 @@
-// What is under the pointer in Door mode: which row of the precedence table a
+// What is under the pointer in Door Mode: which row of the precedence table a
 // gesture can reach.
 //
 // Identifies the target (empty, room, door, or teleport) but not what the
 // gesture does. That separation lets gestures be added incrementally without
 // promising a row that dispatch does not yet handle.
 //
-// Not a second hit-tester. Door mode's targets are objects with `ObjectRef`s,
+// Not a second hit-tester. Door Mode's targets are objects with `ObjectRef`s,
 // resolved by `hitTest.ts`. This file maps those onto table rows and adds the
 // room under the pointer (which gestures need to know).
 

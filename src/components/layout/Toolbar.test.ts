@@ -21,7 +21,7 @@ describe('Toolbar', () => {
   })
 
   // The dynamic section is per-mode, and every mode has one of its own.
-  it('shows the Draw tools in the dynamic section, and only in Draw mode', async () => {
+  it('shows the Room tools in the dynamic section, and only in Room Mode', async () => {
     const modeStore = useModeStore()
     const wrapper = mount(Toolbar)
 
@@ -32,7 +32,7 @@ describe('Toolbar', () => {
     expect(wrapper.find('.brush-size').exists()).toBe(false)
   })
 
-  // The toggle belongs to every mode with deletable content, which is Draw,
+  // The toggle belongs to every mode with deletable content, which is Room,
   // Door and Markup. It is also the only erase route touch has, since
   // right-click and the stylus eraser end are the other two.
   describe('the erase toggle', () => {
@@ -44,7 +44,7 @@ describe('Toolbar', () => {
       modeStore.setMode('door')
       await nextTick()
       expect(wrapper.find('.erase-toggle-button').exists()).toBe(true)
-      // Door's own section, not Draw's left on screen.
+      // Door's own section, not Room's left on screen.
       expect(wrapper.find('.brush-size').exists()).toBe(false)
 
       modeStore.setMode('markup')
@@ -61,7 +61,7 @@ describe('Toolbar', () => {
 
     // One flag, shared: "the primary pointer erases" is an intent the user
     // carries between modes, and each mode decides what erasing means.
-    it('reads and writes the same flag from Door mode', async () => {
+    it('reads and writes the same flag from Door Mode', async () => {
       const tools = useToolsStore()
       useModeStore().setMode('door')
       const wrapper = mount(Toolbar)
@@ -75,7 +75,7 @@ describe('Toolbar', () => {
     })
 
     // The two modes describe different destruction, so they cannot share one
-    // tooltip: Door mode never erases a cell.
+    // tooltip: Door Mode never erases a cell.
     it('describes what this mode erases', async () => {
       const modeStore = useModeStore()
       const wrapper = mount(Toolbar)
@@ -136,9 +136,9 @@ describe('Toolbar', () => {
       wrapper.unmount()
     })
 
-    // Registered by the Draw toolbar, so it is bound only while Draw mode
+    // Registered by Room Mode's toolbar, so it is bound only while that mode
     // owns the section: a brush size means nothing in the other three modes.
-    it('unbinds [ and ] when Draw mode is left', async () => {
+    it('unbinds [ and ] when Room Mode is left', async () => {
       const modeStore = useModeStore()
       const wrapper = mount(Toolbar, { attachTo: document.body })
       await nextTick()
@@ -426,7 +426,7 @@ describe('Toolbar', () => {
     })
   })
 
-  // Select's whole section: what a press selects, and nothing else. A mode
+  // Object Mode's whole section: what a press selects, and nothing else. A mode
   // toggle, not a selection editor.
   describe('the Select granularity toggle', () => {
     beforeEach(() => {

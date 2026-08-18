@@ -15,7 +15,7 @@ import type { IconId, LineId, MapId, RoomId, TransitionId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 import type { MapModel, ObjectRef } from '@/core/types'
 
-// Select mode's Drag column, row by row: one kind of selection per case, then
+// Object Mode's Drag column, row by row: one kind of selection per case, then
 // the rules that hold across every row.
 //
 // `selectionMove.test.ts` covers the same gesture from its API surface, which
@@ -28,7 +28,7 @@ const LINE_DEFAULTS = { color: '#8bd5ff', arrowStart: false, arrowEnd: true }
 // step" are both exact assertions.
 const SETUP = 'Setup'
 
-describe('the Drag column of Select mode', () => {
+describe('the Drag column of Object Mode', () => {
   let onChange: Mock<() => void>
 
   beforeEach(() => {

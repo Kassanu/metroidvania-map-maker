@@ -1,4 +1,4 @@
-// Select mode's marquee: the rubber band that selects what it sweeps, at the
+// Object Mode's marquee: the rubber band that selects what it sweeps, at the
 // granularity the mode is in.
 //
 // `runResize`'s shape, not a stroke's. The rectangle is a quantity replaced on

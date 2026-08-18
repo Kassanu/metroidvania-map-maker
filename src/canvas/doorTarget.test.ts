@@ -206,7 +206,7 @@ describe('resolveDoorTarget', () => {
     expect((inside as Extract<DoorTarget, { kind: 'teleport' }>).id).toBe(across)
   })
 
-  // Door mode has no row for an icon or a line, so neither may shadow what is
+  // Door Mode has no row for an icon or a line, so neither may shadow what is
   // under it. Both are in the dev fixture, and `hitTest` ranks both above the
   // things this mode does act on: the line above an edge door, the icon above
   // the room cell. Using it unfiltered would make this map partly inert.

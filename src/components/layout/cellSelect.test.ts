@@ -19,7 +19,7 @@ import { WORLD_AREA_ID } from '@/core/ids'
 import type { IconId, LineId, MapId, RoomId, TransitionId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 
-// Select mode's Cells granularity, as a matrix: one `describe` per target under
+// Object Mode's Cells granularity, as a matrix: one `describe` per target under
 // the pointer, one `it` per gesture, plus the rules that cut across the table.
 //
 // The Cells table is its own table, not the Rooms table filtered. Only cells are
@@ -81,7 +81,7 @@ describe('Cell-select precedence table', () => {
     await click(viewport, { ...point, shiftKey: true })
   }
 
-  // Select mode opens in the Rooms granularity, so every test states the one it
+  // Object Mode opens in the Rooms granularity, so every test states the one it
   // is about.
   async function granularity(subMode: 'rooms' | 'cells') {
     useToolsStore().setSelectSubMode(subMode)

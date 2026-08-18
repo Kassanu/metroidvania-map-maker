@@ -1,4 +1,4 @@
-// Select mode's other drag: moving a cell selection, which does not move a
+// Object Mode's other drag: moving a cell selection, which does not move a
 // room but takes cells out of one.
 //
 // A separate gesture from the room-granularity move rather than a branch inside

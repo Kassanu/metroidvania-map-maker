@@ -173,7 +173,7 @@ test.describe('Inspector', () => {
     const inspector = page.locator('[data-panel-id="inspector"]')
 
     // The seed's two-segment door on the seam at x = 3, between "Landing Site"
-    // and "Corridor". Door mode selects a transition on click.
+    // and "Corridor". Door Mode selects a transition on click.
     await page.keyboard.press('3')
     const seam = grid.at(3, 0.5)
     await page.mouse.click(seam.x, seam.y)

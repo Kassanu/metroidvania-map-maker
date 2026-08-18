@@ -21,7 +21,7 @@ import type { CellKey } from '@/core/cell'
 import type { AreaId, IconId, MapId, RoomId, TransitionId } from '@/core/ids'
 import type { MapModel, ObjectRef, Room } from '@/core/types'
 
-// Select mode at the Cells granularity: what `Delete` means there, and the four
+// Object Mode at the Cells granularity: what `Delete` means there, and the four
 // clipboard verbs, driven through their action ids against a mounted canvas.
 //
 // Cells and Rooms are two granularities on one set of keys, so every test states
@@ -29,7 +29,7 @@ import type { MapModel, ObjectRef, Room } from '@/core/types'
 // means "aimed at this cell" moves it and one that means "unaimed" leaves the
 // canvas first.
 
-describe('Select mode, Cells granularity: Delete and the clipboard verbs', () => {
+describe('Object Mode, Cells granularity: Delete and the clipboard verbs', () => {
   let mounted: ReturnType<typeof mount> | null = null
 
   beforeEach(() => {
@@ -657,7 +657,7 @@ describe('Select mode, Cells granularity: Delete and the clipboard verbs', () =>
   // Mode
   // -------------------------------------------------------------------------
 
-  it('runs none of the four verbs outside Select mode', async () => {
+  it('runs none of the four verbs outside Object Mode', async () => {
     await mountCanvas()
     fixture()
     granularity('cells')

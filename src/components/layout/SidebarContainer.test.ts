@@ -21,7 +21,7 @@ describe('SidebarContainer', () => {
     expect(titles).toEqual(['Hierarchy'])
   })
 
-  it('shows the Icon Library panel only while in Markup mode', async () => {
+  it('shows the Icon Library panel only while in Markup Mode', async () => {
     const wrapper = mount(SidebarContainer, { props: { side: 'left' } })
     const mode = useModeStore()
     mode.setMode('markup')

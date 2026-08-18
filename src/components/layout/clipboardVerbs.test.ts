@@ -137,7 +137,7 @@ describe('the clipboard verbs', () => {
       expect(clipboard().payload).toBe(kept)
     })
 
-    it('does nothing outside Select mode', async () => {
+    it('does nothing outside Object Mode', async () => {
       await mountCanvas()
       const a = room(['0,0'])
       selection().set([{ kind: 'room', id: a }], mapId())

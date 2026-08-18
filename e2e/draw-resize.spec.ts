@@ -14,7 +14,7 @@ import { openApp, undoLabel, gridMapping } from './support/canvas'
 // resize instead of about paint.
 const EAST_WALL = { x: 5, y: 0.5 }
 
-test.describe('Draw mode edge-run resize', () => {
+test.describe('Room Mode edge-run resize', () => {
   test('dragging the handle extrudes the run, as one undo step', async ({ page }) => {
     const { errors } = await openApp(page)
     const grid = await gridMapping(page)

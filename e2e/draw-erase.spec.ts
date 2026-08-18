@@ -36,7 +36,7 @@ async function canvasPoint(page: Page, dx: number, dy: number) {
   return { x: box.x + dx, y: box.y + dy }
 }
 
-test.describe('Draw mode erase', () => {
+test.describe('Room Mode erase', () => {
   test('right-drag erases, and the browser menu does not interrupt it', async ({ page }) => {
     const { errors } = await openApp(page)
 

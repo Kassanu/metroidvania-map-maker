@@ -186,7 +186,7 @@ describe('useSelectionStore', () => {
     })
   })
 
-  // What Draw mode draws its resize handles on.
+  // What Room Mode draws its resize handles on.
   describe('soleRoomOn', () => {
     it('answers only for exactly one room, on the map asked about', () => {
       const selection = useSelectionStore()

@@ -15,7 +15,7 @@ async function lock(page: Page, name: string) {
   await page.getByRole('radiogroup', { name: 'Lock' }).getByRole('radio', { name }).click()
 }
 
-test.describe('Draw mode sub-mode lock', () => {
+test.describe('Room Mode sub-mode lock', () => {
   test('Auto resizes the run where Cells grows one cell', async ({ page }) => {
     const { errors } = await openApp(page)
     const grid = await gridMapping(page)

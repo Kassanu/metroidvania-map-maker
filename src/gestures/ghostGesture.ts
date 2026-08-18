@@ -34,7 +34,7 @@ export interface GhostGesture {
 }
 
 // A gesture driven by the cell the pointer is over, which is the shape both of
-// Select mode's moves take. One name for one shape, so the caller can hold
+// Object Mode's moves take. One name for one shape, so the caller can hold
 // whichever granularity is in use without knowing which it got.
 //
 // `to` starts at the origin, so a drag that has not left its cell is already a

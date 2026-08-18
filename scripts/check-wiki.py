@@ -34,7 +34,7 @@ IMAGE_SUFFIXES = (".png", ".gif")
 # the same direction as PENDING: an image named here that IS now referenced
 # fails, which is the signal to delete the entry rather than leave a permanent
 # hole in the orphan check.
-UNREFERENCED = ["app-cold-start.png", "regions-numbered.png", "room-mode-draw-a-room.gif"]
+UNREFERENCED = ["regions-numbered.png", "room-mode-draw-a-room.gif"]
 
 # Material with a name in the tree but no page until it ships.
 FUTURE_SLOTS = ["Exports", "Global find", "Global-find", "Managing lock types", "Managing-lock-types"]
@@ -43,7 +43,7 @@ FUTURE_SLOTS = ["Exports", "Global find", "Global-find", "Managing lock types", 
 # tree was built as, and the shape check below applies only to those. The list
 # is self-clearing in the same direction as PENDING: a page named here that is
 # still a stub fails, which is the signal to correct the list.
-WRITTEN = ["Home", "Glossary"]
+WRITTEN = ["Home", "Glossary", "Introduction"]
 
 # Product terms the pages use. Each must appear inside a string in en.ts: a term
 # no message renders is a term no user has seen on screen.

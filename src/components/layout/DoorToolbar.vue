@@ -7,15 +7,15 @@ import { OPEN_LOCK_ID } from '@/core/ids'
 import type { LockTypeId } from '@/core/ids'
 import { t } from '@/i18n'
 
-// Door mode's half of the toolbar's dynamic (per-mode) section. This toggle is
+// Door Mode's half of the toolbar's dynamic (per-mode) section. This toggle is
 // the only erase route on touch: right-click and the stylus eraser end are
 // the other two, and touch has neither.
 //
 // A component per mode rather than a branch inside `Toolbar.vue`, following
-// `DrawToolbar`: further Door mode controls belong next to this rather than
+// `DrawToolbar`: further Door Mode controls belong next to this rather than
 // inside a switch.
 //
-// Shares `tools.erase` with Draw mode deliberately: the flag means "the
+// Shares `tools.erase` with Room Mode deliberately: the flag means "the
 // primary pointer erases", one intent carried between modes, while each mode
 // decides for itself what erasing means, which is why the title below is
 // Door's own.
@@ -53,7 +53,7 @@ const selectedColor = computed(
 
 <template>
   <div class="toolbar-group dynamic" role="group" :aria-label="t('toolbar.door.label')">
-    <!-- A native select, like Draw mode's area picker and for the same reasons:
+    <!-- A native select, like Room Mode's area picker and for the same reasons:
          one choice from a short list gets keyboard support, a real touch picker
          and screen-reader semantics for free. Lock types are created in the
          Hierarchy: this only picks from what exists, which is why there is no
@@ -103,7 +103,7 @@ const selectedColor = computed(
 
 <style scoped>
 /* Everything else is Toolbar.vue's :deep rules on .toolbar-button and
- * .toolbar-group, so these cannot drift away from Draw mode's. The picker and
+ * .toolbar-group, so these cannot drift away from Room Mode's. The picker and
  * swatch deliberately match the area picker's metrics for the same reason. */
 .erase-toggle-button,
 .one-way-button {

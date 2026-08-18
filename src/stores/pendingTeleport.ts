@@ -22,10 +22,10 @@
 // selection store already makes: it is the version that eventually misses one.
 //
 // Why the mode watch is here rather than in the canvas. Cancellation happens
-// only via `Esc`, switching modes (leaving Door mode), or deleting the origin's
+// only via `Esc`, switching modes (leaving Door Mode), or deleting the origin's
 // tab or room. Two of those three are model facts, and the third is a mode fact.
 // None of them is a canvas fact. Owning all three here makes "pending only
-// exists in Door mode" a property of the state itself, true whatever is mounted.
+// exists in Door Mode" a property of the state itself, true whatever is mounted.
 // The one cancel route that is genuinely input, `Esc`, stays with the component
 // that owns input wiring, exactly as the active room's does.
 
@@ -139,7 +139,7 @@ export const usePendingTeleportStore = defineStore('pendingTeleport', () => {
   // be able to read an origin whose room has already gone.
   watch([() => model.project, () => model.rev], prune, { flush: 'sync' })
 
-  // Leaving Door mode cancels. Sync for the same reason: the mode keys are a
+  // Leaving Door Mode cancels. Sync for the same reason: the mode keys are a
   // keypress away from the next click.
   watch(
     () => mode.active,

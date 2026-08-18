@@ -23,7 +23,7 @@ async function canvasPoint(page: Page, dx: number, dy: number) {
   return { x: box.x + dx, y: box.y + dy }
 }
 
-test.describe('Draw mode brush', () => {
+test.describe('Room Mode brush', () => {
   test('[ and ] resize the brush through the real keyboard', async ({ page }) => {
     const { errors } = await openApp(page)
     const size = page.locator('.brush-size')

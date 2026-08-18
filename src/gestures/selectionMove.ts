@@ -1,4 +1,4 @@
-// Select mode's drag column: moving whatever is selected, by a whole-cell
+// Object Mode's drag column: moving whatever is selected, by a whole-cell
 // delta, as one transaction.
 //
 // `iconDrag`'s shape, and for the same reason: the destination is derived from

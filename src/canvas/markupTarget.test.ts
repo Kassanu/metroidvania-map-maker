@@ -175,7 +175,7 @@ describe('markupCursor', () => {
     const empty = resolveMarkupTarget(centre('9,9'), scene)
     const room = resolveMarkupTarget(centre('4,0'), scene)
 
-    // Door mode's empty row is inert in every column and offers no cursor.
+    // Door Mode's empty row is inert in every column and offers no cursor.
     // Markup's is not: a line may be drawn outside every room.
     expect(markupCursor(empty)).toBe('crosshair')
     expect(markupCursor(room)).toBe('crosshair')

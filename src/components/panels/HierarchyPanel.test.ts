@@ -976,7 +976,7 @@ describe('HierarchyPanel', () => {
     // Works in every mode, unlike the canvas clipboard verbs: the tree is
     // mode-independent, so it owns the op rather than routing through the
     // Select-only action.
-    it('Duplicate works outside Select mode', async () => {
+    it('Duplicate works outside Object Mode', async () => {
       const { mapId } = setup()
       useModeStore().setMode('draw')
       const panel = mountTree()

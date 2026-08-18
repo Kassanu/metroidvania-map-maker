@@ -8,7 +8,7 @@ describe('useModeStore', () => {
     setActivePinia(createTestPinia())
   })
 
-  it('defaults to draw mode', () => {
+  it('defaults to Room Mode', () => {
     expect(useModeStore().active).toBe('draw')
   })
 

@@ -38,7 +38,7 @@ export interface MapScene {
   map: MapModel | null
   // The transitions layer's visibility, and the teleport-lines sub-toggle
   // nested under it. Both arrive as plain instructions: the policy (which
-  // includes Door mode overriding the master, since Door mode acts on exactly
+  // includes Door Mode overriding the master, since Door Mode acts on exactly
   // these objects) is the scene builder's, not this file's.
   //
   // The nesting is structural rather than a conjunction computed anywhere: the
@@ -98,7 +98,7 @@ export interface MapScene {
   // show: no pointer over the canvas, or a 1×1 brush, which needs no aiming
   // aid and whose preview would cost a repaint on every pointer move.
   brushPreview: BrushPreview | null
-  // Door mode's rubber-band box, or null when no box drag is live.
+  // Door Mode's rubber-band box, or null when no box drag is live.
   //
   // The one ghost that is not model state. Everything else a gesture
   // previews is drawn by applying it speculatively and letting the model render
@@ -477,7 +477,7 @@ export function renderMap(
   // Not gated on the layer, and neither is the box preview below. These are
   // the live gesture, not the map: hiding a layer is a statement about what the
   // map shows, and it cannot be allowed to swallow the one mark that says the
-  // app is mid-interaction and waiting for you. In practice Door mode forces
+  // app is mid-interaction and waiting for you. In practice Door Mode forces
   // the layer on anyway, so this only bites if a later mode grows a pending
   // state.
   if (scene.pendingTeleport) drawPendingTeleport(ctx, scene, scene.pendingTeleport)

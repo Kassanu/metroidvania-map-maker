@@ -12,7 +12,7 @@ import { edgeOfCell } from '@/core/cell'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { MapId, RoomId } from '@/core/ids'
 
-// Draw/Edit mode's press behaviour, as a matrix: one `describe` per press
+// Room Mode mode's press behaviour, as a matrix: one `describe` per press
 // zone, one `it` per gesture (click, drag, erase), plus the cross-cutting
 // rules that apply regardless of zone.
 //
@@ -29,7 +29,7 @@ function armedRoom() {
   return useSelectionStore().soleRoomOn(useTabsStore().activeTabId)
 }
 
-describe('Draw/Edit precedence table (Auto)', () => {
+describe('Room Mode precedence table (Auto)', () => {
   beforeEach(() => {
     setActivePinia(createTestPinia())
   })
@@ -443,7 +443,7 @@ describe('Draw/Edit precedence table (Auto)', () => {
   // Cross-cutting rules
   // -------------------------------------------------------------------------
   describe('cross-cutting rules', () => {
-    // Draw's drag column is fully spent, so it does not honour the default that
+    // Room Mode's drag column is fully spent, so it does not honour the default that
     // a drag beginning on a selected object moves it. Every press on a room
     // cell selects that room, so a version of that rule applied above the mode
     // dispatch would turn every stroke after the first into a room move.

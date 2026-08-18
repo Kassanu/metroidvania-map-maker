@@ -21,7 +21,7 @@ import type { Transition } from '@/core/types'
 describe('pendingTeleport store', () => {
   beforeEach(() => {
     setActivePinia(createTestPinia())
-    // Every route below is a Door-mode one, and the store cancels itself
+    // Every route below is a Door Mode one, and the store cancels itself
     // anywhere else, so the mode has to be set or half these tests would be
     // asserting against a slot the mode watch had already emptied.
     useModeStore().setMode('door')
@@ -238,11 +238,11 @@ describe('pendingTeleport store', () => {
     })
   })
 
-  // Cancelling happens via `Esc`, switching modes (leaving Door mode), or
+  // Cancelling happens via `Esc`, switching modes (leaving Door Mode), or
   // deleting the origin's tab or room. `Esc` is the component's, being input;
   // the other two are here.
   describe('cancelling', () => {
-    it('cancels on leaving Door mode', () => {
+    it('cancels on leaving Door Mode', () => {
       const pending = usePendingTeleportStore()
       const mapId = twoRooms()
       pending.start(mapId, '0,0')
@@ -254,7 +254,7 @@ describe('pendingTeleport store', () => {
 
     // Coming back must not resurrect it: a pending state the user watched
     // disappear reappearing on a mode key would be the worst kind of surprise.
-    it('does not come back when Door mode does', () => {
+    it('does not come back when Door Mode does', () => {
       const pending = usePendingTeleportStore()
       const mapId = twoRooms()
       pending.start(mapId, '0,0')

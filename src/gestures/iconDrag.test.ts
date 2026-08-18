@@ -67,7 +67,7 @@ describe('the icon drag', () => {
 
     const map = mapOf(mapId)
     // The icon's room is derived from the cell, so nothing was re-parented and
-    // no cascade ran: this is the opposite of Door mode's attachment rules.
+    // no cascade ran: this is the opposite of Door Mode's attachment rules.
     expect(map.icons.get(icon)!.cell).toBe('4,0')
     expect(map.cellOwner.get('4,0')).not.toBe(map.cellOwner.get('0,0'))
   })

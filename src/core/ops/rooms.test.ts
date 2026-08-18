@@ -170,7 +170,7 @@ describe('erase and split', () => {
     const { project, map } = setup()
     const room = makeRoom(project, map, rect(0, 0, 2, 1))
     const transaction = tx(map)
-    // An outer boundary, with the reason spelled out. The Draw-mode gesture can
+    // An outer boundary, with the reason spelled out. The Room Mode gesture can
     // tell a mis-aimed vertex drag from a stale id.
     expect(refusal(drawInnerWall(transaction, map, room.id, edgeOfCell('0,0', 'N'), 'solid'))).toBe(
       'not-interior',

@@ -5,7 +5,7 @@
 // selected, and does not change the selection. Selecting a transition never
 // updates this; changing this never updates the selection. That separation lets
 // you set Missile Door once and draw five of them, like the wall and area
-// pickers in Draw mode.
+// pickers in Room Mode.
 //
 // Stored here rather than in `stores/tools.ts` because it holds a `LockTypeId`,
 // which only means something in the current project and needs pruning.

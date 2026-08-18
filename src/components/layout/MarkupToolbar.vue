@@ -4,7 +4,7 @@ import { useMarkupDefaultsStore } from '@/stores/markupDefaults'
 import { useArmedIconStore } from '@/stores/armedIcon'
 import { t } from '@/i18n'
 
-// Markup mode's half of the toolbar's dynamic section, following `DoorToolbar`.
+// Markup Mode's half of the toolbar's dynamic section, following `DoorToolbar`.
 //
 // A creation strip: every control says what the next icon gets, and none of
 // them reads or writes the selection. Editing an existing icon is the
@@ -120,7 +120,7 @@ const armedIcon = useArmedIconStore()
 
 <style scoped>
 /* Everything else comes from Toolbar.vue's :deep rules, so these cannot drift
- * away from Draw and Door mode's. */
+ * away from Room Mode's and Door Mode's. */
 .erase-toggle-button,
 .replace-button,
 .disarm-button,

@@ -18,7 +18,7 @@ import { createLine, placeIcon } from '@/core/ops/markup'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { IconId, LineId, RoomId, TransitionId } from '@/core/ids'
 
-// Select mode's press behaviour, as a matrix: one `describe` per target under
+// Object Mode's press behaviour, as a matrix: one `describe` per target under
 // the pointer, one `it` per gesture, plus the rules that cut across every
 // target.
 //

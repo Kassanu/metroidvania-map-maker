@@ -8,7 +8,7 @@ import { openApp, gridMapping, undoLabel } from './support/canvas'
 const IN_A_ROOM = { x: 1.5, y: 0.5 }
 const BARE_GRID = { x: 9.5, y: 3.5 }
 
-test.describe('Select mode clipboard', () => {
+test.describe('Object Mode clipboard', () => {
   test('copies a room and pastes it under the pointer', async ({ page }) => {
     const { errors } = await openApp(page)
     await page.keyboard.press('2')

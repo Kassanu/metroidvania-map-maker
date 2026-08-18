@@ -5,7 +5,7 @@ import { openApp, gridMapping } from './support/canvas'
 // picker has something real to offer without this test needing a way to create
 // one: areas are created in the Hierarchy, and the picker only picks.
 
-test.describe('Draw mode area picker', () => {
+test.describe('Room Mode area picker', () => {
   test('lists the project’s areas, World first', async ({ page }) => {
     const { errors } = await openApp(page)
     const picker = page.locator('.area-select')

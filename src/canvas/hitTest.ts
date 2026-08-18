@@ -102,7 +102,7 @@ export function hitTest(
 
 // The transition under a point, ignoring every other kind of object.
 //
-// Door mode's targets are transitions and room cells only, so this must not
+// Door Mode's targets are transitions and room cells only, so this must not
 // let an icon or line shadow the door underneath: `hitTest` answers the
 // topmost object of any kind, which for a line drawn across a door is the
 // line, right for selection but wrong for a mode that cannot select lines.

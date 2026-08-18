@@ -1,4 +1,4 @@
-// Room operations: the edits the Draw/Edit and Select/Move gestures perform.
+// Room operations: the edits the Room Mode and Object Mode gestures perform.
 //
 // These are the model-level verbs. They take a set of cells (or a delta, or a
 // transform) and enforce the rules: rooms never overlap, a room is
@@ -727,7 +727,7 @@ export function transformRooms(
 }
 
 // ---------------------------------------------------------------------------
-// Cell-fragment move (Select/Move, cell sub-mode)
+// Cell-fragment move (Object Mode, cell sub-mode)
 // ---------------------------------------------------------------------------
 
 // Moving a cell-selection is deliberately not a room move: the grabbed
@@ -936,7 +936,7 @@ export function roomsTouchedBy(map: MapModel, cells: Iterable<CellKey>): Set<Roo
 }
 
 // Whether a cell is orthogonally adjacent to a room: the "grow" test the
-// Draw/Edit gesture uses to decide a stroke is extending rather than starting.
+// Room Mode gesture uses to decide a stroke is extending rather than starting.
 export function isAdjacentToRoom(map: MapModel, roomId: RoomId, cell: CellKey): boolean {
   const room = map.rooms.get(roomId)
   // A predicate, so an unknown id is simply "no" rather than a throw: asking

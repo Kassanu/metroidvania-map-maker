@@ -1,4 +1,4 @@
-// What is under the pointer in Select mode: which row of the precedence table a
+// What is under the pointer in Object Mode: which row of the precedence table a
 // gesture can reach.
 //
 // One file with a hard branch on the sub-mode, and the branch is the first
@@ -20,7 +20,7 @@ import type { CellKey } from '@/core/cell'
 import type { RoomId } from '@/core/ids'
 import type { ObjectRef } from '@/core/types'
 
-// What Select mode selects. A hard branch, not a filter: the two arms reach
+// What Object Mode selects. A hard branch, not a filter: the two arms reach
 // different targets, hold different things, move by different ops and delete by
 // different ops. It shares a word with Draw's `SubMode` and nothing else.
 export type SelectSubMode = 'rooms' | 'cells'

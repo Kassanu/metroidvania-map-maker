@@ -9,7 +9,7 @@
 // selected" has to survive being handed to an op that only accepts one kind.
 //
 // A list rather than a single slot: shift-click builds a multi-selection, and
-// a selection of exactly one room is also what Draw mode draws its resize
+// a selection of exactly one room is also what Room Mode draws its resize
 // handles on.
 
 import { defineStore } from 'pinia'
@@ -117,7 +117,7 @@ export const useSelectionStore = defineStore('selection', () => {
     else set([ref], mapId)
   }
 
-  // The room Draw mode draws handles on: exactly one room selected, on this
+  // The room Room Mode draws handles on: exactly one room selected, on this
   // map. Null for a selection that holds anything else, holds more than one
   // room, or belongs to another tab.
   //

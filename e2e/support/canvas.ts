@@ -1,4 +1,4 @@
-// Shared canvas plumbing for the Draw-mode e2e specs.
+// Shared canvas plumbing for the Room Mode e2e specs.
 //
 // The canvas has no DOM to query, so every one of these reaches the grid the
 // way a user does: through the coords overlay for position, and through the

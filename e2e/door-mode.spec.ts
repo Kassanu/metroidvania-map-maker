@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { gridMapping, openApp, undoLabel } from './support/canvas'
 import type { Page } from '@playwright/test'
 
-// Door mode's shell: what a press resolves to, said in the only way the user can
+// Door Mode's shell: what a press resolves to, said in the only way the user can
 // see it before the gestures land: the cursor, and the guarantee that nothing
 // else happens yet.
 //
@@ -23,7 +23,7 @@ async function enterDrawMode(page: Page) {
   await page.keyboard.press('1')
 }
 
-test.describe('Door mode shell', () => {
+test.describe('Door Mode shell', () => {
   test('the cursor names the row under the pointer', async ({ page }) => {
     const { errors } = await openApp(page)
     const grid = await gridMapping(page)
@@ -49,9 +49,9 @@ test.describe('Door mode shell', () => {
     expect(errors).toEqual([])
   })
 
-  // The same seam is an edge-run handle in Draw mode. Two modes reading two
+  // The same seam is an edge-run handle in Room Mode. Two modes reading two
   // tables over one pixel, which is the thing most likely to leak.
-  test('the same pixel reads differently in Draw mode', async ({ page }) => {
+  test('the same pixel reads differently in Room Mode', async ({ page }) => {
     const { errors } = await openApp(page)
     const grid = await gridMapping(page)
     const viewport = page.locator('.canvas-viewport')
@@ -85,7 +85,7 @@ test.describe('Door mode shell', () => {
     expect(errors).toEqual([])
   })
 
-  // The risk to catch is a press falling through to Draw mode and painting
+  // The risk to catch is a press falling through to Room Mode and painting
   // instead of doing nothing.
   test('presses do nothing at all, on grid or on a room', async ({ page }) => {
     const { errors } = await openApp(page)
@@ -110,7 +110,7 @@ test.describe('Door mode shell', () => {
   })
 
   // Right-click is the erase column, and on a bare room cell it does nothing:
-  // in particular it must not fall through to Draw mode's erase, which would
+  // in particular it must not fall through to Room Mode's erase, which would
   // eat a room.
   test('a right-press on a bare room cell erases nothing', async ({ page }) => {
     const { errors } = await openApp(page)
@@ -135,7 +135,7 @@ test.describe('Door mode shell', () => {
 // "Corridor" (3,0)-(4,1), sharing the seam at x = 3 whose two segments both
 // already carry a door. Further down, "West Wing" (0,5)-(1,6) and "East Wing"
 // (5,5)-(6,6) face each other across a three-cell gap on rows 5 and 6.
-test.describe('Door mode box drag', () => {
+test.describe('Door Mode box drag', () => {
   // Drag from the centre of one cell to the centre of another.
   async function dragBox(
     page: Page,
@@ -266,7 +266,7 @@ test.describe('Door mode box drag', () => {
 // clicks separated by a real tab switch reach a commit, and that the prompt is
 // on screen in between, which is the whole of the pending state from the user's
 // side.
-test.describe('Door mode teleport', () => {
+test.describe('Door Mode teleport', () => {
   const prompt = (page: Page) => page.locator('.pending-prompt')
 
   // Landing Site fills (0,0)-(2,2) with teleport endpoints already at (0,2) and
@@ -326,7 +326,7 @@ test.describe('Door mode teleport', () => {
     expect(errors).toEqual([])
   })
 
-  test('Esc cancels it, and so does leaving Door mode', async ({ page }) => {
+  test('Esc cancels it, and so does leaving Door Mode', async ({ page }) => {
     const { errors } = await openApp(page)
     const grid = await gridMapping(page)
     await enterDoorMode(page)
@@ -402,7 +402,7 @@ test.describe('Door mode teleport', () => {
 // browser is where the two routes that only exist as real input can be
 // checked: the right button, and the toolbar toggle that touch depends on
 // because it has neither of the other two.
-test.describe('Door mode delete', () => {
+test.describe('Door Mode delete', () => {
   async function rightClick(
     page: Page,
     grid: Awaited<ReturnType<typeof gridMapping>>,
@@ -529,7 +529,7 @@ test.describe('Door mode delete', () => {
 // touches the selected one, so that the Inspector is the single place to edit
 // something that already exists. That negative is the most important thing in
 // this suite, and the last test here is the one that holds it down.
-test.describe('Door mode selection and the creation strip', () => {
+test.describe('Door Mode selection and the creation strip', () => {
   const lockPicker = (page: Page) => page.locator('#door-lock')
   const oneWay = (page: Page) => page.getByRole('button', { name: 'One-way' })
 
@@ -773,10 +773,10 @@ test.describe('transition layer toggles', () => {
     expect(errors).toEqual([])
   })
 
-  // Door mode overrides the master. Entering Door mode is a statement that you
+  // Door Mode overrides the master. Entering Door Mode is a statement that you
   // are working on transitions, so they come back, and the toggle is left
   // alone, so leaving the mode hides them again.
-  test('Door mode shows the layer anyway, and leaving it hides them again', async ({ page }) => {
+  test('Door Mode shows the layer anyway, and leaving it hides them again', async ({ page }) => {
     const { errors } = await openApp(page)
     const grid = await gridMapping(page)
     const canvas = page.locator('.canvas')
@@ -797,7 +797,7 @@ test.describe('transition layer toggles', () => {
     await park(page, grid)
     expect((await canvas.screenshot()).equals(hidden)).toBe(true)
 
-    // The toggle itself never moved: Door mode overrode it, it did not set it.
+    // The toggle itself never moved: Door Mode overrode it, it did not set it.
     await openViewMenu(page)
     await expect(layerItem(page, 'Transitions')).toHaveAttribute('data-state', 'unchecked')
     await page.keyboard.press('Escape')

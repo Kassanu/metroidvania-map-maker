@@ -1,4 +1,4 @@
-// Door mode's box drag: the rubber-band rectangle that makes an edge door or
+// Door Mode's box drag: the rubber-band rectangle that makes an edge door or
 // an elevator.
 //
 // Has `runResize`'s shape, not a stroke's. `moveTo` replaces the far corner

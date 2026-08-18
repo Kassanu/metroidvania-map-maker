@@ -12,7 +12,7 @@
 // speculative model. That is why the caller shows the refusal on the cursor:
 // "did not move" and "cannot move here" look identical otherwise.
 //
-// Deliberately not Door mode's rule. Transitions are never dragged or moved
+// Deliberately not Door Mode's rule. Transitions are never dragged or moved
 // directly, and an icon is the opposite case: it is cell-anchored, and moving
 // it into another room re-owns it with no cascade at all, because ownership is
 // derived from the cell rather than stored.

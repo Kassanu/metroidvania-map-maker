@@ -9,7 +9,7 @@ import { openApp, gridMapping, undoLabel } from './support/canvas'
 const IN_A_ROOM = { x: 1.5, y: 0.5 }
 const BARE_GRID = { x: 9.5, y: 3.5 }
 
-test.describe('Select mode context menu', () => {
+test.describe('Object Mode context menu', () => {
   test('right-click opens the four verbs on a room, and selects it first', async ({ page }) => {
     const { errors } = await openApp(page)
     await page.keyboard.press('2')
@@ -82,7 +82,7 @@ test.describe('Select mode context menu', () => {
 
   // The other three modes spend that button on erase, so the menu must not
   // appear over a delete that already happened.
-  test('right-click still erases in Draw mode instead of opening a menu', async ({ page }) => {
+  test('right-click still erases in Room Mode instead of opening a menu', async ({ page }) => {
     const { errors } = await openApp(page)
     await page.keyboard.press('1')
     const grid = await gridMapping(page)

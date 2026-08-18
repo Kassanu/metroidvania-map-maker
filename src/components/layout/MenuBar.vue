@@ -200,7 +200,7 @@ function meetsNeed(need: EditNeed): boolean {
   }
 }
 
-// The four clipboard verbs and Select All belong to Select mode alone, so the
+// The four clipboard verbs and Select All belong to Object Mode alone, so the
 // items for them are live there alone: the other three modes spend their
 // gestures on authoring, and the selection they carry is there to hold resize
 // handles rather than to be copied.

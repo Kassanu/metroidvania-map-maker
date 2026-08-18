@@ -1483,7 +1483,7 @@ describe('renderMap drawing selected rooms', () => {
   })
 
   // The two treatments land on the same room the moment one room is selected in
-  // Draw mode, so they have to compose: different colours, and on either side of
+  // Room Mode, so they have to compose: different colours, and on either side of
   // the walls rather than both in the same place.
   it('coexists with the resize handles on one room', () => {
     const { ctx, strokes } = fakeContext()
@@ -2147,7 +2147,7 @@ describe('renderMap brush preview', () => {
   })
 })
 
-// Draw/Edit's active room. The hovered handle is drawn at the size drawZone
+// Room Mode's active room. The hovered handle is drawn at the size drawZone
 // grabs it at, which is the point: a handle that disagrees with its own hit
 // zone is worse than no handle. Idle handles are smaller hints, sized below.
 describe('renderMap active room handles', () => {

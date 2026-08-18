@@ -110,7 +110,10 @@ test.describe('Hierarchy', () => {
 
     await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Landing Site')
     // Selecting from the tree never changes the mode: Draw is still Draw.
-    await expect(page.locator('.activity-bar .mode-button.active')).toHaveAttribute('title', /Draw/)
+    await expect(page.locator('.activity-bar .mode-button.active')).toHaveAttribute(
+      'title',
+      /Room Mode/,
+    )
     expect(errors).toEqual([])
   })
 
@@ -204,7 +207,7 @@ test.describe('Hierarchy', () => {
     expect(errors).toEqual([])
   })
 
-  test('duplicates a room from the row menu, in Draw mode', async ({ page }) => {
+  test('duplicates a room from the row menu, in Room Mode', async ({ page }) => {
     const { errors } = await openApp(page)
     const tree = page.locator('[data-panel-id="hierarchy"] [role="tree"]')
 
@@ -275,7 +278,7 @@ test.describe('Hierarchy', () => {
     expect(errors).toEqual([])
   })
 
-  // `Delete` on a selected area, from Draw mode, with the row itself focused:
+  // `Delete` on a selected area, from Room Mode, with the row itself focused:
   // the tree is not a text field, so the global dispatcher answers the key, and
   // the same confirmation the row menu opens is what appears.
   test('deletes a selected area with the Delete key, from any mode', async ({ page }) => {

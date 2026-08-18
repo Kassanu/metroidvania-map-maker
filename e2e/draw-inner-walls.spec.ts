@@ -16,7 +16,7 @@ const TO = { x: 2, y: 1 }
 // the pointer's own cell is the room's and neither end vertex is nearer.
 const ON_WALL = { x: 1.5, y: 1.06 }
 
-test.describe('Draw mode inner walls', () => {
+test.describe('Room Mode inner walls', () => {
   test('dragging between two interior corners draws a wall', async ({ page }) => {
     const { errors } = await openApp(page)
     const grid = await gridMapping(page)

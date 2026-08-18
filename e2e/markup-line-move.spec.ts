@@ -17,7 +17,7 @@ const END = { x: 14.5, y: 8.5 }
 const MIDDLE = { x: 12.5, y: 8.5 }
 const CROSSING = { x: 9.5, y: 8.5 }
 
-test.describe('Markup mode line move', () => {
+test.describe('Markup Mode line move', () => {
   test('a selected line translates by drag, and an unselected one draws another', async ({
     page,
   }) => {

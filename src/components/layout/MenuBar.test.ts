@@ -178,7 +178,7 @@ describe('MenuBar', () => {
   }
 
   describe('Edit menu', () => {
-    // The clipboard verbs and Select All are Select mode's, so the mode is part
+    // The clipboard verbs and Select All are Object Mode's, so the mode is part
     // of what enables them. What this block is about is the other half of the
     // rule, the handler and the selection, which needs the mode out of the way.
     beforeEach(() => {

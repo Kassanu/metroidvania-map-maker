@@ -1,6 +1,6 @@
 // Markup operations: icons and path lines.
 //
-// The two halves of Markup mode differ in one important way: an icon is
+// The two halves of Markup Mode differ in one important way: an icon is
 // cell-anchored and must sit inside a room, so room edits carry or kill it. A
 // line is a top-layer overlay with no room owner. Room edits never affect
 // lines.

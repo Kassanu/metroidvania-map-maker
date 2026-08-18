@@ -255,7 +255,7 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       // lines can be in the same selection; the renderer takes transitions.
       selected: selectedTransitions(),
       // The same, for rooms. Halo and handles land on the same room whenever
-      // exactly one is selected in Draw mode, which is why they are drawn in
+      // exactly one is selected in Room Mode, which is why they are drawn in
       // different colours on different layers rather than sharing either.
       selectedRooms: selectedRooms(),
       selectedCells: selectedCells(),
@@ -265,7 +265,7 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       // thing it grabs cannot disagree.
       handleRoom: (() => {
         // A handle is drawn exactly when a press on it would do something,
-        // applied to the mode rather than the sub-mode lock: in Door mode a
+        // applied to the mode rather than the sub-mode lock: in Door Mode a
         // press on a resize handle resizes nothing.
         if (!tab || modeStore.active !== 'draw') return null
         const roomId = handleRoomId()
@@ -311,7 +311,7 @@ function handleRoomId(): RoomId | null {
   return tab ? selection.soleRoomOn(tab.id) : null
 }
 
-// Whether Markup mode is overriding the markup layer toggles. A function rather
+// Whether Markup Mode is overriding the markup layer toggles. A function rather
 // than a computed because the scene above is already recomputed per draw, and
 // this is one comparison.
 function markupForced(): boolean {
@@ -408,7 +408,7 @@ function worldPoint(event: PointerEvent) {
   return screenToWorld(point.x, point.y, tab, model.tileSize)
 }
 
-// Door mode's press resolves to a click or a drag only once the pointer comes
+// Door Mode's press resolves to a click or a drag only once the pointer comes
 // back up: a drag once it has left the origin cell and crossed the pixel
 // dead-zone, a click on the origin cell short of either. `startPointerDrag`'s
 // dead-zone keeps `onMove` silent until crossed, and `leftCell` below latches
@@ -426,7 +426,7 @@ function handleDoorPress(event: PointerEvent) {
   // Which route this press belongs to: right button, stylus eraser end, or the
   // primary button while the erase toggle is on, the same three routes Draw
   // mode's strokes use. Reusing `strokeActionFor` rather than checking
-  // `button !== 0` here is what gives Door mode the toggle and the eraser end
+  // `button !== 0` here is what gives Door Mode the toggle and the eraser end
   // for free, and the toggle is the only erase route touch has at all.
   //
   // `null` is the middle button, which must start nothing rather than fall
@@ -506,13 +506,13 @@ function handleDoorPress(event: PointerEvent) {
 // nothing at all.
 //
 // Erase or right-click on a non-transition does nothing, the deliberate
-// opposite of Draw mode's erase-priority rule, where a right-press that misses
+// opposite of Room Mode's erase-priority rule, where a right-press that misses
 // an inner wall still erases the cell under it. Here a miss is a miss: Door
 // mode never destroys a room, so a right-drag across the map is harmless in a
-// way the same drag in Draw mode is not.
+// way the same drag in Room Mode is not.
 //
 // Deletes on press rather than on release: there is no click-vs-drag question
-// to answer since erase has only one gesture, and it matches Draw mode's
+// to answer since erase has only one gesture, and it matches Room Mode's
 // erase, which also takes effect under the pointer immediately. `Ctrl+Z` is
 // the safety net there too.
 function deleteTransitionAt(mapId: MapId, target: DoorTarget) {
@@ -755,7 +755,7 @@ function beginMarkupErase(event: PointerEvent, target: MarkupTarget) {
 // Erase is decided first and takes the press outright, so an armed icon does
 // not place while the toggle is on and a right-click never draws.
 //
-// On the paint side, click and drag are told apart the way Door mode tells them
+// On the paint side, click and drag are told apart the way Door Mode tells them
 // apart: the drag primitive's dead zone, plus a latch for having left the origin
 // cell. A press that wandered is not a click, even if it came back, and a drag
 // that never left the cell draws no line and must not open the picker on the
@@ -843,7 +843,7 @@ function handleMarkupPress(event: PointerEvent) {
         return
       }
       // The selection column, which every row answers through the shared
-      // policy. Select beats create, the rule Door mode already follows: a
+      // policy. Select beats create, the rule Door Mode already follows: a
       // click that found an object selects it rather than offering to put a new
       // one on top of it.
       if (!tab) return
@@ -877,7 +877,7 @@ function bandableAt(target: SelectTarget, subMode: SelectSubMode): boolean {
   return !selection.isSelected({ kind: 'cell', id: target.cell })
 }
 
-// Select mode's press dispatch, and the one mode that does not route through
+// Object Mode's press dispatch, and the one mode that does not route through
 // `strokeActionFor`.
 //
 // That table answers "erase" for the secondary button unconditionally, which is
@@ -1267,8 +1267,8 @@ function beginGestureFor(
   return stroke && { gesture: stroke, move: (point) => stroke.extendTo(point) }
 }
 
-// What Door mode's pointer is over, as a row of the table. One call, and every
-// Door-mode reader goes through it: the cursor below, the click here, and the
+// What Door Mode's pointer is over, as a row of the table. One call, and every
+// Door Mode reader goes through it: the cursor below, the click here, and the
 // gestures.
 function doorTargetAt(point: ScreenPoint): DoorTarget | null {
   const tab = tabsStore.activeTab
@@ -1366,10 +1366,10 @@ function placeIconAt(iconType: string, cell: CellKey) {
 }
 
 // Which object layers are drawn right now. One answer, read by the renderer and
-// by Select mode's resolver: you cannot select what you cannot see, and a rule
+// by Object Mode's resolver: you cannot select what you cannot see, and a rule
 // each of them worked out for itself would drift.
 //
-// The mode overrides live here. Door mode forces the transitions master on
+// The mode overrides live here. Door Mode forces the transitions master on
 // because it acts on exactly those, and hiding them would leave the objects live
 // but invisible: a press on a hidden door would miss it, start a teleport
 // instead, and be refused by the one-per-cell rule with nothing on screen to
@@ -1383,7 +1383,7 @@ function visibleLayers(): VisibleLayers {
   }
 }
 
-// What Select mode's pointer is over, as a row of whichever of its two tables
+// What Object Mode's pointer is over, as a row of whichever of its two tables
 // is live. The sub-mode goes in with the point, because which table applies is
 // part of the question rather than something to filter the answer by.
 function selectTargetAt(point: ScreenPoint): SelectTarget | null {
@@ -1403,7 +1403,7 @@ function selectTargetAt(point: ScreenPoint): SelectTarget | null {
   )
 }
 
-// What Markup mode's pointer is over, as a row of its table. The same shape as
+// What Markup Mode's pointer is over, as a row of its table. The same shape as
 // `doorTargetAt`, against its own resolver: Markup's priority is the reverse of
 // `hitTest`'s, so the two modes cannot share one.
 function markupTargetAt(point: ScreenPoint): MarkupTarget | null {
@@ -1451,7 +1451,7 @@ function handlePointerLeave() {
   updateHoveredHandle(null, null)
 }
 
-// The pointer-driven half of Draw mode's hover: which of the active room's
+// The pointer-driven half of Room Mode's hover: which of the active room's
 // handles is under the pointer (drawn at full grab size), which cell the
 // vertex targets are revealed around, and the resize cursor.
 //
@@ -1467,8 +1467,8 @@ function handlePointerLeave() {
 // than its exact position is what makes the second gate possible.
 function updateHoveredHandle(point: ScreenPoint | null, world: WorldPoint | null) {
   hoverScreen = point
-  // Every zone below is Draw mode's: its handles, its reveal window, its
-  // cursor. Door mode resolves its own target instead (see `cursorAt`), and
+  // Every zone below is Room Mode's: its handles, its reveal window, its
+  // cursor. Door Mode resolves its own target instead (see `cursorAt`), and
   // running the zone resolver for it would be work whose answer nothing reads.
   const drawing = modeStore.active === 'draw'
   const zone = drawing && point ? zoneAt(point) : null
@@ -1493,7 +1493,7 @@ function updateHoveredHandle(point: ScreenPoint | null, world: WorldPoint | null
 // The label the pointer is currently showing, and the second reason hover costs
 // a repaint at all. It stays free unless there is a label to show:
 //
-//   - Markup mode only, like the brush preview is Draw mode only. Reading a map
+//   - Markup Mode only, like the brush preview is Room Mode only. Reading a map
 //     from another mode is what the show-all toggle is for.
 //   - Nothing while that toggle is on: every label is drawn already, so hover
 //     could only re-draw the same picture.
@@ -1564,8 +1564,8 @@ function handleFor(zone: DrawZone | null): HoveredHandle | null {
 // The cursor for whatever is under the pointer, in whichever mode is active.
 //
 // Both modes answer it from the same record their own dispatch reads (Draw
-// mode's zone, Door mode's target), so neither can promise a gesture it does
-// not have. Door mode inherits that discipline from the sub-mode lock without
+// mode's zone, Door Mode's target), so neither can promise a gesture it does
+// not have. Door Mode inherits that discipline from the sub-mode lock without
 // a lock of its own.
 function cursorAt(
   point: ScreenPoint | null,
@@ -1620,7 +1620,7 @@ function cursorAt(
   return cursorFor(zone)
 }
 
-// What the press under the pointer would do, as a cursor. Only in Draw mode,
+// What the press under the pointer would do, as a cursor. Only in Room Mode,
 // because only there do these zones mean anything.
 //
 // An edge run gets a resize cursor along the wall's own axis, so a north or
@@ -1663,9 +1663,9 @@ function updateBrushPreview(world: WorldPoint | null) {
 }
 
 function previewAt(world: WorldPoint | null, size: number): BrushPreview | null {
-  // Draw mode only. The preview says "a press lands here", which is false in
+  // Room Mode only. The preview says "a press lands here", which is false in
   // every other mode, and gating it here rather than in the scene also stops
-  // the repaint it would cost on every cell crossed in Door mode.
+  // the repaint it would cost on every cell crossed in Door Mode.
   if (modeStore.active !== 'draw') return null
   if (!world || size <= 1) return null
   const offset = brushOffset(world, size)
@@ -1823,7 +1823,7 @@ watch(
 // tier 3 above tier 5 encodes.
 //
 // One handler for the whole tier, in every mode, because there is one
-// selection: clearing it is also what puts Draw mode's resize handles away.
+// selection: clearing it is also what puts Room Mode's resize handles away.
 //
 // `flush: 'sync'` because this is input precedence, not rendering: the handler
 // has to be on the stack the instant something is selected, or a press followed
@@ -1860,7 +1860,7 @@ watch(
 )
 
 // Switching modes changes which chrome belongs on the canvas (handles and the
-// brush preview are Draw mode's), and changes what the pointer is over without
+// brush preview are Room Mode's), and changes what the pointer is over without
 // the pointer moving, exactly like the sub-mode lock below.
 watch(
   () => modeStore.active,
@@ -1936,7 +1936,7 @@ watch([() => themeStore.mode, prefersDark], () => repaintForTheme())
 // canvas menu enable their Delete from the same one. A menu item offered by one
 // rule and a handler that refuses by another is what sharing the plan prevents.
 //
-// Draw mode then has two destructive granularities: erase removes cells, this
+// Room Mode then has two destructive granularities: erase removes cells, this
 // removes the whole room. It is also the *only* way to delete a whole line in
 // one step, since erase on a line's body does nothing by design and a line
 // could otherwise only be peeled away segment by segment.
@@ -2044,7 +2044,7 @@ useHotkeyAction('selectAll', () => {
 // mode can hold one: the same reason `Esc` clears it everywhere.
 useHotkeyAction('deselect', () => selection.clear())
 
-// The clipboard, all four verbs, and Select mode's alone. The other three spend
+// The clipboard, all four verbs, and Object Mode's alone. The other three spend
 // their gestures on authoring; a copy taken in Draw would act on the selection
 // that is only there to carry resize handles.
 //
@@ -2203,7 +2203,7 @@ onUnmounted(() => {
     <div class="ruler-corner" />
     <!-- The browser menu is suppressed on the viewport only, because
          right-drag is erase here. Everywhere else in the app the native menu
-         still works. The app's own menu replaces it in Select mode alone: the
+         still works. The app's own menu replaces it in Object Mode alone: the
          other three spend that button on erase. -->
     <CanvasContextMenu :disabled="modeStore.active !== 'select'">
       <div

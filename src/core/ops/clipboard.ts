@@ -221,7 +221,7 @@ export function copyLines(
   return payload
 }
 
-// A Select-mode copy, which can hold rooms and lines at once.
+// A Object Mode copy, which can hold rooms and lines at once.
 //
 // Both halves are normalised against the union's top-left rather than against
 // their own, which is the whole reason this exists: two payloads merged after
@@ -319,7 +319,7 @@ export function cutCells(
   return payload
 }
 
-// The Select-mode cut: `copySelection` and then remove what it took, in the one
+// The Object Mode cut: `copySelection` and then remove what it took, in the one
 // transaction the caller opened. Both halves together, so no caller can copy
 // and forget to delete, or delete in a second step that undoes separately.
 export function cutSelection(

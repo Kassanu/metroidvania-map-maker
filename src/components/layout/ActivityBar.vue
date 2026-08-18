@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useModeStore, MODES } from '@/stores/mode'
+import ModeIcon from './ModeIcon.vue'
 import { combosForAction } from '@/hotkeys/keymap'
 import { formatCombo } from '@/hotkeys/combo'
 import { t } from '@/i18n'
@@ -8,7 +9,7 @@ import type { MessageKey } from '@/i18n'
 
 const modeStore = useModeStore()
 
-// "Draw/Edit (1)": the key comes from the keymap, so a remap is reflected
+// "Room Mode (1)": the key comes from the keymap, so a remap is reflected
 // here without touching MODES.
 function modeTitle(labelKey: MessageKey, actionId: ActionId): string {
   const [combo] = combosForAction(actionId)
@@ -27,9 +28,10 @@ function modeTitle(labelKey: MessageKey, actionId: ActionId): string {
       :class="{ active: modeStore.active === mode.id }"
       :aria-pressed="modeStore.active === mode.id"
       :title="modeTitle(mode.labelKey, mode.actionId)"
+      :aria-label="t(mode.labelKey)"
       @click="modeStore.setMode(mode.id)"
     >
-      {{ t(mode.labelKey)[0] }}
+      <ModeIcon :mode="mode.id" />
     </button>
   </nav>
 </template>
@@ -53,8 +55,10 @@ function modeTitle(labelKey: MessageKey, actionId: ActionId): string {
   border-radius: 0.375rem;
   background: transparent;
   color: var(--fg);
-  font-weight: 600;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .mode-button:hover {
   background: var(--surface-active);

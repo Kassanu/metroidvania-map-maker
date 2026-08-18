@@ -20,7 +20,7 @@ export const PANEL_MIN_HEIGHT = 60
 
 // Pointer travel, in px, before a press counts as a drag rather than a
 // click. Shared by every chrome drag-to-reorder gesture so they all feel the
-// same, and by Door mode's press, which is the first canvas gesture where the
+// same, and by Door Mode's press, which is the first canvas gesture where the
 // distinction decides which gesture happens (click = teleport, drag = box).
 //
 // This is half of the click-vs-drag rule. The canvas adds the other half

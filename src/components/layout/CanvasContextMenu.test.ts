@@ -101,7 +101,7 @@ describe('the canvas context menu', () => {
   }
 
   describe('when it opens', () => {
-    it('opens on a right-click in Select mode', async () => {
+    it('opens on a right-click in Object Mode', async () => {
       const { viewport } = await mountCanvas()
 
       await rightClick(viewport)

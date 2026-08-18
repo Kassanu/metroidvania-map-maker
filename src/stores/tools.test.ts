@@ -93,7 +93,7 @@ describe('tools store', () => {
   })
 
   // One flag across modes, not one per mode: the toggle means the same thing
-  // in Draw, Door and Markup, so switching between them must not silently
+  // in Room, Door and Markup, so switching between them must not silently
   // disarm it.
   it('keeps the erase toggle across a mode switch', () => {
     const tools = useToolsStore()
@@ -107,9 +107,9 @@ describe('tools store', () => {
   })
 
   // What `Delete` means where the user is standing, which both menus and the
-  // key read: only the Cells granularity erases, and only inside Select mode.
+  // key read: only the Cells granularity erases, and only inside Object Mode.
   describe('erasesCells', () => {
-    it('is on in Select mode with the Cells granularity', () => {
+    it('is on in Object Mode with the Cells granularity', () => {
       const tools = useToolsStore()
       useModeStore().setMode('select')
       tools.setSelectSubMode('cells')
@@ -126,8 +126,8 @@ describe('tools store', () => {
     })
 
     // The granularity survives a mode switch, and the same selection reached
-    // from Draw names objects rather than erasing.
-    it('is off outside Select mode, whatever the granularity says', () => {
+    // from Room Mode names objects rather than erasing.
+    it('is off outside Object Mode, whatever the granularity says', () => {
       const tools = useToolsStore()
       useModeStore().setMode('select')
       tools.setSelectSubMode('cells')
