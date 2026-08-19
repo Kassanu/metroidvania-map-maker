@@ -66,6 +66,7 @@ function providerServing(data: unknown): StorageProvider {
     open: async () => opened,
     save: async (handle) => handle,
     saveAs: async () => ({ providerId: 'fake', name: 'next.mvm' }),
+    saveBytes: async () => 'written' as const,
   }
 }
 

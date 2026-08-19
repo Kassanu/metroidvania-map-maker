@@ -86,6 +86,32 @@ export interface StorageProvider {
 
   // Always prompts for a destination.
   saveAs(data: unknown, suggestedName: string): Promise<StorageHandle | null>
+
+  // Writes bytes the app produced to a destination the user picks.
+  //
+  // Distinct from `saveAs` in three ways, and each is why it exists rather
+  // than being folded in: the payload is bytes rather than a JSON value, the
+  // file is not a `.mvm`, and no handle comes back. Nothing reopens what this
+  // writes, so there is nothing to remember and nothing to write back to.
+  //
+  // The blob carries its own media type; the picker filter is built from that
+  // and the extension below.
+  saveBytes(contents: Blob, name: SuggestedName): Promise<WriteOutcome>
+}
+
+// Whether the bytes left the app. `cancelled` is a dismissed destination
+// picker, which is an ordinary answer rather than a failure; a provider that
+// cannot observe the outcome says `written`, which is the strongest claim
+// available to it.
+export type WriteOutcome = 'written' | 'cancelled'
+
+// Split rather than one filename, because sanitising truncates the stem: a
+// long stem in a single string would eat its own extension and the file would
+// arrive with no suffix at all.
+export interface SuggestedName {
+  stem: string
+  // Leading dot included, matching `FILE_EXTENSION`.
+  extension: string
 }
 
 // What the recovery offer has to say about a snapshot before anyone decides
@@ -151,11 +177,13 @@ export class PermissionDeniedError extends StorageError {
   }
 }
 
-// Appends the extension if the user did not type it, so a suggested filename
-// is always a `.mvm`.
-export function withExtension(name: string): string {
+// Appends the extension if the user did not type it. Defaults to `.mvm`,
+// which is what every caller but the exporter wants.
+export function withExtension(name: string, extension: string = FILE_EXTENSION): string {
   const trimmed = name.trim() || FALLBACK_NAME
-  return trimmed.toLowerCase().endsWith(FILE_EXTENSION) ? trimmed : `${trimmed}${FILE_EXTENSION}`
+  return trimmed.toLowerCase().endsWith(extension.toLowerCase())
+    ? trimmed
+    : `${trimmed}${extension}`
 }
 const FALLBACK_NAME = 'Untitled Project'
 
@@ -179,7 +207,9 @@ const MAX_STEM = 120
 // has no reason to suspect. Trailing dots and spaces go for the same reason:
 // Windows strips them silently, and the file no longer matches the name that
 // was asked for.
-export function safeFileName(projectName: string): string {
+// The stem is what gets truncated, never the extension, so a long project name
+// cannot produce a file the platform reads as having no suffix.
+export function safeFileName(projectName: string, extension: string = FILE_EXTENSION): string {
   let stem = projectName
     .replace(UNSAFE_IN_FILENAME, ' ')
     .replace(/\s+/g, ' ')
@@ -194,5 +224,5 @@ export function safeFileName(projectName: string): string {
   // Tested against the part before the first dot, since the reservation
   // applies to the device name however the file is suffixed.
   if (!stem || RESERVED_STEM.test(stem.split('.')[0])) stem = FALLBACK_NAME
-  return withExtension(stem)
+  return withExtension(stem, extension)
 }

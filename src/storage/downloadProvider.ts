@@ -19,6 +19,8 @@ import type {
   StorageEntry,
   StorageHandle,
   StorageProvider,
+  SuggestedName,
+  WriteOutcome,
 } from '@/core/storage/provider'
 
 export const DOWNLOAD_PROVIDER_ID = 'download'
@@ -68,7 +70,10 @@ async function readProject(file: File): Promise<unknown> {
 }
 
 function download(data: unknown, filename: string): void {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: MVM_MEDIA_TYPE })
+  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: MVM_MEDIA_TYPE }), filename)
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -147,6 +152,18 @@ export function createDownloadProvider(): StorageProvider {
         throw asStorageError(error, 'could not save the file')
       }
       return nameOnly(filename)
+    },
+
+    // Never `cancelled`, for the same reason `saveAs` never resolves null: the
+    // browser owns whatever prompt it shows and does not report what the user
+    // did with it. `written` here means the bytes left the app.
+    async saveBytes(contents: Blob, name: SuggestedName): Promise<WriteOutcome> {
+      try {
+        downloadBlob(contents, safeFileName(name.stem, name.extension))
+      } catch (error) {
+        throw asStorageError(error, 'could not save the file')
+      }
+      return 'written'
     },
   }
 }

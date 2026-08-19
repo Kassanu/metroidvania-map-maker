@@ -188,6 +188,30 @@ describe('save', () => {
     expect(document.querySelectorAll('a[download]')).toHaveLength(0)
   })
 
+  // An export, which is not a project: different bytes, a different extension,
+  // and no handle to hand back.
+  it('downloads arbitrary bytes under the extension it was given', async () => {
+    const contents = new Blob(['not json'], { type: 'application/zip' })
+    const outcome = await provider.saveBytes(contents, { stem: 'World', extension: '.zip' })
+
+    expect(outcome).toBe('written')
+    expect(downloads[0].name).toBe('World.zip')
+    expect(downloads[0].blob).toBe(contents)
+  })
+
+  it('sanitizes the stem of an export without touching its extension', async () => {
+    await provider.saveBytes(new Blob(['x']), { stem: 'maps/world: final?', extension: '.json' })
+    expect(downloads[0].name).toBe('maps world final.json')
+  })
+
+  // The browser owns whatever prompt it shows and does not report what the
+  // user did with it, so the strongest claim available is that the bytes left.
+  it('never reports an export as cancelled, because it cannot know', async () => {
+    await expect(
+      provider.saveBytes(new Blob(['x']), { stem: 'World', extension: '.json' }),
+    ).resolves.toBe('written')
+  })
+
   // Revoking straight away cancels the download in some engines, so the URL
   // has to outlive the click.
   it('holds the object URL open past the click', async () => {

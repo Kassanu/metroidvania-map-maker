@@ -265,6 +265,84 @@ describe('saveAs', () => {
   })
 })
 
+// Writing bytes that are not a project: an export. No handle comes back,
+// because nothing reopens one.
+describe('saveBytes', () => {
+  const contents = new Blob(['{"a":1}'], { type: 'application/json' })
+
+  it('prompts, writes the bytes, and says they landed', async () => {
+    const { handle, state } = fakeFile({ name: 'world.json' })
+    vi.mocked(showSaveFilePicker).mockResolvedValue(handle)
+
+    const outcome = await provider.saveBytes(contents, { stem: 'World', extension: '.json' })
+
+    expect(outcome).toBe('written')
+    expect(state.written[0]).toBe(contents)
+    expect(state.closed).toBe(1)
+  })
+
+  it('reports a dismissed dialog as cancelled rather than as a failure', async () => {
+    vi.mocked(showSaveFilePicker).mockRejectedValue(new DOMException('no', 'AbortError'))
+    await expect(provider.saveBytes(contents, { stem: 'World', extension: '.json' })).resolves.toBe(
+      'cancelled',
+    )
+  })
+
+  it('keeps the extension it was given, and sanitizes only the stem', async () => {
+    const { handle } = fakeFile()
+    vi.mocked(showSaveFilePicker).mockResolvedValue(handle)
+
+    await provider.saveBytes(contents, { stem: 'maps/world', extension: '.zip' })
+    const options = vi.mocked(showSaveFilePicker).mock.calls.at(-1)?.[0]
+    expect(options?.suggestedName).toBe('maps world.zip')
+  })
+
+  it('leaves a long name its extension, which a single string would eat', async () => {
+    const { handle } = fakeFile()
+    vi.mocked(showSaveFilePicker).mockResolvedValue(handle)
+
+    await provider.saveBytes(contents, { stem: 'n'.repeat(5_000), extension: '.zip' })
+    const options = vi.mocked(showSaveFilePicker).mock.calls.at(-1)?.[0]
+    expect(options?.suggestedName?.endsWith('.zip')).toBe(true)
+  })
+
+  it('filters the picker by the media type of the bytes it is writing', async () => {
+    const { handle } = fakeFile()
+    vi.mocked(showSaveFilePicker).mockResolvedValue(handle)
+
+    await provider.saveBytes(new Blob([''], { type: 'application/zip' }), {
+      stem: 'World',
+      extension: '.zip',
+    })
+    const options = vi.mocked(showSaveFilePicker).mock.calls.at(-1)?.[0]
+    expect(options?.types?.[0].accept).toEqual({ 'application/zip': ['.zip'] })
+  })
+
+  it('asks the picker to remember where exports go, not where projects do', async () => {
+    const { handle } = fakeFile()
+    vi.mocked(showSaveFilePicker).mockResolvedValue(handle)
+
+    await provider.saveAs({}, 'World')
+    const project = vi.mocked(showSaveFilePicker).mock.calls.at(-1)?.[0]
+    await provider.saveBytes(contents, { stem: 'World', extension: '.json' })
+    const exported = vi.mocked(showSaveFilePicker).mock.calls.at(-1)?.[0]
+
+    expect(exported?.id).not.toBe(project?.id)
+  })
+
+  it('turns a failed write into a StorageError, discarding the swap', async () => {
+    const { handle, state } = fakeFile()
+    state.failWrite = true
+    vi.mocked(showSaveFilePicker).mockResolvedValue(handle)
+
+    await expect(
+      provider.saveBytes(contents, { stem: 'World', extension: '.json' }),
+    ).rejects.toBeInstanceOf(StorageError)
+    expect(state.aborted).toBe(1)
+    expect(state.closed).toBe(0)
+  })
+})
+
 // Whether two handles name the same file. Names cannot answer it and neither
 // can object identity across a reload, so the API's own call is the whole
 // implementation and the only thing worth checking here is that it is asked.

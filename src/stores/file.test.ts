@@ -29,6 +29,7 @@ function fakeProvider(over: Partial<StorageProvider> = {}): StorageProvider {
     open: async () => null,
     save: async (handle) => handle,
     saveAs: async () => null,
+    saveBytes: async () => 'written' as const,
     ...over,
   }
 }

@@ -23,6 +23,8 @@ import type {
   StorageEntry,
   StorageHandle,
   StorageProvider,
+  SuggestedName,
+  WriteOutcome,
 } from '@/core/storage/provider'
 import { createRecentFiles } from './recentFiles'
 import type { RecentFiles } from './recentFiles'
@@ -42,6 +44,11 @@ const PICKER_TYPES = [
 // Keeps the picker returning to the folder the user last used, rather than
 // starting from the default every time.
 const PICKER_ID = 'mvm-project'
+
+// A second id, so the browser remembers where exports go independently of
+// where projects live. Those are usually different folders, and one shared id
+// would make each kind of save start in the other's directory.
+const EXPORT_PICKER_ID = 'mvm-export'
 
 // The handle the editor passes around. It carries the real
 // `FileSystemFileHandle`, which nothing above this file may read.
@@ -128,16 +135,20 @@ async function readProject(file: FileSystemFileHandle): Promise<OpenedProject> {
 }
 
 async function writeProject(file: FileSystemFileHandle, data: unknown): Promise<void> {
+  await writeTo(file, JSON.stringify(data, null, 2))
+}
+
+async function writeTo(file: FileSystemFileHandle, payload: string | Blob): Promise<void> {
   // `createWritable` writes to a swap file and commits it on `close()`, so a
   // crash mid-write leaves the previous contents intact. Relied on rather than
   // reimplemented, and the reason nothing here writes a backup copy first.
   const writable = await file.createWritable()
   try {
-    await writable.write(JSON.stringify(data, null, 2))
+    await writable.write(payload)
   } catch (error) {
     // Leaves the original file alone: the swap is discarded rather than
     // committed. Without this a failed write closes the stream and commits a
-    // truncated file over the user's project.
+    // truncated file over whatever was there.
     await writable.abort().catch(() => {})
     throw error
   }
@@ -245,6 +256,29 @@ export function createFsaProvider(
         throw asStorageError(error, 'could not write the file')
       }
       return wrap(file)
+    },
+
+    async saveBytes(contents: Blob, name: SuggestedName): Promise<WriteOutcome> {
+      let file: FileSystemFileHandle
+      try {
+        file = await showSaveFilePicker({
+          // Built from the blob rather than from a table, so the filter always
+          // describes the bytes actually being written.
+          types: [{ description: name.extension, accept: { [contents.type]: [name.extension] } }],
+          suggestedName: safeFileName(name.stem, name.extension),
+          id: EXPORT_PICKER_ID,
+        })
+      } catch (error) {
+        if (isCancellation(error)) return 'cancelled'
+        throw asStorageError(error, 'could not open the save dialog')
+      }
+
+      try {
+        await writeTo(file, contents)
+      } catch (error) {
+        throw asStorageError(error, 'could not write the file')
+      }
+      return 'written'
     },
   }
 }

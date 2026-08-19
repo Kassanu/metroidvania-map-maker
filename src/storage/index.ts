@@ -21,6 +21,8 @@ export type {
   StorageEntry,
   StorageHandle,
   StorageProvider,
+  SuggestedName,
+  WriteOutcome,
 } from '@/core/storage/provider'
 export { getRecoveryStore, setRecoveryStore } from './recoveryStore'
 export {
