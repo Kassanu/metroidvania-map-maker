@@ -1,0 +1,409 @@
+{
+  "formatVersion": 1,
+  "generator": {
+    "name": "Metroidvania Map Maker",
+    "version": "0.0.0"
+  },
+  "project": {
+    "name": "Fixture Project"
+  },
+  "tabs": [
+    {
+      "id": "map_01",
+      "name": "Surface",
+      "notes": "",
+      "rooms": [
+        {
+          "id": "room_01",
+          "name": "Landing Site",
+          "notes": "",
+          "area": {
+            "id": "area_01",
+            "name": "Crateria",
+            "cellColor": "#3a5f7d",
+            "wallColor": "#7fb2d9",
+            "notes": ""
+          },
+          "cells": [
+            [0, 0],
+            [1, 0],
+            [2, 0],
+            [0, 1],
+            [1, 1],
+            [2, 1],
+            [0, 2],
+            [1, 2],
+            [2, 2]
+          ],
+          "bounds": {
+            "min": [0, 0],
+            "max": [2, 2],
+            "size": [3, 3]
+          },
+          "walls": [
+            {
+              "cell": [0, 0],
+              "side": "N",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [0, 0],
+              "side": "E",
+              "boundary": "inner",
+              "style": "dotted"
+            },
+            {
+              "cell": [0, 0],
+              "side": "W",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [1, 0],
+              "side": "N",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [1, 0],
+              "side": "W",
+              "boundary": "inner",
+              "style": "dotted"
+            },
+            {
+              "cell": [2, 0],
+              "side": "N",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [0, 1],
+              "side": "W",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [0, 2],
+              "side": "S",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [0, 2],
+              "side": "W",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [1, 2],
+              "side": "S",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [2, 2],
+              "side": "E",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [2, 2],
+              "side": "S",
+              "boundary": "outer",
+              "style": "solid"
+            }
+          ],
+          "transitions": [
+            {
+              "id": "tr_01",
+              "kind": "edge",
+              "direction": "both",
+              "notes": "",
+              "from": {
+                "tab": "map_01",
+                "room": "room_01",
+                "cells": [
+                  [2, 0],
+                  [2, 1]
+                ],
+                "side": "E",
+                "lock": {
+                  "id": "lock_01",
+                  "name": "Missile Door",
+                  "color": "#e23b3b",
+                  "glyph": "M"
+                }
+              },
+              "to": {
+                "tab": "map_01",
+                "room": "room_02",
+                "cells": [
+                  [3, 0],
+                  [3, 1]
+                ],
+                "side": "W",
+                "lock": {
+                  "id": "open",
+                  "name": "Open",
+                  "color": null,
+                  "glyph": null
+                }
+              }
+            },
+            {
+              "id": "tr_02",
+              "kind": "teleport",
+              "direction": "both",
+              "notes": "",
+              "from": {
+                "tab": "map_01",
+                "room": "room_01",
+                "cells": [[0, 2]],
+                "lock": {
+                  "id": "open",
+                  "name": "Open",
+                  "color": null,
+                  "glyph": null
+                }
+              },
+              "to": {
+                "tab": "map_02",
+                "room": "room_03",
+                "cells": [[1, 1]],
+                "lock": {
+                  "id": "open",
+                  "name": "Open",
+                  "color": null,
+                  "glyph": null
+                }
+              }
+            }
+          ],
+          "icons": [
+            {
+              "id": "ic_01",
+              "type": "save",
+              "cell": [1, 1],
+              "label": "",
+              "plateColor": "#e0e0e0",
+              "glyphColor": "#202020",
+              "notes": ""
+            }
+          ]
+        },
+        {
+          "id": "room_02",
+          "name": "Corridor",
+          "notes": "",
+          "area": {
+            "id": "world",
+            "name": "World",
+            "cellColor": null,
+            "wallColor": null,
+            "notes": ""
+          },
+          "cells": [
+            [3, 0],
+            [4, 0],
+            [3, 1],
+            [4, 1]
+          ],
+          "bounds": {
+            "min": [3, 0],
+            "max": [4, 1],
+            "size": [2, 2]
+          },
+          "walls": [
+            {
+              "cell": [3, 0],
+              "side": "N",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [4, 0],
+              "side": "N",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [4, 0],
+              "side": "E",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [3, 1],
+              "side": "S",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [4, 1],
+              "side": "E",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [4, 1],
+              "side": "S",
+              "boundary": "outer",
+              "style": "solid"
+            }
+          ],
+          "transitions": [
+            {
+              "id": "tr_01",
+              "kind": "edge",
+              "direction": "both",
+              "notes": "",
+              "from": {
+                "tab": "map_01",
+                "room": "room_02",
+                "cells": [
+                  [3, 0],
+                  [3, 1]
+                ],
+                "side": "W",
+                "lock": {
+                  "id": "open",
+                  "name": "Open",
+                  "color": null,
+                  "glyph": null
+                }
+              },
+              "to": {
+                "tab": "map_01",
+                "room": "room_01",
+                "cells": [
+                  [2, 0],
+                  [2, 1]
+                ],
+                "side": "E",
+                "lock": {
+                  "id": "lock_01",
+                  "name": "Missile Door",
+                  "color": "#e23b3b",
+                  "glyph": "M"
+                }
+              }
+            }
+          ],
+          "icons": []
+        }
+      ]
+    },
+    {
+      "id": "map_02",
+      "name": "Caves",
+      "notes": "",
+      "rooms": [
+        {
+          "id": "room_03",
+          "name": "Vault",
+          "notes": "",
+          "area": {
+            "id": "area_01",
+            "name": "Crateria",
+            "cellColor": "#3a5f7d",
+            "wallColor": "#7fb2d9",
+            "notes": ""
+          },
+          "cells": [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [1, 1]
+          ],
+          "bounds": {
+            "min": [0, 0],
+            "max": [1, 1],
+            "size": [2, 2]
+          },
+          "walls": [
+            {
+              "cell": [0, 0],
+              "side": "N",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [0, 0],
+              "side": "W",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [1, 0],
+              "side": "N",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [1, 0],
+              "side": "E",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [0, 1],
+              "side": "S",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [0, 1],
+              "side": "W",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [1, 1],
+              "side": "E",
+              "boundary": "outer",
+              "style": "solid"
+            },
+            {
+              "cell": [1, 1],
+              "side": "S",
+              "boundary": "outer",
+              "style": "solid"
+            }
+          ],
+          "transitions": [
+            {
+              "id": "tr_02",
+              "kind": "teleport",
+              "direction": "both",
+              "notes": "",
+              "from": {
+                "tab": "map_02",
+                "room": "room_03",
+                "cells": [[1, 1]],
+                "lock": {
+                  "id": "open",
+                  "name": "Open",
+                  "color": null,
+                  "glyph": null
+                }
+              },
+              "to": {
+                "tab": "map_01",
+                "room": "room_01",
+                "cells": [[0, 2]],
+                "lock": {
+                  "id": "open",
+                  "name": "Open",
+                  "color": null,
+                  "glyph": null
+                }
+              }
+            }
+          ],
+          "icons": []
+        }
+      ]
+    }
+  ]
+}

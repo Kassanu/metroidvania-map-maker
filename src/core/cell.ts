@@ -70,6 +70,17 @@ export function parseCell(key: CellKey): Cell {
 // The four orthogonal neighbours. Room connectivity is orthogonal-only (a
 // room is "a set of orthogonally connected cells"), so this is what the split
 // rule, wall derivation and paint-growth all walk.
+// Row-major reading order: top to bottom, left to right within a row.
+//
+// The one order everything that writes cells out sorts by, so a saved file and
+// an export list the same room's cells identically, and a set that reordered
+// under an edit still produces the same bytes.
+export function compareCells(a: CellKey, b: CellKey): number {
+  const first = parseCell(a)
+  const second = parseCell(b)
+  return first.y - second.y || first.x - second.x
+}
+
 export function neighbors(key: CellKey): CellKey[] {
   const { x, y } = parseCell(key)
   return [cellKey(x, y - 1), cellKey(x + 1, y), cellKey(x, y + 1), cellKey(x - 1, y)]

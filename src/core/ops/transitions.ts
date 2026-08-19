@@ -335,8 +335,12 @@ export function cascadeTransitions(
 // Splits segments the way a fresh box-drag would: one group per unordered room
 // pair, then per contiguous run within it. The same two rules `classifyBox`
 // applies, kept separate because that one works from a box and this one from
-// an existing door. The two must agree.
-function groupByPairAndRun(map: MapModel, segments: DoorSegment[]): DoorSegment[][] {
+// an existing door. The two must agree, and so must the loader, which reaches
+// the same state from a hand-edited file rather than from an edit.
+//
+// Every segment must already have both cells owned, which `isSegmentValid`
+// is what establishes; the lookups below assume it.
+export function groupByPairAndRun(map: MapModel, segments: DoorSegment[]): DoorSegment[][] {
   const byPair = new Map<string, DoorSegment[]>()
   for (const segment of segments) {
     const { lo, hi } = edgeCells(segment.edge)

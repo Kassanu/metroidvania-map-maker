@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { edgeOfCell } from '../cell'
+import { edgeCells, edgeOfCell } from '../cell'
 import { getFarEnd } from '../farEnds'
 import { OPEN_LOCK_ID, WORLD_AREA_ID } from '../ids'
 import { createTeleport, createFromBox } from '../ops/doors'
@@ -13,6 +13,7 @@ import type { LoadEvent, LoadEventKind, LoadReport } from './index'
 import { UnsupportedVersionError } from './migrate'
 import { FILE_FORMAT, FILE_VERSION } from './schema'
 import type { JsonFile } from './schema'
+import type { EdgeTransition } from '../types'
 
 // Narrows to one kind of repair, so a test asserting about dropped icons is
 // not disturbed by an unrelated event appearing alongside it.
@@ -306,6 +307,56 @@ describe('repair on load', () => {
     expect(eventsOf(report, 'inner-wall-dropped')).toEqual([
       expect.objectContaining({ reason: 'not-interior' }),
     ])
+  })
+
+  it('splits a door whose segments join two different room pairs', () => {
+    // A hand-written file can state a door the app can never draw and an edit
+    // can never leave behind: two contiguous segments where the far side
+    // changes room halfway. Its `aSide` then means two different things, so
+    // the loader must split it exactly as an edit would.
+    //
+    //   A B     the seam runs down x=1, A on the west of both segments,
+    //   A D     B and D on the east.
+    const file = fileWith((f) => {
+      f.project.maps[0].rooms = [
+        { id: 'room_a', areaId: WORLD_AREA_ID, cells: [[0, 0] as [number, number], [0, 1]] },
+        { id: 'room_b', areaId: WORLD_AREA_ID, cells: [[1, 0] as [number, number]] },
+        { id: 'room_d', areaId: WORLD_AREA_ID, cells: [[1, 1] as [number, number]] },
+      ]
+      f.project.maps[0].transitions = [
+        {
+          id: 'tr_pair',
+          type: 'edge',
+          locks: { a: OPEN_LOCK_ID, b: OPEN_LOCK_ID },
+          geometry: {
+            segments: [
+              { cell: [1, 0], side: 'W', aSide: 'lo' },
+              { cell: [1, 1], side: 'W', aSide: 'lo' },
+            ],
+          },
+        },
+      ]
+    })
+
+    const { project, report } = fromJSON(file)
+    expect(eventsOf(report, 'door-trimmed')).toEqual([
+      expect.objectContaining({ kind: 'door-trimmed', droppedSegments: 0, splitInto: 2 }),
+    ])
+
+    const map = project.mapsById.get(project.maps[0])!
+    expect(map.transitions.size).toBe(2)
+    // Each piece joins exactly one pair of rooms.
+    for (const transition of map.transitions.values()) {
+      expect(transition.kind).toBe('edge')
+      const pairs = new Set(
+        (transition as EdgeTransition).segments.map((segment) => {
+          const { lo, hi } = edgeCells(segment.edge)
+          return `${map.cellOwner.get(lo)}|${map.cellOwner.get(hi)}`
+        }),
+      )
+      expect(pairs.size).toBe(1)
+    }
+    expect(checkInvariants(project)).toEqual([])
   })
 
   it('drops an icon outside every room, and a second icon on one cell', () => {

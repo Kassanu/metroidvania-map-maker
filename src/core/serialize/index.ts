@@ -11,6 +11,7 @@
 
 import {
   cellKey,
+  compareCells,
   edgeFromSegment,
   edgeOfCell,
   parseCell,
@@ -30,7 +31,7 @@ import {
 import { getFarEnd, setFarEnd } from '../farEnds'
 import { OPEN_LOCK_ID, WORLD_AREA_ID, uniqueId } from '../ids'
 import type { AreaId, IconId, LineId, LockTypeId, MapId, RoomId, TransitionId } from '../ids'
-import { contiguousRuns, isSegmentValid, isTransitionValid } from '../ops/transitions'
+import { groupByPairAndRun, isSegmentValid, isTransitionValid } from '../ops/transitions'
 import { farEndOf, transitionAnchors } from '../primitives'
 import type {
   Direction,
@@ -118,14 +119,9 @@ export function toJSON(project: ProjectModel): JsonFile {
   }
 }
 
-// Row-major: top to bottom, left to right within a row. Reading order and
-// the order a hand-written file would naturally be in.
+// Row-major, the order a hand-written file would naturally be in.
 function sortedCells(cells: ReadonlySet<CellKey>): CellKey[] {
-  return [...cells].sort((a, b) => {
-    const first = parseCell(a)
-    const second = parseCell(b)
-    return first.y - second.y || first.x - second.x
-  })
+  return [...cells].sort(compareCells)
 }
 
 function serializeMap(map: MapModel): JsonMap {
@@ -868,10 +864,15 @@ function ownsAnEnd(map: MapModel, transition: TeleportTransition): boolean {
   return transition.a.mapId === map.id || transition.b.mapId === map.id
 }
 
-// Applies the runtime's two edge-door rules to a loaded transition: every
-// segment must separate two different rooms, and all segments form one
-// contiguous run. Mirrors trimEdgeTransition: the first run keeps the original
-// id, rest are new, so splits never collide with ids later in the file.
+// Applies the runtime's three edge-door rules to a loaded transition: every
+// segment must separate two different rooms, all segments join the same room
+// pair, and they form one contiguous run. Mirrors trimEdgeTransition: the
+// first run keeps the original id, rest are new, so splits never collide with
+// ids later in the file.
+//
+// The room-pair rule matters as much here as it does after an edit. A door
+// whose segments straddle two different neighbours has an `aSide` that cannot
+// be answered, and a hand-edited file can state one directly.
 function trimForLoad(
   map: MapModel,
   transition: Transition,
@@ -881,7 +882,7 @@ function trimForLoad(
   if (transition.kind !== 'edge') return [transition]
 
   const surviving = transition.segments.filter((segment) => isSegmentValid(map, segment))
-  const runs = contiguousRuns(surviving)
+  const runs = groupByPairAndRun(map, surviving)
   if (runs.length === 0) return []
 
   const dropped = transition.segments.length - surviving.length
