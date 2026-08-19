@@ -658,4 +658,39 @@ describe('MenuBar', () => {
       expect(asked.map((handle) => handle?.name)).toEqual(['world.mvm'])
     })
   })
+
+  // A submenu from the start, with one item today: image export joins it, and
+  // the JSON exporter is reached from nowhere else.
+  describe('Export', () => {
+    async function openFileMenu() {
+      const trigger = wrapper.findAll('.menu-item').find((el) => el.text() === 'File')!
+      await trigger.trigger('click')
+      await nextTick()
+    }
+
+    it('offers JSON under an Export submenu', async () => {
+      await openFileMenu()
+      await openSubmenu('Export')
+
+      const labels = Array.from(document.querySelectorAll('.popover-item')).map((el) =>
+        el.textContent?.trim(),
+      )
+      expect(labels).toContain('JSON\u2026')
+    })
+
+    it('opens the export dialog', async () => {
+      const ui = useUiStore()
+      expect(ui.exportOpen).toBe(false)
+
+      await openFileMenu()
+      await openSubmenu('Export')
+      const item = Array.from(document.querySelectorAll('.popover-item')).find(
+        (el) => el.textContent?.trim() === 'JSON\u2026',
+      ) as HTMLElement
+      item.click()
+      await nextTick()
+
+      expect(ui.exportOpen).toBe(true)
+    })
+  })
 })

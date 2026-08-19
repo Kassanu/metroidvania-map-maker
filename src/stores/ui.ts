@@ -16,6 +16,10 @@ export const useUiStore = defineStore('ui', {
     // the persist entry below derives this from on load.
     welcomeOpen: true,
     aboutOpen: false,
+    // Session-only, and deliberately not persisted with the scope it was last
+    // opened with: a remembered subset would quietly omit a tab the user had
+    // forgotten was unticked.
+    exportOpen: false,
   }),
   actions: {
     toggleLeftSidebar() {
@@ -53,6 +57,9 @@ export const useUiStore = defineStore('ui', {
     },
     openAbout() {
       this.aboutOpen = true
+    },
+    openExport() {
+      this.exportOpen = true
     },
   },
   persist: [

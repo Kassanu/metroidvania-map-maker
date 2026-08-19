@@ -251,6 +251,27 @@ const displayTitle = computed(() =>
             >
               {{ t(item.key) }}
             </DropdownMenuItem>
+            <!-- A submenu from the start, because image export joins it. -->
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger class="popover-item popover-subtrigger">
+                {{ t('menu.file.export') }}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent
+                  class="popover-surface"
+                  style="--popover-min-width: 12rem"
+                  :side-offset="4"
+                >
+                  <DropdownMenuItem
+                    class="popover-item"
+                    :disabled="file.busy"
+                    @select="ui.openExport()"
+                  >
+                    {{ t('menu.file.export.json') }}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
             <!-- Absent rather than empty. A provider that cannot reopen a file
                  has nothing to list, and a submenu that opens onto nothing
                  reads as a bug. -->

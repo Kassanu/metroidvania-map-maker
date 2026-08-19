@@ -117,6 +117,10 @@ export const en = {
   // Absent rather than empty where the provider cannot reopen a file, which is
   // every engine without File System Access.
   'menu.file.recent': 'Recent',
+  // A submenu from the start: image export joins it, and one item today is
+  // cheaper than renaming a top-level item into a submenu later.
+  'menu.file.export': 'Export',
+  'menu.file.export.json': 'JSON\u2026',
 
   // The file the project came from, beside the project name. Absent until a
   // project has been saved or opened, since there is nothing true to say.
@@ -462,6 +466,27 @@ export const en = {
   // because the pending state is the one thing on the canvas with no pointer
   // holding it open. There is no "let go" to get out of it.
   'canvas.pickTeleportDestination': 'Pick a destination - Esc to cancel',
+
+  'modal.export.title': 'Export JSON',
+  'modal.export.description':
+    'Choose which tabs, areas and rooms to export, and whether they arrive as one file or one per room.',
+  'modal.export.scope': 'What to export',
+  'modal.export.packaging': 'How to package it',
+  'modal.export.combined': 'One file',
+  'modal.export.combinedHint': 'Every room in a single JSON file.',
+  'modal.export.perRoom': 'One file per room',
+  'modal.export.perRoomHint': 'A zip holding one JSON file for each room.',
+  // Said as a count rather than left to the checkboxes, which on a large
+  // project take a moment to read. Label-and-count, like the load report, so
+  // there is no plural rule to get right.
+  'modal.export.count': 'Tabs: {tabs} \u00b7 Rooms: {rooms}',
+  'modal.export.nothing': 'Nothing selected',
+  // A tab with no rooms is shown so the list still matches the tab bar, and
+  // says why it cannot be picked.
+  'modal.export.emptyTab': 'No rooms',
+  'modal.export.confirm': 'Export',
+  'modal.export.working': 'Exporting\u2026',
+  'modal.export.failed': 'The export could not be written: {message}',
 
   'modal.about.title': 'Metroidvania Map Maker',
   'modal.about.description': 'App version and links.',
