@@ -1,17 +1,19 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import { createTestPinia } from '@/test-setup'
 import { useTabsStore } from './tabs'
 import { mapScope, useModelStore } from './model'
 import { MAX_ZOOM, MIN_ZOOM } from '@/canvas/camera'
-import { DEFAULT_PAN } from '@/canvas/viewport'
 import { pageBounds } from '@/canvas/page'
 import { paintCells } from '@/core/ops/rooms'
 import { renameMap } from '@/core/ops/maps'
 import { checkInvariants } from '@/core/testUtils'
 import { createProject } from '@/core/factory'
+import { fromJSON, toJSON } from '@/core/serialize'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { MapId } from '@/core/ids'
+import type { CellKey } from '@/core/cell'
 
 describe('useTabsStore', () => {
   beforeEach(() => {
@@ -76,7 +78,9 @@ describe('useTabsStore', () => {
   describe('the active tab', () => {
     it('carries the camera and the derived page bounds', () => {
       const store = useTabsStore()
-      expect(store.activeTab!.pan).toEqual(DEFAULT_PAN)
+      // No canvas has been measured, so nothing has been centred: the tab
+      // reads as unseen, which puts world (0,0) at the canvas origin.
+      expect(store.activeTab!.pan).toEqual({ x: 0, y: 0 })
       expect(store.activeTab!.zoom).toBe(1)
       // An empty map gets the minimum sheet.
       expect(store.activeTab!.bounds).toEqual(pageBounds(null))
@@ -104,7 +108,7 @@ describe('useTabsStore', () => {
       store.addTab()
       const [first, second] = store.tabs
       store.setPan(second.id, { x: 3, y: -1 })
-      expect(store.cameraOf(first.id).pan).toEqual(DEFAULT_PAN)
+      expect(store.cameraOf(first.id).pan).toEqual({ x: 0, y: 0 })
       expect(store.cameraOf(second.id).pan).toEqual({ x: 3, y: -1 })
     })
 
@@ -438,5 +442,165 @@ describe('useTabsStore', () => {
       model.undo()
       expect(store.tabs.map((tab) => tab.name)).toEqual(before)
     })
+  })
+})
+
+// One describe per row of the camera's default table. Every row is about the
+// same question: has this tab been looked at, and if not, where does it open?
+describe('the default camera', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  const VIEW = { width: 800, height: 600 }
+
+  // Where centring puts the pan for a given world middle, from the same
+  // convention `centerOn` uses: pan is the world point at the top-left corner.
+  function panFor(middleX: number, middleY: number) {
+    const scale = useModelStore().tileSize
+    return { x: middleX - VIEW.width / 2 / scale, y: middleY - VIEW.height / 2 / scale }
+  }
+
+  function paint(mapId: MapId, cells: string[]) {
+    const model = useModelStore()
+    model.run('Paint', mapScope(mapId), (tx) =>
+      paintCells(tx, model.project, model.project.mapsById.get(mapId)!, cells as CellKey[], {
+        areaId: WORLD_AREA_ID,
+      }),
+    )
+  }
+
+  it('centres a blank map on world (0,0)', () => {
+    const store = useTabsStore()
+    store.setViewport(VIEW)
+    store.centerIfUnseen(store.activeTabId)
+
+    // Home is 21x21 about the origin, so its middle is the middle of cell 0.
+    expect(store.cameraOf(store.activeTabId).pan).toEqual(panFor(0.5, 0.5))
+    expect(store.cameraOf(store.activeTabId).zoom).toBe(1)
+  })
+
+  it('centres a map with content on the content, not on the page', () => {
+    const store = useTabsStore()
+    // Far enough from home that the page spans the gap and the two answers
+    // differ: centring the page here would look at the empty middle.
+    paint(store.activeTabId, ['100,100', '101,100', '102,100'])
+    store.setViewport(VIEW)
+    store.centerIfUnseen(store.activeTabId)
+
+    // Padded content is 98..104 by 98..102, so its middle is (101.5, 100.5).
+    expect(store.cameraOf(store.activeTabId).pan).toEqual(panFor(101.5, 100.5))
+  })
+
+  it('shows the content it centred on, which is what a far map needs', () => {
+    const store = useTabsStore()
+    paint(store.activeTabId, ['100,100', '101,100', '102,100'])
+    store.setViewport(VIEW)
+    store.centerIfUnseen(store.activeTabId)
+
+    const { pan, zoom } = store.cameraOf(store.activeTabId)
+    const scale = useModelStore().tileSize * zoom
+    const right = pan.x + VIEW.width / scale
+    expect(pan.x).toBeLessThan(100)
+    expect(right).toBeGreaterThan(103)
+  })
+
+  it('does nothing until the canvas has a size', () => {
+    const store = useTabsStore()
+    store.centerIfUnseen(store.activeTabId)
+    expect(store.hasBeenSeen(store.activeTabId)).toBe(false)
+
+    store.setViewport({ width: 0, height: 0 })
+    store.centerIfUnseen(store.activeTabId)
+    expect(store.hasBeenSeen(store.activeTabId)).toBe(false)
+  })
+
+  it('centres a newly added tab on its own blank page', () => {
+    const store = useTabsStore()
+    store.setViewport(VIEW)
+    store.addTab()
+    store.centerIfUnseen(store.activeTabId)
+
+    expect(store.cameraOf(store.activeTabId).pan).toEqual(panFor(0.5, 0.5))
+  })
+
+  it('leaves a duplicated tab with its source camera rather than centring it', () => {
+    const store = useTabsStore()
+    store.setViewport(VIEW)
+    const source = store.activeTabId
+    store.setPan(source, { x: 40, y: 40 })
+
+    store.duplicateTab(source)
+    const copy = store.activeTabId
+    store.centerIfUnseen(copy)
+
+    expect(copy).not.toBe(source)
+    expect(store.cameraOf(copy).pan).toEqual({ x: 40, y: 40 })
+  })
+
+  it('leaves a tab that has been looked at alone when it is switched back to', () => {
+    const store = useTabsStore()
+    store.setViewport(VIEW)
+    const first = store.activeTabId
+    store.setPan(first, { x: 7, y: -3 })
+    store.addTab()
+
+    store.activate(first)
+    store.centerIfUnseen(first)
+
+    expect(store.cameraOf(first).pan).toEqual({ x: 7, y: -3 })
+  })
+
+  it('keeps a camera through the undo that brings its tab back', () => {
+    const store = useTabsStore()
+    const model = useModelStore()
+    store.setViewport(VIEW)
+    store.addTab()
+    const added = store.activeTabId
+    store.setPan(added, { x: 12, y: 9 })
+
+    store.deleteTab(added)
+    model.undo()
+    store.centerIfUnseen(added)
+
+    expect(store.cameraOf(added).pan).toEqual({ x: 12, y: 9 })
+  })
+
+  it('does not recentre when the canvas is measured again', () => {
+    const store = useTabsStore()
+    store.setViewport(VIEW)
+    store.centerIfUnseen(store.activeTabId)
+    const opened = store.cameraOf(store.activeTabId).pan
+
+    // A window resize, or a sidebar being collapsed: a new measurement, and
+    // the camera belongs to the user by now whatever it says.
+    store.setViewport({ width: 1200, height: 900 })
+    store.centerIfUnseen(store.activeTabId)
+
+    expect(store.cameraOf(store.activeTabId).pan).toEqual(opened)
+  })
+
+  // Reopening the same file, which is the case that needs this: a saved project
+  // carries its own map ids, so the incoming tabs have the ids the outgoing
+  // cameras are filed under. A swap to a freshly created project would pass
+  // whether or not anything was forgotten, because its ids are new.
+  it('forgets every camera when a project is opened over this one', async () => {
+    const store = useTabsStore()
+    const model = useModelStore()
+    store.setViewport(VIEW)
+    const mapId = store.activeTabId
+    paint(mapId, ['100,100', '101,100'])
+    store.setPan(mapId, { x: 99, y: 99 })
+
+    // The round trip is what a reopen is: same ids, different objects.
+    const reopened = fromJSON(toJSON(model.project))
+    model.replaceProject(reopened.project)
+    await nextTick()
+
+    expect(store.activeTabId).toBe(mapId)
+    expect(store.hasBeenSeen(mapId)).toBe(false)
+    store.centerIfUnseen(mapId)
+    // Two cells at 100..101 by 100, padded to 98..103 by 98..102.
+    expect(store.cameraOf(mapId).pan).toEqual(panFor(101, 100.5))
   })
 })

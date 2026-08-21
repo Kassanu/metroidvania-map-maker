@@ -103,7 +103,17 @@ function context2d(canvas: HTMLCanvasElement | null): CanvasRenderingContext2D |
   return ctx
 }
 
-export function useCanvasRenderer(targets: CanvasTargets, scene: () => SceneInput) {
+// Called with the container's CSS-pixel size each time it is measured, before
+// the draw that follows. The hook exists so the camera can be centred on a
+// canvas that has just gained a size without this composable reading a store
+// to do it: it reports the measurement and the caller decides what it means.
+export type OnMeasured = (size: { width: number; height: number }) => void
+
+export function useCanvasRenderer(
+  targets: CanvasTargets,
+  scene: () => SceneInput,
+  onMeasured?: OnMeasured,
+) {
   // Resolved once per theme change rather than per draw.
   const palette = ref<CanvasPalette | null>(null)
 
@@ -192,6 +202,9 @@ export function useCanvasRenderer(targets: CanvasTargets, scene: () => SceneInpu
     sizeToDpr(main, width, height)
     if (targets.topRuler.value) sizeToDpr(targets.topRuler.value, width, RULER_THICKNESS)
     if (targets.leftRuler.value) sizeToDpr(targets.leftRuler.value, RULER_THICKNESS, height)
+    // Before the draw, so a camera centred on this measurement is the one the
+    // draw below uses rather than being a frame behind it.
+    onMeasured?.({ width, height })
     draw()
   }
 

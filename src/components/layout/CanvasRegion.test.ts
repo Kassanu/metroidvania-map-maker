@@ -24,7 +24,7 @@ import { edgeOfCell } from '@/core/cell'
 import { WORLD_AREA_ID } from '@/core/ids'
 import { runAction } from '@/hotkeys/actions'
 import { checkInvariants } from '@/core/testUtils'
-import { DEFAULT_PAN, screenToWorld } from '@/canvas/viewport'
+import { screenToWorld } from '@/canvas/viewport'
 import { PAGE_HOME, PAGE_PADDING } from '@/canvas/page'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
 import type { IconId, MapId } from '@/core/ids'
@@ -115,14 +115,15 @@ describe('CanvasRegion wheel pan', () => {
     const wrapper = mount(CanvasRegion, { attachTo: document.body })
     const tabsStore = useTabsStore()
     const tabId = tabsStore.activeTabId
+    const before = tabsStore.cameraOf(tabId).pan
 
     wrapper.get('.canvas-viewport').element.dispatchEvent(wheel({ deltaX: 64, deltaY: 32 }))
 
     const tab = tabsStore.cameraOf(tabId)
     // Converted at the project's own tile size, not a renderer constant.
     const tile = useModelStore().tileSize
-    expect(tab.pan.x).toBeCloseTo(DEFAULT_PAN.x + 64 / (tile * 1))
-    expect(tab.pan.y).toBeCloseTo(DEFAULT_PAN.y + 32 / (tile * 1))
+    expect(tab.pan.x).toBeCloseTo(before.x + 64 / (tile * 1))
+    expect(tab.pan.y).toBeCloseTo(before.y + 32 / (tile * 1))
     wrapper.unmount()
   })
 
@@ -130,12 +131,13 @@ describe('CanvasRegion wheel pan', () => {
     const wrapper = mount(CanvasRegion, { attachTo: document.body })
     const tabsStore = useTabsStore()
     const tabId = tabsStore.activeTabId
+    const before = tabsStore.cameraOf(tabId).pan
 
     wrapper
       .get('.canvas-viewport')
       .element.dispatchEvent(wheel({ ctrlKey: true, deltaX: 64, deltaY: -100 }))
 
-    expect(tabsStore.cameraOf(tabId).pan).toEqual(DEFAULT_PAN)
+    expect(tabsStore.cameraOf(tabId).pan).toEqual(before)
     wrapper.unmount()
   })
 })
@@ -171,19 +173,20 @@ describe('CanvasRegion middle-drag pan', () => {
     const { wrapper, viewport } = mountCanvas()
     const tabsStore = useTabsStore()
     const tile = useModelStore().tileSize
+    const before = tabsStore.cameraOf(tabsStore.activeTabId).pan
 
     panBy(viewport, 64, 32)
 
     const camera = tabsStore.cameraOf(tabsStore.activeTabId)
     // The opposite sign to wheel-pan: a wheel scrolls the view, a drag carries
     // the map, and the two are the same gesture seen from either end.
-    expect(camera.pan.x).toBeCloseTo(DEFAULT_PAN.x - 64 / tile)
-    expect(camera.pan.y).toBeCloseTo(DEFAULT_PAN.y - 32 / tile)
+    expect(camera.pan.x).toBeCloseTo(before.x - 64 / tile)
+    expect(camera.pan.y).toBeCloseTo(before.y - 32 / tile)
     wrapper.unmount()
   })
 
   // The camera lives on the tab and survives a remount, so each mode is
-  // measured as a delta rather than against `DEFAULT_PAN`: asserting the
+  // measured as a delta rather than against an absolute pan: asserting the
   // absolute value passes only for whichever mode happens to run first.
   it('works in every mode', () => {
     for (const mode of ['draw', 'select', 'door', 'markup'] as const) {
@@ -261,10 +264,11 @@ describe('CanvasRegion middle-drag pan', () => {
   it('does not pan on a primary drag, which is the mode’s own', () => {
     const { wrapper, viewport } = mountCanvas()
     const tabsStore = useTabsStore()
+    const before = tabsStore.cameraOf(tabsStore.activeTabId).pan
 
     panBy(viewport, 64, 32, 0)
 
-    expect(tabsStore.cameraOf(tabsStore.activeTabId).pan).toEqual(DEFAULT_PAN)
+    expect(tabsStore.cameraOf(tabsStore.activeTabId).pan).toEqual(before)
     wrapper.unmount()
   })
 })
@@ -951,7 +955,8 @@ describe('CanvasRegion painting', () => {
     return new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, ...init })
   }
 
-  // The camera starts at DEFAULT_PAN, so screen (0,0) is not world (0,0): a
+  // The camera is not at the world origin in general, so screen (0,0) is not
+  // world (0,0): a
   // gesture that forgot the conversion would paint in the wrong place and this
   // is what would catch it.
   function screenOf(col: number, row: number) {
@@ -4063,7 +4068,7 @@ describe('CanvasRegion Markup Mode picker', () => {
     await click(viewport, at(1.5, 0.5))
     expect(pickerIsOpen()).toBe(true)
 
-    tabsStore.setCamera(tabsStore.activeTabId, { pan: DEFAULT_PAN, zoom: 2 })
+    tabsStore.setCamera(tabsStore.activeTabId, { pan: { x: 0, y: 0 }, zoom: 2 })
     await nextTick()
 
     expect(pickerIsOpen()).toBe(false)

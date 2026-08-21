@@ -23,7 +23,7 @@ import {
   touchesMap,
   type DeletePlan,
 } from '@/selection/deletePlan'
-import { DEFAULT_PAN, screenToWorld, worldToScreen, type ScreenPoint } from '@/canvas/viewport'
+import { screenToWorld, worldToScreen, type ScreenPoint } from '@/canvas/viewport'
 import { pageBounds } from '@/canvas/page'
 import { contentBounds } from '@/core/derive/bounds'
 import { centerOn, panByScreen, wheelZoom } from '@/canvas/camera'
@@ -230,7 +230,7 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
     // of the map than the one being drawn is the defect this shape prevents.
     const map = tab ? (model.project.mapsById.get(tab.id) ?? null) : null
     return {
-      camera: { pan: tab?.pan ?? DEFAULT_PAN, zoom: tab?.zoom ?? 1 },
+      camera: { pan: tab?.pan ?? { x: 0, y: 0 }, zoom: tab?.zoom ?? 1 },
       tileSize: model.tileSize,
       map,
       areas: model.project.areas,
@@ -313,6 +313,13 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       showRulers: canvasView.showRulers,
       rulerUnits: canvasView.rulerUnits,
     }
+  },
+  // The canvas has just been measured. The store needs the size for every
+  // camera operation that centres something, and a tab nobody has looked at
+  // gets its page centred here, on the first measurement that has a size.
+  (size) => {
+    tabsStore.setViewport(size)
+    tabsStore.centerIfUnseen(tabsStore.activeTabId)
   },
 )
 
@@ -1697,6 +1704,16 @@ function samePreview(a: BrushPreview | null, b: BrushPreview | null): boolean {
 
 const coordsLabel = computed(() =>
   cursorCell.value ? `${cursorCell.value.col}, ${cursorCell.value.row}` : '-, -',
+)
+
+// A tab nobody has looked at is centred on its page when it becomes the one
+// being drawn. The canvas draws only the active tab, so this is the moment its
+// camera first means anything; the measurement itself is handled above, for the
+// first tab and for a canvas that gains a size later. Centring writes a camera,
+// which the watch below sees, so the redraw is not this watch's job.
+watch(
+  () => tabsStore.activeTabId,
+  (mapId) => tabsStore.centerIfUnseen(mapId),
 )
 
 // Redraws on any pan/zoom/bounds change, or switching to a different tab.

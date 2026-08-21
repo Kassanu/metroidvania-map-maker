@@ -17,14 +17,14 @@ export type { CellBounds as Bounds } from '@/core/derive/bounds'
 // World-cell coordinate (can be fractional) visible at the canvas's
 // top-left pixel: the "camera position." Absolute world coordinates, not
 // relative to the page bounds, so they can go negative.
+//
+// There is no default here. Where a tab looks when nobody has told it is a
+// function of the canvas's width and height, which a module constant cannot
+// know; the tabs store centres the page instead, once the canvas is measured.
 export interface Pan {
   x: number
   y: number
 }
-
-// A little negative padding so a fresh map doesn't open with the page flush
-// against the canvas's top-left corner.
-export const DEFAULT_PAN: Pan = { x: -4, y: -3 }
 
 export interface ScreenPoint {
   x: number

@@ -32,20 +32,30 @@ export const PAGE_PADDING = 2
 // middle vertex.
 export const PAGE_HOME: CellBounds = { minCol: -10, minRow: -10, maxCol: 10, maxRow: 10 }
 
+// The map's own framed rectangle: its drawn extent with the page's padding
+// around it, or null for an empty map.
+//
+// The half of the page that is about the map rather than about the canvas.
+// Everything that wants to frame the content itself takes this: the camera's
+// default, so opening a file looks at the rooms rather than at the void
+// between them and the home rectangle, and image export, which must not pad a
+// two-cell map out to the home rectangle's size.
+export function paddedContentBounds(content: CellBounds | null): CellBounds | null {
+  if (!content) return null
+  return {
+    minCol: content.minCol - PAGE_PADDING,
+    minRow: content.minRow - PAGE_PADDING,
+    maxCol: content.maxCol + PAGE_PADDING,
+    maxRow: content.maxRow + PAGE_PADDING,
+  }
+}
+
 // The sheet to render for a map's drawn extent. `content` is null for an
 // empty map.
 export function pageBounds(content: CellBounds | null): CellBounds {
+  const padded = paddedContentBounds(content)
   // Copied rather than returned directly: a caller holding the page must not
   // be able to write through to the constant every other page contains.
-  if (!content) return { ...PAGE_HOME }
-
-  return unionBounds(
-    {
-      minCol: content.minCol - PAGE_PADDING,
-      minRow: content.minRow - PAGE_PADDING,
-      maxCol: content.maxCol + PAGE_PADDING,
-      maxRow: content.maxRow + PAGE_PADDING,
-    },
-    PAGE_HOME,
-  )
+  if (!padded) return { ...PAGE_HOME }
+  return unionBounds(padded, PAGE_HOME)
 }

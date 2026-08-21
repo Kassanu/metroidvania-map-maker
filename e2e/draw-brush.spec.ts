@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { gridMapping } from './support/canvas'
 
 // jsdom can dispatch a keydown, but it cannot tell you that `[` and `]` survive
 // the real keyboard path: the hotkey dispatcher's text-field suppression, the
@@ -15,12 +16,6 @@ async function openApp(page: Page) {
   await page.goto('/?sample=one-of-everything')
   await page.getByRole('button', { name: 'Get started' }).click()
   return { errors }
-}
-
-async function canvasPoint(page: Page, dx: number, dy: number) {
-  const box = await page.locator('.canvas-viewport').boundingBox()
-  if (!box) throw new Error('no canvas viewport')
-  return { x: box.x + dx, y: box.y + dy }
 }
 
 test.describe('Room Mode brush', () => {
@@ -63,7 +58,12 @@ test.describe('Room Mode brush', () => {
     await page.keyboard.press(']')
     await expect(page.locator('.brush-size')).toHaveText('3×3')
 
-    const point = await canvasPoint(page, 260, 220)
+    // A cell, not a pixel offset: where the camera opens is a property of the
+    // map, so a fixed offset lands on whatever happens to be under it. Column
+    // 10 is clear of `one-of-everything`, whose content stops at column 6, so
+    // the whole 3x3 footprint has somewhere to go.
+    const grid = await gridMapping(page)
+    const point = grid.at(10.5, 5.5)
     await page.mouse.click(point.x, point.y)
 
     await page.getByRole('button', { name: 'Edit' }).click()

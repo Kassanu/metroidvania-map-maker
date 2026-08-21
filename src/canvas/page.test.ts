@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PAGE_HOME, PAGE_PADDING, pageBounds } from './page'
+import { PAGE_HOME, PAGE_PADDING, pageBounds, paddedContentBounds } from './page'
 import type { CellBounds } from '@/core/derive/bounds'
 
 // One `describe` per row of the page's state table, so a row nobody covered
@@ -28,6 +28,23 @@ describe('the home rectangle', () => {
     expect(cols % 2).toBe(1)
     expect(PAGE_HOME.minCol + PAGE_HOME.maxCol).toBe(0)
     expect(PAGE_HOME.minRow + PAGE_HOME.maxRow).toBe(0)
+  })
+})
+
+// The half of the page that frames the map rather than the canvas. The camera's
+// default and image export take this, so the home rectangle never reaches them.
+describe('the padded content', () => {
+  it('is null for an empty map, so callers can say what empty means for them', () => {
+    expect(paddedContentBounds(null)).toBeNull()
+  })
+
+  it('pads the content and does not reach for home', () => {
+    expect(paddedContentBounds(box(0, 0, 1, 1))).toEqual(box(-2, -2, 3, 3))
+  })
+
+  it('stays with content far from the origin, where the page spans the gap', () => {
+    expect(paddedContentBounds(box(200, 200, 202, 202))).toEqual(box(198, 198, 204, 204))
+    expect(pageBounds(box(200, 200, 202, 202)).minCol).toBe(PAGE_HOME.minCol)
   })
 })
 

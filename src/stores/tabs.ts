@@ -9,9 +9,9 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref, watch } from 'vue'
 import { PROJECT_SCOPE, dependOn, mapScope, useModelStore } from './model'
-import { pageBounds } from '@/canvas/page'
-import { clampZoom, steppedZoom, type Camera } from '@/canvas/camera'
-import { DEFAULT_PAN, type Bounds, type Pan } from '@/canvas/viewport'
+import { PAGE_HOME, pageBounds, paddedContentBounds } from '@/canvas/page'
+import { centerOn, clampZoom, steppedZoom, type Camera } from '@/canvas/camera'
+import { type Bounds, type Pan } from '@/canvas/viewport'
 import { contentBounds } from '@/core/derive/bounds'
 import { addMap, deleteMap, duplicateMap, renameMap, reorderMap } from '@/core/ops/maps'
 import { t, templateMatcher } from '@/i18n'
@@ -36,7 +36,20 @@ export interface ActiveTab extends MapTab {
   bounds: Bounds
 }
 
-const DEFAULT_CAMERA: Camera = { pan: DEFAULT_PAN, zoom: 1 }
+// What a tab reads as before it has been looked at. Deliberately not "the
+// default view": that is the centred one below, and it cannot be a constant
+// because centring is a function of the canvas's size. This is only what the
+// maths uses until a size arrives, and it puts world (0,0) at the canvas
+// origin.
+const UNSEEN_CAMERA: Camera = { pan: { x: 0, y: 0 }, zoom: 1 }
+
+// The canvas's size in CSS pixels, or null until it has one. Held here rather
+// than in the component because every camera operation that needs a viewport
+// (centring, and Fit) is a camera operation, and the cameras live here.
+export interface ViewportSize {
+  width: number
+  height: number
+}
 
 // Generated names are content, not chrome: they're rendered from the active
 // locale once, at creation, and then stored as plain text. Reopening under
@@ -65,13 +78,53 @@ export const useTabsStore = defineStore('tabs', () => {
   // numbers and a point.
   const cameras = reactive(new Map<MapId, Camera>())
 
+  const viewport = ref<ViewportSize | null>(null)
+
   const activeId = ref<MapId>(model.project.maps[0])
   // Where the active tab sat in the order, so that when it disappears the
   // fallback can be "whatever slid into its place" rather than "the first tab".
   let activeIndex = 0
 
   function cameraOf(mapId: MapId): Camera {
-    return cameras.get(mapId) ?? DEFAULT_CAMERA
+    return cameras.get(mapId) ?? UNSEEN_CAMERA
+  }
+
+  // Membership is the question, not the value: a tab with an entry has been
+  // looked at, whatever it says, so anything that writes a camera stops the
+  // centring below from ever firing for that tab again.
+  function hasBeenSeen(mapId: MapId): boolean {
+    return cameras.has(mapId)
+  }
+
+  // A canvas with no size reports zero, which is not a viewport to centre in.
+  function setViewport(size: ViewportSize): void {
+    viewport.value = size.width > 0 && size.height > 0 ? { ...size } : null
+  }
+
+  // The default view: a tab nobody has looked at opens centred on its content,
+  // or on the home rectangle when it has none. So a blank map opens with world
+  // (0,0) in the middle and an opened file opens on its rooms.
+  //
+  // The content rather than the page, because the page always contains home:
+  // a map drawn far from the origin has a page spanning the gap between the
+  // two, and centring that would look at the empty middle of the gap rather
+  // than at the map.
+  //
+  // Zoom is untouched. Where to look and how close are different questions,
+  // and a project that opened at some computed percentage rather than at 100%
+  // would make the readout the first thing a user had to interpret.
+  function centerIfUnseen(mapId: MapId): void {
+    const size = viewport.value
+    if (!size || cameras.has(mapId)) return
+    const map = model.project.mapsById.get(mapId)
+    if (!map) return
+
+    const framed = paddedContentBounds(contentBounds(map)) ?? PAGE_HOME
+    const middle = {
+      x: (framed.minCol + framed.maxCol + 1) / 2,
+      y: (framed.minRow + framed.maxRow + 1) / 2,
+    }
+    setCameraOf(mapId, centerOn(cameraOf(mapId), middle, size, model.tileSize))
   }
 
   function setCameraOf(mapId: MapId, camera: Camera): void {
@@ -124,6 +177,16 @@ export const useTabsStore = defineStore('tabs', () => {
     activeId.value = fallback
     activeIndex = maps.indexOf(fallback)
   }
+
+  // A camera belongs to a session with one project, not to the ids inside it.
+  // A file carries its own map ids, so reopening one in the same session would
+  // otherwise find its cameras still here, take every tab for one already
+  // looked at, and never look at the content. Undo is untouched: it never
+  // swaps the project, so a camera still outlives the tab it belongs to.
+  watch(
+    () => model.projectKey,
+    () => cameras.clear(),
+  )
 
   // Watching the project identity as well as its revision, because a swap is
   // the one change a counter cannot report: the incoming project brings its own
@@ -265,6 +328,10 @@ export const useTabsStore = defineStore('tabs', () => {
     deleteTab,
     renameTab,
     reorderTab,
+
+    setViewport,
+    centerIfUnseen,
+    hasBeenSeen,
 
     setPan,
     setZoom,

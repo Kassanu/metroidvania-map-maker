@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { gridMapping } from './support/canvas'
 
 // What jsdom structurally cannot reach here: a real secondary button. jsdom
 // will happily dispatch a synthetic PointerEvent with button 2 and never fire
@@ -85,7 +86,11 @@ test.describe('Room Mode erase', () => {
   test('the erase toggle makes the primary button erase', async ({ page }) => {
     const { errors } = await openApp(page)
 
-    const point = await canvasPoint(page, 240, 220)
+    // A cell, not a pixel offset, so the click lands on bare grid whatever the
+    // camera is looking at: painting a cell a room already owns is a no-op and
+    // leaves nothing on the undo stack to read.
+    const grid = await gridMapping(page)
+    const point = grid.at(10.5, 5.5)
     await page.mouse.click(point.x, point.y)
     expect(await undoLabel(page)).toBe('Undo Paint')
 
