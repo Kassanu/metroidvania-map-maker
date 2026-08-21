@@ -338,11 +338,11 @@ describe('MenuBar', () => {
   })
 
   describe('canvas view toggles', () => {
-    it('lists Grid, Rulers, and Coords Overlay, all checked by default', async () => {
+    it('lists Page, Grid, Rulers, and Coords Overlay, all checked by default', async () => {
       await openViewMenu()
 
       const items = Array.from(document.querySelectorAll('[role="menuitemcheckbox"]'))
-      const labels = ['Grid', 'Rulers', 'Coords Overlay']
+      const labels = ['Page', 'Grid', 'Rulers', 'Coords Overlay']
       for (const label of labels) {
         const item = items.find((el) => el.textContent?.trim() === label)
         expect(item?.getAttribute('data-state')).toBe('checked')
@@ -360,6 +360,20 @@ describe('MenuBar', () => {
       await nextTick()
 
       expect(canvasView.showGrid).toBe(false)
+      expect(document.querySelector('.view-menu-content')).not.toBeNull()
+    })
+
+    it('toggling Page flips the canvasView store and keeps the menu open', async () => {
+      const canvasView = useCanvasViewStore()
+      await openViewMenu()
+
+      const pageItem = Array.from(document.querySelectorAll('[role="menuitemcheckbox"]')).find(
+        (el) => el.textContent?.trim() === 'Page',
+      ) as HTMLElement
+      pageItem.click()
+      await nextTick()
+
+      expect(canvasView.showPage).toBe(false)
       expect(document.querySelector('.view-menu-content')).not.toBeNull()
     })
 

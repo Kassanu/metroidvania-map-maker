@@ -32,6 +32,9 @@ export interface MapScene {
   // `settings.tileSize`: the on-screen size of one cell at zoom 1.
   tileSize: number
   palette: CanvasPalette
+  // Whether the page is painted. Presentation only: `bounds` is derived and
+  // handed over either way, so nothing that reads the rectangle changes.
+  showPage: boolean
   showGrid: boolean
   // The map to draw. Null renders an empty page, which is what the canvas
   // shows before a project is available.
@@ -378,20 +381,31 @@ export function renderMap(
 
   ctx.clearRect(0, 0, width, height)
 
-  // Pasteboard first, as the backdrop for everything outside the page.
-  ctx.fillStyle = palette.pasteboard
+  // The backdrop for the whole canvas: pasteboard around the page, or the page
+  // colour itself when the page is hidden, since then there is no outside and
+  // the paper is everywhere.
+  ctx.fillStyle = scene.showPage ? palette.pasteboard : palette.page
   ctx.fillRect(0, 0, width, height)
 
   const topLeft = worldToScreen(bounds.minCol, bounds.minRow, camera, tileSize)
   const bottomRight = worldToScreen(bounds.maxCol + 1, bounds.maxRow + 1, camera, tileSize)
 
-  ctx.fillStyle = palette.page
-  ctx.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y)
+  if (scene.showPage) {
+    ctx.fillStyle = palette.page
+    ctx.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y)
+  }
 
   // Order matters and is the whole layout of this function: the grid belongs
   // under the rooms, so it reads as the paper they sit on rather than as
   // lines drawn over them.
-  if (scene.showGrid) drawGrid(ctx, scene, topLeft, bottomRight, width, height)
+  //
+  // The rectangle handed over is the extent the lines span, not just a clip, so
+  // a hidden page substitutes the canvas's own rather than dropping it.
+  if (scene.showGrid) {
+    const from = scene.showPage ? topLeft : { x: 0, y: 0 }
+    const to = scene.showPage ? bottomRight : { x: width, y: height }
+    drawGrid(ctx, scene, from, to, width, height)
+  }
 
   const map = scene.map
   if (!map) return
@@ -890,12 +904,16 @@ function drawGrid(
   // content, which is unbounded, and a line stroked off-screen costs the same
   // as one on it. The lines still span the page, so they stop at its edge
   // rather than at the viewport's.
+  //
+  // With the page hidden there is no edge to stop at, so only the viewport
+  // bounds the range and the grid runs off all four sides.
   const first = screenToWorld(0, 0, camera, tileSize)
   const last = screenToWorld(width, height, camera, tileSize)
-  const minCol = Math.max(bounds.minCol, Math.floor(first.x))
-  const maxCol = Math.min(bounds.maxCol + 1, Math.ceil(last.x))
-  const minRow = Math.max(bounds.minRow, Math.floor(first.y))
-  const maxRow = Math.min(bounds.maxRow + 1, Math.ceil(last.y))
+  const page = scene.showPage
+  const minCol = page ? Math.max(bounds.minCol, Math.floor(first.x)) : Math.floor(first.x)
+  const maxCol = page ? Math.min(bounds.maxCol + 1, Math.ceil(last.x)) : Math.ceil(last.x)
+  const minRow = page ? Math.max(bounds.minRow, Math.floor(first.y)) : Math.floor(first.y)
+  const maxRow = page ? Math.min(bounds.maxRow + 1, Math.ceil(last.y)) : Math.ceil(last.y)
 
   // One path for every line, stroked once: an order of magnitude fewer
   // canvas state changes than stroking each line separately.

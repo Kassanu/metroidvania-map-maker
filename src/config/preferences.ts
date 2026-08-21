@@ -44,6 +44,9 @@ export interface WelcomePrefs {
 }
 
 export interface CanvasViewPrefs {
+  // The page: the framed sheet drawn over the unbounded grid. Off leaves the
+  // plain grid, running to the edge of the viewport in every direction.
+  showPage: boolean
   showGrid: boolean
   showRulers: boolean
   showCoords: boolean
@@ -89,6 +92,7 @@ export const PREF_DEFAULTS: Preferences = {
   },
   welcome: { hideWelcomeOnStartup: false },
   canvasView: {
+    showPage: true,
     showGrid: true,
     showRulers: true,
     showCoords: true,

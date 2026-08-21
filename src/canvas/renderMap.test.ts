@@ -199,6 +199,7 @@ function scene(overrides: Partial<MapScene> = {}): MapScene {
     handleRoom: null,
     marquee: null,
     palette,
+    showPage: true,
     showGrid: true,
     ...overrides,
   }
@@ -212,6 +213,84 @@ describe('renderMap', () => {
     expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, 800, 600)
     expect(fills[0]).toEqual({ style: '#pasteboard', rect: [0, 0, 800, 600] })
     expect(fills[1].style).toBe('#page')
+  })
+
+  // Hidden, the page stops being painted and stops bounding anything. Every map
+  // state collapses to the same canvas, which is the whole point of the toggle.
+  describe('with the page hidden', () => {
+    const hidden = { showPage: false }
+
+    it('fills the whole canvas with the page colour and paints no sheet', () => {
+      const { ctx, fills } = fakeContext()
+      const bounds = { minCol: 0, minRow: 0, maxCol: 3, maxRow: 1 }
+      renderMap(ctx as unknown as CanvasRenderingContext2D, 800, 600, scene({ bounds, ...hidden }))
+
+      expect(fills[0]).toEqual({ style: '#page', rect: [0, 0, 800, 600] })
+      // No second fill: there is no sheet to lay on the pasteboard.
+      expect(fills.some((fill) => fill.style === '#pasteboard')).toBe(false)
+      expect(fills.filter((fill) => fill.style === '#page')).toHaveLength(1)
+    })
+
+    it('runs the grid to the edge of the viewport instead of the page edge', () => {
+      const small = { minCol: 0, minRow: 0, maxCol: 3, maxRow: 1 }
+      const shown = fakeContext()
+      renderMap(
+        shown.ctx as unknown as CanvasRenderingContext2D,
+        800,
+        600,
+        scene({ bounds: small }),
+      )
+
+      const { ctx } = fakeContext()
+      renderMap(
+        ctx as unknown as CanvasRenderingContext2D,
+        800,
+        600,
+        scene({ bounds: small, ...hidden }),
+      )
+
+      // 800px and 600px at 20px a cell: 41 verticals and 31 horizontals,
+      // against the 8 lines the four-by-two page allowed.
+      expect(shown.ctx.moveTo).toHaveBeenCalledTimes(8)
+      expect(ctx.moveTo).toHaveBeenCalledTimes(72)
+    })
+
+    it('spans each line across the canvas, not across where the page was', () => {
+      const { ctx } = fakeContext()
+      const bounds = { minCol: 0, minRow: 0, maxCol: 3, maxRow: 1 }
+      renderMap(ctx as unknown as CanvasRenderingContext2D, 800, 600, scene({ bounds, ...hidden }))
+
+      // A vertical runs the full height rather than stopping at the old page's
+      // two rows: the rectangle is the line extent, not only a clip.
+      const verticals = ctx.moveTo.mock.calls.filter((call, at) => {
+        const to = ctx.lineTo.mock.calls[at]
+        return call[0] === to[0]
+      })
+      expect(verticals.length).toBeGreaterThan(0)
+      for (const [, y] of verticals) expect(y).toBe(0)
+      expect(ctx.lineTo.mock.calls[0][1]).toBe(600)
+    })
+
+    it('looks the same whatever the map bounds are', () => {
+      const rects: number[][] = []
+      for (const bounds of [
+        { minCol: 0, minRow: 0, maxCol: 0, maxRow: 0 },
+        { minCol: -10, minRow: -10, maxCol: 10, maxRow: 10 },
+        { minCol: -400, minRow: -400, maxCol: 400, maxRow: 400 },
+      ]) {
+        const { ctx, fills } = fakeContext()
+        renderMap(
+          ctx as unknown as CanvasRenderingContext2D,
+          800,
+          600,
+          scene({ bounds, ...hidden }),
+        )
+        rects.push(fills[0].rect)
+        expect(ctx.moveTo).toHaveBeenCalledTimes(72)
+      }
+      expect(rects[0]).toEqual(rects[1])
+      expect(rects[1]).toEqual(rects[2])
+    })
   })
 
   it('sizes the page from the map bounds, inclusive of the last cell', () => {

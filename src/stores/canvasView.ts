@@ -25,6 +25,9 @@ export const useCanvasViewStore = defineStore('canvasView', {
     },
   },
   actions: {
+    togglePage() {
+      this.showPage = !this.showPage
+    },
     toggleGrid() {
       this.showGrid = !this.showGrid
     },

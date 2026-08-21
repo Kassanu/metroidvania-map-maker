@@ -67,6 +67,7 @@ export interface SceneInput {
   handleRoom: HandleRoomScene | null
   // The marquee's rectangle while a select drag is live, or null.
   marquee: MarqueeRect | null
+  showPage: boolean
   showGrid: boolean
   showRulers: boolean
   rulerUnits: RulerUnits
@@ -153,6 +154,7 @@ export function useCanvasRenderer(
       handleRoom: current.handleRoom,
       marquee: current.marquee,
       palette: palette.value!,
+      showPage: current.showPage,
       showGrid: current.showGrid,
       showTransitions: current.showTransitions,
       showTeleportLines: current.showTeleportLines,

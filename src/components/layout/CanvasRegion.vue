@@ -309,6 +309,7 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
       showAllLabels: canvasView.showAllLabels,
       hoveredLabel,
       selectedMarkup: selectedMarkup(),
+      showPage: canvasView.showPage,
       showGrid: canvasView.showGrid,
       showRulers: canvasView.showRulers,
       rulerUnits: canvasView.rulerUnits,
@@ -1931,9 +1932,12 @@ watch(
 )
 
 // The layer toggles are a plain repaint: unlike the rulers above, they change
-// nothing about the viewport's size, only what is painted into it.
+// nothing about the viewport's size, only what is painted into it. The page
+// belongs here rather than with the grid: hiding it changes the backdrop and
+// the grid's extent, neither of which moves the ruler strips.
 watch(
   () => [
+    canvasView.showPage,
     canvasView.showTransitions,
     canvasView.showTeleportLines,
     canvasView.showMarkup,

@@ -359,6 +359,14 @@ const displayTitle = computed(() =>
             <DropdownMenuSeparator class="popover-separator" />
             <DropdownMenuCheckboxItem
               class="popover-item checkable"
+              :model-value="canvasView.showPage"
+              @update:model-value="canvasView.togglePage()"
+              @select="keepMenuOpen"
+            >
+              {{ t('menu.view.page') }}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              class="popover-item checkable"
               :model-value="canvasView.showGrid"
               @update:model-value="canvasView.toggleGrid()"
               @select="keepMenuOpen"

@@ -17,6 +17,7 @@ describe('useCanvasViewStore', () => {
 
   it('defaults to grid/rulers/coords all on, units in cells', () => {
     const store = useCanvasViewStore()
+    expect(store.showPage).toBe(true)
     expect(store.showGrid).toBe(true)
     expect(store.showRulers).toBe(true)
     expect(store.showCoords).toBe(true)
@@ -31,6 +32,18 @@ describe('useCanvasViewStore', () => {
 
     store.$flushPersist()
     expect(savedPref('canvasView')?.showGrid).toBe(false)
+  })
+
+  it('togglePage flips only the page, and persists', () => {
+    const store = useCanvasViewStore()
+    store.togglePage()
+    expect(store.showPage).toBe(false)
+    // The page and the grid are separate: hiding the frame keeps the lines.
+    expect(store.showGrid).toBe(true)
+    expect(store.showRulers).toBe(true)
+
+    store.$flushPersist()
+    expect(savedPref('canvasView')?.showPage).toBe(false)
   })
 
   it('toggleRulers and toggleCoords flip independently', () => {

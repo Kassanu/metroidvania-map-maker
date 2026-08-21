@@ -5017,6 +5017,46 @@ describe('CanvasRegion Markup Mode erase', () => {
   })
 })
 
+// A View toggle that nothing watches leaves the canvas showing the old picture
+// until some unrelated event repaints it, which reads as the toggle not working.
+describe('CanvasRegion page toggle', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    const canvasEl = wrapper.get('.canvas').element as HTMLCanvasElement
+    const ctx = canvasEl.getContext('2d') as unknown as FakeContext2D
+    return { wrapper, ctx }
+  }
+
+  it('repaints as soon as the page is hidden, without waiting for anything else', async () => {
+    const { wrapper, ctx } = mountCanvas()
+    const canvasView = useCanvasViewStore()
+
+    const before = ctx.clearRect.mock.calls.length
+    canvasView.togglePage()
+    await nextTick()
+
+    expect(ctx.clearRect.mock.calls.length).toBeGreaterThan(before)
+    wrapper.unmount()
+  })
+
+  it('repaints again when it is shown', async () => {
+    const canvasView = useCanvasViewStore()
+    canvasView.togglePage()
+    const { wrapper, ctx } = mountCanvas()
+
+    const before = ctx.clearRect.mock.calls.length
+    canvasView.togglePage()
+    await nextTick()
+
+    expect(ctx.clearRect.mock.calls.length).toBeGreaterThan(before)
+    wrapper.unmount()
+  })
+})
+
 // The page is derived on the draw path from the live model, so it tracks a
 // gesture's speculative state instead of waiting for the commit that publishes
 // it. Every case below asserts the rectangle the canvas actually filled,

@@ -243,6 +243,7 @@ export const en = {
   // Marks unsaved work in the project title and the browser tab.
   'title.unsaved': '{name} •',
 
+  'menu.view.page': 'Page',
   'menu.view.grid': 'Grid',
   'menu.view.rulers': 'Rulers',
   'menu.view.coords': 'Coords Overlay',

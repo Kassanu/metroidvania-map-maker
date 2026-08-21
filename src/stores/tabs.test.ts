@@ -3,6 +3,7 @@ import { setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { createTestPinia } from '@/test-setup'
 import { useTabsStore } from './tabs'
+import { useCanvasViewStore } from './canvasView'
 import { mapScope, useModelStore } from './model'
 import { MAX_ZOOM, MIN_ZOOM } from '@/canvas/camera'
 import { pageBounds } from '@/canvas/page'
@@ -671,5 +672,36 @@ describe('Reset View', () => {
 
     expect(store.cameraOf(mapId).zoom).toBe(1)
     expect(store.cameraOf(mapId).pan).toEqual({ x: 5, y: 5 })
+  })
+})
+
+// D23: the toggle gates painting and nothing else. The page rectangle is
+// derived either way, so everything that reads it is unaffected.
+describe('hiding the page', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  it('changes neither the page rectangle nor where the camera opens', () => {
+    const store = useTabsStore()
+    const model = useModelStore()
+    const canvasView = useCanvasViewStore()
+    const mapId = store.activeTabId
+    model.run('Paint', mapScope(mapId), (tx) =>
+      paintCells(tx, model.project, model.project.mapsById.get(mapId)!, ['4,4'] as CellKey[], {
+        areaId: WORLD_AREA_ID,
+      }),
+    )
+    store.setViewport({ width: 800, height: 600 })
+
+    store.centerIfUnseen(mapId)
+    const shown = { bounds: store.activeTab!.bounds, camera: store.cameraOf(mapId) }
+
+    canvasView.togglePage()
+    expect(canvasView.showPage).toBe(false)
+    store.resetView(mapId)
+
+    expect(store.activeTab!.bounds).toEqual(shown.bounds)
+    expect(store.cameraOf(mapId)).toEqual(shown.camera)
   })
 })
