@@ -25,6 +25,7 @@ import { WORLD_AREA_ID } from '@/core/ids'
 import { runAction } from '@/hotkeys/actions'
 import { checkInvariants } from '@/core/testUtils'
 import { DEFAULT_PAN, screenToWorld } from '@/canvas/viewport'
+import { PAGE_HOME, PAGE_PADDING } from '@/canvas/page'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
 import type { IconId, MapId } from '@/core/ids'
 import type { FakeContext2D } from '@/test-setup'
@@ -5008,5 +5009,150 @@ describe('CanvasRegion Markup Mode erase', () => {
 
     resolveEscape()
     expect(pointsOf(mapId, line)).toEqual(['1,2', '2,2', '3,2', '4,2', '5,2'])
+  })
+})
+
+// The page is derived on the draw path from the live model, so it tracks a
+// gesture's speculative state instead of waiting for the commit that publishes
+// it. Every case below asserts the rectangle the canvas actually filled,
+// because that is the thing that was wrong: the room drew and the page did not.
+describe('CanvasRegion page during a gesture', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 }) as DOMRect
+    viewport.setPointerCapture = () => {}
+    const canvasEl = wrapper.get('.canvas').element as HTMLCanvasElement
+    const ctx = canvasEl.getContext('2d') as unknown as FakeContext2D
+    return { wrapper, viewport, ctx, canvasEl }
+  }
+
+  function pointer(type: string, init: PointerEventInit = {}) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, ...init })
+  }
+
+  function screenOf(col: number, row: number) {
+    const tabsStore = useTabsStore()
+    const tile = useModelStore().tileSize
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    return {
+      clientX: (col + 0.5 - camera.pan.x) * tile * camera.zoom,
+      clientY: (row + 0.5 - camera.pan.y) * tile * camera.zoom,
+    }
+  }
+
+  // The page rectangle of the newest frame, back in world cells.
+  //
+  // Scanned from the end rather than read at a fixed index: one pointer event
+  // can cause several draws, because the hover watch repaints and then the
+  // gesture's own onChange repaints again. Every draw opens by filling the
+  // whole canvas with the pasteboard and fills the page immediately after, so
+  // the last of those pairs is the frame on screen.
+  function drawnPage(ctx: FakeContext2D, canvasEl: HTMLCanvasElement) {
+    const ratio = window.devicePixelRatio || 1
+    const full = [0, 0, canvasEl.width / ratio, canvasEl.height / ratio]
+    const calls = ctx.fillRect.mock.calls as [number, number, number, number][]
+    let pasteboard = -1
+    for (let i = calls.length - 1; i >= 0; i--) {
+      if (full.every((value, axis) => calls[i][axis] === value)) {
+        pasteboard = i
+        break
+      }
+    }
+    expect(pasteboard).toBeGreaterThanOrEqual(0)
+    const [x, , width] = calls[pasteboard + 1]
+    const tabsStore = useTabsStore()
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    const scale = useModelStore().tileSize * camera.zoom
+    const minCol = x / scale + camera.pan.x
+    return { minCol, maxCol: minCol + width / scale - 1 }
+  }
+
+  it('grows the page during a paint drag, before release', () => {
+    const { wrapper, viewport, ctx, canvasEl } = mountCanvas()
+
+    viewport.dispatchEvent(pointer('pointerdown', screenOf(0, 0)))
+    ctx.fillRect.mockClear()
+    viewport.dispatchEvent(pointer('pointermove', screenOf(20, 0)))
+
+    // Content out to column 20, padded by 2, so the page reaches 22 while the
+    // pointer is still down. Home alone would have stopped at 10.
+    expect(drawnPage(ctx, canvasEl).maxCol).toBeCloseTo(20 + PAGE_PADDING)
+
+    viewport.dispatchEvent(pointer('pointerup', screenOf(20, 0)))
+    wrapper.unmount()
+  })
+
+  it('shrinks the page during an erase drag, before release', () => {
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    const wide = Array.from({ length: 21 }, (_, col) => `${col},0` as const)
+    model.run('Setup', mapScope(mapId), (tx) =>
+      paintCells(tx, model.project, model.project.mapsById.get(mapId)!, wide, {
+        areaId: WORLD_AREA_ID,
+      }),
+    )
+
+    const { wrapper, viewport, ctx, canvasEl } = mountCanvas()
+    const RIGHT = 2
+
+    viewport.dispatchEvent(pointer('pointerdown', { ...screenOf(20, 0), button: RIGHT }))
+    ctx.fillRect.mockClear()
+    viewport.dispatchEvent(pointer('pointermove', { ...screenOf(12, 0), button: RIGHT }))
+
+    // Columns 12 through 20 erased mid-drag, leaving content out to 11.
+    expect(drawnPage(ctx, canvasEl).maxCol).toBeCloseTo(11 + PAGE_PADDING)
+
+    viewport.dispatchEvent(pointer('pointerup', { ...screenOf(12, 0), button: RIGHT }))
+    wrapper.unmount()
+  })
+
+  it('puts the page back when Esc rolls the gesture back', () => {
+    const { wrapper, viewport, ctx, canvasEl } = mountCanvas()
+
+    viewport.dispatchEvent(pointer('pointerdown', screenOf(0, 0)))
+    viewport.dispatchEvent(pointer('pointermove', screenOf(20, 0)))
+
+    ctx.fillRect.mockClear()
+    resolveEscape()
+
+    // Nothing was painted, so the page is home again.
+    expect(drawnPage(ctx, canvasEl).maxCol).toBeCloseTo(PAGE_HOME.maxCol)
+
+    viewport.dispatchEvent(pointer('pointerup', screenOf(20, 0)))
+    wrapper.unmount()
+  })
+
+  it('leaves the page where the drag put it, on commit', () => {
+    const { wrapper, viewport, ctx, canvasEl } = mountCanvas()
+
+    viewport.dispatchEvent(pointer('pointerdown', screenOf(0, 0)))
+    viewport.dispatchEvent(pointer('pointermove', screenOf(20, 0)))
+    ctx.fillRect.mockClear()
+    viewport.dispatchEvent(pointer('pointerup', screenOf(20, 0)))
+
+    expect(drawnPage(ctx, canvasEl).maxCol).toBeCloseTo(20 + PAGE_PADDING)
+    wrapper.unmount()
+  })
+
+  // The other half of the seam, and the reason the two call sites are not a
+  // duplication: the store's page is the committed one, and a later reader
+  // reaching for it on the draw path is exactly how this defect comes back.
+  it('does not move the published bounds until the gesture commits', () => {
+    const { wrapper, viewport } = mountCanvas()
+    const tabsStore = useTabsStore()
+
+    viewport.dispatchEvent(pointer('pointerdown', screenOf(0, 0)))
+    viewport.dispatchEvent(pointer('pointermove', screenOf(20, 0)))
+
+    expect(tabsStore.activeTab!.bounds.maxCol).toBe(PAGE_HOME.maxCol)
+
+    viewport.dispatchEvent(pointer('pointerup', screenOf(20, 0)))
+    expect(tabsStore.activeTab!.bounds.maxCol).toBe(20 + PAGE_PADDING)
+    wrapper.unmount()
   })
 })

@@ -25,6 +25,7 @@ import {
 } from '@/selection/deletePlan'
 import { DEFAULT_PAN, screenToWorld, worldToScreen, type ScreenPoint } from '@/canvas/viewport'
 import { pageBounds } from '@/canvas/page'
+import { contentBounds } from '@/core/derive/bounds'
 import { centerOn, panByScreen, wheelZoom } from '@/canvas/camera'
 import {
   doorCursor,
@@ -219,13 +220,19 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
   () => {
     const tab = tabsStore.activeTab
     const layers = visibleLayers()
+    // The model is outside Vue reactivity, so this is read fresh on every draw
+    // rather than watched. What triggers the draw is the revision counters the
+    // tabs store depends on (see the watch below) and, mid-gesture, the
+    // gesture's own `onChange`.
+    //
+    // Held in a local because the page below is derived from the same object,
+    // and the two must be the same read: a page framing a different revision
+    // of the map than the one being drawn is the defect this shape prevents.
+    const map = tab ? (model.project.mapsById.get(tab.id) ?? null) : null
     return {
       camera: { pan: tab?.pan ?? DEFAULT_PAN, zoom: tab?.zoom ?? 1 },
       tileSize: model.tileSize,
-      // The model is outside Vue reactivity, so these are read fresh on every
-      // draw rather than watched. What triggers the draw is the revision
-      // counters the tabs store depends on: see the watch below.
-      map: tab ? (model.project.mapsById.get(tab.id) ?? null) : null,
+      map,
       areas: model.project.areas,
       lockTypes: model.project.lockTypes,
       // The whole catalogue, not just the types in use: resolving per icon here
@@ -280,11 +287,18 @@ const { draw, resize, repaintForTheme } = useCanvasRenderer(
           handles: visibleHandles(tools.subMode),
         }
       })(),
-      // The page the active map draws on, derived from its content. The
-      // fallbacks here are for the unreachable no-active-tab case only: the
-      // store keeps `activeTabId` on a live map, so they match what a blank
-      // map would give rather than collapsing the page to a single cell.
-      bounds: tab?.bounds ?? pageBounds(null),
+      // The page the active map draws on, derived here from the live model
+      // rather than taken from the store's published `bounds`. A gesture
+      // mutates the map in place and publishes nothing until it commits, so
+      // the published page is a whole drag behind: it would sit still while
+      // the stroke it frames ran off its edge and painted onto pasteboard.
+      //
+      // This and the store's copy are the same function at two revisions, not
+      // two sources of truth. The store's answers "what is committed", which is
+      // what a Fit should frame; this one answers "what is on screen right
+      // now". Reading across the published/speculative seam is deliberate here
+      // and nowhere else.
+      bounds: pageBounds(map ? contentBounds(map) : null),
       showTransitions: layers.transitions,
       // Not part of `layers`: a teleport line is not a target in any mode, so
       // the sub-toggle for it gates drawing only. It stays nested under the
