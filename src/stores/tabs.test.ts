@@ -4,16 +4,17 @@ import { nextTick } from 'vue'
 import { createTestPinia } from '@/test-setup'
 import { useTabsStore } from './tabs'
 import { useCanvasViewStore } from './canvasView'
-import { mapScope, useModelStore } from './model'
+import { PROJECT_SCOPE, mapScope, useModelStore } from './model'
 import { MAX_ZOOM, MIN_ZOOM } from '@/canvas/camera'
-import { pageBounds } from '@/canvas/page'
+import { PAGE_HOME, pageBounds } from '@/canvas/page'
 import { paintCells } from '@/core/ops/rooms'
+import { updateSetting } from '@/core/ops/project'
 import { renameMap } from '@/core/ops/maps'
 import { checkInvariants } from '@/core/testUtils'
 import { createProject } from '@/core/factory'
 import { fromJSON, toJSON } from '@/core/serialize'
 import { WORLD_AREA_ID } from '@/core/ids'
-import type { MapId } from '@/core/ids'
+import type { MapId, RoomId } from '@/core/ids'
 import type { CellKey } from '@/core/cell'
 
 describe('useTabsStore', () => {
@@ -703,5 +704,223 @@ describe('hiding the page', () => {
 
     expect(store.activeTab!.bounds).toEqual(shown.bounds)
     expect(store.cameraOf(mapId)).toEqual(shown.camera)
+  })
+})
+
+// Fit frames the same rectangle a tab opens on. The rows below are the map
+// states that change the answer; the rest of the page's states do not.
+describe('Fit Window', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  const VIEW = { width: 800, height: 600 }
+
+  function paint(mapId: MapId, cells: string[]) {
+    const model = useModelStore()
+    model.run('Paint', mapScope(mapId), (tx) =>
+      paintCells(tx, model.project, model.project.mapsById.get(mapId)!, cells as CellKey[], {
+        areaId: WORLD_AREA_ID,
+      }),
+    )
+  }
+
+  // What the fitted rectangle actually covers on screen, so the assertions are
+  // about the picture rather than about the arithmetic that produced it.
+  function framedOnScreen(store: ReturnType<typeof useTabsStore>, mapId: MapId) {
+    const { pan, zoom } = store.cameraOf(mapId)
+    const scale = useModelStore().tileSize * zoom
+    return {
+      minCol: pan.x,
+      minRow: pan.y,
+      maxCol: pan.x + VIEW.width / scale,
+      maxRow: pan.y + VIEW.height / scale,
+    }
+  }
+
+  it('fits an empty map to the home rectangle', () => {
+    const store = useTabsStore()
+    store.setViewport(VIEW)
+    store.fitToContent(store.activeTabId)
+
+    const seen = framedOnScreen(store, store.activeTabId)
+    // 21 rows is the tighter axis in a 800x600 canvas, so it is the one that
+    // ends up exactly framed.
+    expect(seen.minRow).toBeCloseTo(PAGE_HOME.minRow)
+    expect(seen.maxRow).toBeCloseTo(PAGE_HOME.maxRow + 1)
+    // The looser axis has room to spare, never less.
+    expect(seen.minCol).toBeLessThanOrEqual(PAGE_HOME.minCol)
+    expect(seen.maxCol).toBeGreaterThanOrEqual(PAGE_HOME.maxCol + 1)
+  })
+
+  it('fits a large map so all of it is on screen', () => {
+    const store = useTabsStore()
+    const mapId = store.activeTabId
+    paint(mapId, ['0,0', '80,60'])
+    store.setViewport(VIEW)
+    store.fitToContent(mapId)
+
+    const seen = framedOnScreen(store, mapId)
+    expect(seen.minCol).toBeLessThanOrEqual(-2)
+    expect(seen.maxCol).toBeGreaterThanOrEqual(83)
+    expect(seen.minRow).toBeLessThanOrEqual(-2)
+    expect(seen.maxRow).toBeGreaterThanOrEqual(63)
+  })
+
+  // The reason Fit takes the content and not the page: the page here spans the
+  // gap back to home, and fitting it would frame mostly void.
+  it('fits a far-from-origin map to the map, not to the gap behind it', () => {
+    const store = useTabsStore()
+    const mapId = store.activeTabId
+    paint(mapId, ['100,100', '102,102'])
+    store.setViewport(VIEW)
+    store.fitToContent(mapId)
+
+    const seen = framedOnScreen(store, mapId)
+    expect(seen.minCol).toBeGreaterThan(90)
+    expect(seen.maxCol).toBeLessThan(115)
+  })
+
+  it('takes the tighter axis, so nothing overflows the other one', () => {
+    const store = useTabsStore()
+    const mapId = store.activeTabId
+    // Much taller than it is wide, against a landscape canvas.
+    paint(mapId, ['0,0', '2,80'])
+    store.setViewport(VIEW)
+    store.fitToContent(mapId)
+
+    const seen = framedOnScreen(store, mapId)
+    expect(seen.minRow).toBeLessThanOrEqual(-2)
+    expect(seen.maxRow).toBeGreaterThanOrEqual(83)
+  })
+
+  // The padding is what stops a small map running away: one cell pads to five
+  // by five, which fits at under 4x at the default tile size. The clamp bites
+  // only when the cells themselves are small.
+  it('clamps at the maximum zoom when the fit would exceed it', () => {
+    const store = useTabsStore()
+    const model = useModelStore()
+    const mapId = store.activeTabId
+    paint(mapId, ['0,0'])
+    model.run('Tile size', PROJECT_SCOPE, (tx) => updateSetting(tx, model.project, 'tileSize', 8))
+    store.setViewport(VIEW)
+    store.fitToContent(mapId)
+
+    // Five cells of 8px is 40px against 600px of canvas: 15x, clamped to 8.
+    expect(store.cameraOf(mapId).zoom).toBe(MAX_ZOOM)
+  })
+
+  it('leaves a small map well short of the maximum at the default tile size', () => {
+    const store = useTabsStore()
+    const mapId = store.activeTabId
+    paint(mapId, ['0,0'])
+    store.setViewport(VIEW)
+    store.fitToContent(mapId)
+
+    // Five cells of 32px is 160px against 600px: 3.75x.
+    expect(store.cameraOf(mapId).zoom).toBeCloseTo(3.75)
+  })
+
+  it('clamps a vast map at the minimum zoom', () => {
+    const store = useTabsStore()
+    const mapId = store.activeTabId
+    paint(mapId, ['0,0', '5000,5000'])
+    store.setViewport(VIEW)
+    store.fitToContent(mapId)
+
+    expect(store.cameraOf(mapId).zoom).toBe(MIN_ZOOM)
+  })
+
+  it('centres at the zoom it actually applied, not the one it wanted', () => {
+    const store = useTabsStore()
+    const model = useModelStore()
+    const mapId = store.activeTabId
+    paint(mapId, ['40,40'])
+    // Small enough cells that the fit clamps, which is the case that tells the
+    // two orderings apart: centring at the unclamped zoom lands off centre.
+    model.run('Tile size', PROJECT_SCOPE, (tx) => updateSetting(tx, model.project, 'tileSize', 8))
+    store.setViewport(VIEW)
+    store.fitToContent(mapId)
+
+    const { pan, zoom } = store.cameraOf(mapId)
+    expect(zoom).toBe(MAX_ZOOM)
+    const scale = useModelStore().tileSize * zoom
+    expect(pan.x + VIEW.width / 2 / scale).toBeCloseTo(40.5)
+    expect(pan.y + VIEW.height / 2 / scale).toBeCloseTo(40.5)
+  })
+
+  it('does nothing until the canvas has a size', () => {
+    const store = useTabsStore()
+    const mapId = store.activeTabId
+    store.fitToContent(mapId)
+    expect(store.hasBeenSeen(mapId)).toBe(false)
+  })
+})
+
+describe('Fit Selection', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  const VIEW = { width: 800, height: 600 }
+
+  it('frames the selection rather than the map', () => {
+    const store = useTabsStore()
+    const model = useModelStore()
+    const mapId = store.activeTabId
+    model.run('Paint', mapScope(mapId), (tx) => {
+      const map = model.project.mapsById.get(mapId)!
+      paintCells(tx, model.project, map, ['0,0'] as CellKey[], { areaId: WORLD_AREA_ID })
+      paintCells(tx, model.project, map, ['60,60'] as CellKey[], { areaId: WORLD_AREA_ID })
+    })
+    const far = [...model.project.mapsById.get(mapId)!.rooms.values()].find((room) =>
+      room.cells.has('60,60' as CellKey),
+    )!
+    store.setViewport(VIEW)
+
+    store.fitToSelection(mapId, [{ kind: 'room', id: far.id }])
+
+    // Centred on the far room, not on the pair: 60,60 padded is 58..62.
+    const { pan, zoom } = store.cameraOf(mapId)
+    const scale = useModelStore().tileSize * zoom
+    expect(pan.x + VIEW.width / 2 / scale).toBeCloseTo(60.5)
+    expect(pan.y + VIEW.height / 2 / scale).toBeCloseTo(60.5)
+  })
+
+  it('does nothing at all when nothing is selected', () => {
+    const store = useTabsStore()
+    const mapId = store.activeTabId
+    store.setViewport(VIEW)
+    store.setCamera(mapId, { pan: { x: 11, y: 12 }, zoom: 2 })
+
+    store.fitToSelection(mapId, [])
+
+    // Refused rather than falling back to the map: the camera is untouched.
+    expect(store.cameraOf(mapId)).toEqual({ pan: { x: 11, y: 12 }, zoom: 2 })
+  })
+
+  it('does nothing when the selection names nothing on this map', () => {
+    const store = useTabsStore()
+    const model = useModelStore()
+    const mapId = store.activeTabId
+    store.setViewport(VIEW)
+    store.setCamera(mapId, { pan: { x: 11, y: 12 }, zoom: 2 })
+
+    store.fitToSelection(mapId, [{ kind: 'room', id: 'room_nothere' as RoomId }])
+
+    expect(store.cameraOf(mapId)).toEqual({ pan: { x: 11, y: 12 }, zoom: 2 })
+    expect(model.status.canUndo).toBe(false)
+  })
+
+  it('pads the selection the way the page pads content', () => {
+    const store = useTabsStore()
+    const model = useModelStore()
+    const mapId = store.activeTabId
+    store.setViewport(VIEW)
+
+    store.fitToSelection(mapId, [{ kind: 'cell', id: '10,10' as CellKey }])
+
+    // One cell padded to five by five: 600px of canvas over 5 cells of 32px.
+    expect(store.cameraOf(mapId).zoom).toBeCloseTo(600 / (5 * model.tileSize))
   })
 })

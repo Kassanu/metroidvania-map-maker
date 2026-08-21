@@ -12,11 +12,18 @@ import {
   ComboboxViewport,
 } from 'reka-ui'
 import { useTabsStore } from '@/stores/tabs'
+import { useSelectionStore } from '@/stores/selection'
 import { t } from '@/i18n'
 
 const tabsStore = useTabsStore()
+const selection = useSelectionStore()
 
 const ZOOM_PRESETS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
+
+// Disabled rather than a no-op: an enabled item that declines is worse than
+// one that says it cannot act. The selection is per-tab, so one belonging to
+// another tab frames nothing here and reads as empty.
+const nothingSelected = computed(() => selection.refsOn(tabsStore.activeTabId).length === 0)
 
 // The commands share the zoom's model because they share its control. Only a
 // number is ever read back out: `get` answers the current zoom, so the field
@@ -37,8 +44,12 @@ const zoomModel = computed<ZoomValue>({
       tabsStore.resetView(tabsStore.activeTabId)
       return
     }
-    if (value === 'fit' || value === 'selection') {
-      // TODO: there is no selection to fit against yet.
+    if (value === 'fit') {
+      tabsStore.fitToContent(tabsStore.activeTabId)
+      return
+    }
+    if (value === 'selection') {
+      tabsStore.fitToSelection(tabsStore.activeTabId, selection.refsOn(tabsStore.activeTabId))
       return
     }
     tabsStore.setZoom(tabsStore.activeTabId, value)
@@ -152,11 +163,8 @@ function handleInputBlur(event: FocusEvent) {
             {{ formatZoom(preset) }}
           </ComboboxItem>
           <ComboboxSeparator class="popover-separator" />
-          <!-- Disabled until there's a data model / selection to fit against. -->
-          <ComboboxItem class="popover-item" value="fit" disabled>{{
-            t('zoom.fitWindow')
-          }}</ComboboxItem>
-          <ComboboxItem class="popover-item" value="selection" disabled>
+          <ComboboxItem class="popover-item" value="fit">{{ t('zoom.fitWindow') }}</ComboboxItem>
+          <ComboboxItem class="popover-item" value="selection" :disabled="nothingSelected">
             {{ t('zoom.toSelection') }}
           </ComboboxItem>
         </ComboboxViewport>

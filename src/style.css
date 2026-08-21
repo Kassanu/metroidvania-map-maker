@@ -213,9 +213,17 @@ body {
   box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
   z-index: var(--z-popover);
 }
-/* For lists that can outgrow the viewport (every map, every zoom preset). */
+/* For lists that can outgrow the viewport (every map, every zoom preset).
+ *
+ * Bounded by the space the popper actually has rather than by a fixed height,
+ * so a list scrolls only when it genuinely does not fit. Reka measures that
+ * space and publishes it on the Content element; the fallback covers a popover
+ * that is not positioned by the popper.
+ *
+ * A fixed cap here made the zoom dropdown scroll inside a window with twice the
+ * room to spare, which put its last item out of reach. */
 .popover-surface.scrollable {
-  max-height: 20rem;
+  max-height: var(--reka-popper-available-height, 20rem);
   overflow-y: auto;
 }
 

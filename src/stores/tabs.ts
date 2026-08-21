@@ -12,11 +12,13 @@ import { PROJECT_SCOPE, dependOn, mapScope, useModelStore } from './model'
 import { PAGE_HOME, pageBounds, paddedContentBounds } from '@/canvas/page'
 import { centerOn, clampZoom, steppedZoom, type Camera } from '@/canvas/camera'
 import { type Bounds, type Pan } from '@/canvas/viewport'
-import { contentBounds } from '@/core/derive/bounds'
+import { contentBounds, type CellBounds } from '@/core/derive/bounds'
 import { addMap, deleteMap, duplicateMap, renameMap, reorderMap } from '@/core/ops/maps'
 import { t, templateMatcher } from '@/i18n'
 import { copyName } from '@/i18n/naming'
+import { selectionBounds } from '@/selection/selectionBounds'
 import type { MapId } from '@/core/ids'
+import type { ObjectRef } from '@/core/types'
 
 // What the tab bar renders. Identity and name both come from the model now, so
 // this is a projection rather than a record: there is nothing here to keep in
@@ -112,20 +114,32 @@ export const useTabsStore = defineStore('tabs', () => {
   //
   // Null when there is nothing to compute it against: no canvas size yet, or
   // no such map.
-  function defaultCamera(mapId: MapId, zoom: number): Camera | null {
-    const size = viewport.value
-    if (!size) return null
+  // The rectangle a tab is framed on: its padded content, or the home rectangle
+  // when it has none. Null when there is no such map.
+  function framedBounds(mapId: MapId): CellBounds | null {
     const map = model.project.mapsById.get(mapId)
     if (!map) return null
+    return paddedContentBounds(contentBounds(map)) ?? PAGE_HOME
+  }
 
-    const framed = paddedContentBounds(contentBounds(map)) ?? PAGE_HOME
+  // A camera looking at the middle of `framed` at the given zoom. Null when
+  // there is no canvas size to centre in.
+  //
+  // Zoom first, then centre: what fills the viewport depends on the zoom, so
+  // centring a camera at the old one would be centring the wrong rectangle.
+  function centeredOn(mapId: MapId, framed: CellBounds, zoom: number): Camera | null {
+    const size = viewport.value
+    if (!size) return null
     const middle = {
       x: (framed.minCol + framed.maxCol + 1) / 2,
       y: (framed.minRow + framed.maxRow + 1) / 2,
     }
-    // Zoom first, then centre: what fills the viewport depends on the zoom, so
-    // centring a camera at the old one would be centring the wrong rectangle.
     return centerOn({ pan: cameraOf(mapId).pan, zoom }, middle, size, model.tileSize)
+  }
+
+  function defaultCamera(mapId: MapId, zoom: number): Camera | null {
+    const framed = framedBounds(mapId)
+    return framed ? centeredOn(mapId, framed, zoom) : null
   }
 
   // Where a tab opens. Zoom is untouched, because where to look and how close
@@ -134,6 +148,48 @@ export const useTabsStore = defineStore('tabs', () => {
   function centerIfUnseen(mapId: MapId): void {
     if (cameras.has(mapId)) return
     const camera = defaultCamera(mapId, cameraOf(mapId).zoom)
+    if (camera) setCameraOf(mapId, camera)
+  }
+
+  // The zoom that makes `framed` fill the canvas: the smaller of the two axis
+  // ratios, because the larger one overflows the other axis. Clamped here
+  // rather than by the caller, so what gets centred is the zoom that was
+  // actually applied.
+  function zoomFitting(framed: CellBounds): number | null {
+    const size = viewport.value
+    if (!size) return null
+    const scale = model.tileSize
+    const cols = framed.maxCol - framed.minCol + 1
+    const rows = framed.maxRow - framed.minRow + 1
+    return clampZoom(Math.min(size.width / (cols * scale), size.height / (rows * scale)))
+  }
+
+  // Fit frames the same rectangle a tab opens on, at the zoom that fills the
+  // canvas. Open, Reset View and Fit are one rectangle and three zooms: the
+  // first keeps the zoom, the second sets it to 1, this one computes it.
+  function fitToContent(mapId: MapId): void {
+    const framed = framedBounds(mapId)
+    if (!framed) return
+    const zoom = zoomFitting(framed)
+    if (zoom === null) return
+    const camera = defaultCamera(mapId, zoom)
+    if (camera) setCameraOf(mapId, camera)
+  }
+
+  // Fit the selection instead of the map. Padded like the page, so a framed
+  // selection has the same breathing room a framed map does.
+  //
+  // Refuses rather than falling back to the map when there is nothing to
+  // frame: a command called To Selection that framed something else on an
+  // empty selection would be lying about what it did.
+  function fitToSelection(mapId: MapId, refs: readonly ObjectRef[]): void {
+    const map = model.project.mapsById.get(mapId)
+    if (!map) return
+    const framed = paddedContentBounds(selectionBounds(refs, map))
+    if (!framed) return
+    const zoom = zoomFitting(framed)
+    if (zoom === null) return
+    const camera = centeredOn(mapId, framed, zoom)
     if (camera) setCameraOf(mapId, camera)
   }
 
@@ -356,6 +412,8 @@ export const useTabsStore = defineStore('tabs', () => {
     setViewport,
     centerIfUnseen,
     resetView,
+    fitToContent,
+    fitToSelection,
     hasBeenSeen,
 
     setPan,
