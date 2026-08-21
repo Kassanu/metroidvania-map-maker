@@ -44,7 +44,7 @@ function derived(map: MapModel): MapDerived {
     const box = computeBounds(room.cells)
     if (!box) continue
     const existing = areaBounds.get(room.areaId)
-    areaBounds.set(room.areaId, existing ? union(existing, box) : box)
+    areaBounds.set(room.areaId, existing ? unionBounds(existing, box) : box)
   }
 
   const fresh: MapDerived = { rev: map.rev, bounds: computeBounds(contentCells(map)), areaBounds }
@@ -52,7 +52,9 @@ function derived(map: MapModel): MapDerived {
   return fresh
 }
 
-function union(a: CellBounds, b: CellBounds): CellBounds {
+// The smallest box containing both. Always answerable: a box is never empty,
+// so there is no null case the way there is for a set of cells.
+export function unionBounds(a: CellBounds, b: CellBounds): CellBounds {
   return {
     minCol: Math.min(a.minCol, b.minCol),
     minRow: Math.min(a.minRow, b.minRow),

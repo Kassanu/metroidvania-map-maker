@@ -468,7 +468,8 @@ describe('CanvasRegion drawing', () => {
     const ctx = canvasEl.getContext('2d') as unknown as FakeContext2D
 
     const mapId = tabsStore.activeTabId
-    // Well inside the minimum sheet, so `pageBounds` is unchanged by it.
+    // Well inside the home rectangle even once padded, so `pageBounds` is
+    // unchanged by it.
     model.run('Paint', mapScope(mapId), (tx) =>
       paintCells(tx, model.project, model.project.mapsById.get(mapId)!, ['5,5'], {
         areaId: WORLD_AREA_ID,

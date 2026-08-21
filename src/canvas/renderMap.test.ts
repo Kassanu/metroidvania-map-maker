@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderMap, type HoveredHandle, type MapScene } from './renderMap'
 import { DOOR_JAMB } from './doorRuns'
-import { pageBounds } from './page'
 import { outerWalls, resizableRuns, wallVertices } from '@/core/derive/walls'
 import type { CanvasPalette } from './palette'
 import { createProject } from '@/core/factory'
@@ -169,7 +168,10 @@ const palette: CanvasPalette = {
 function scene(overrides: Partial<MapScene> = {}): MapScene {
   return {
     camera: { pan: { x: 0, y: 0 }, zoom: 1 },
-    bounds: pageBounds(null),
+    // Stated here rather than derived: what these tests need is a stable
+    // rectangle to measure drawn geometry against, not whatever the page rule
+    // currently says.
+    bounds: { minCol: 0, minRow: 0, maxCol: 19, maxRow: 14 },
     tileSize: TILE,
     map: null,
     // Both layer toggles default on, so a scene that does not override them
