@@ -604,3 +604,72 @@ describe('the default camera', () => {
     expect(store.cameraOf(mapId).pan).toEqual(panFor(101, 100.5))
   })
 })
+
+describe('Reset View', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  const VIEW = { width: 800, height: 600 }
+
+  it('returns the tab to the view it opened with', () => {
+    const store = useTabsStore()
+    store.setViewport(VIEW)
+    const mapId = store.activeTabId
+    store.centerIfUnseen(mapId)
+    const opened = store.cameraOf(mapId)
+
+    store.setCamera(mapId, { pan: { x: 400, y: -250 }, zoom: 3 })
+    store.resetView(mapId)
+
+    expect(store.cameraOf(mapId)).toEqual(opened)
+  })
+
+  it('centres on the content, so it follows the map rather than the origin', () => {
+    const store = useTabsStore()
+    const model = useModelStore()
+    const mapId = store.activeTabId
+    model.run('Paint', mapScope(mapId), (tx) =>
+      paintCells(tx, model.project, model.project.mapsById.get(mapId)!, ['60,60'] as CellKey[], {
+        areaId: WORLD_AREA_ID,
+      }),
+    )
+    store.setViewport(VIEW)
+    store.setCamera(mapId, { pan: { x: 0, y: 0 }, zoom: 4 })
+
+    store.resetView(mapId)
+
+    const scale = useModelStore().tileSize
+    // One cell at 60,60 pads to 58..62, whose middle is 60.5 on both axes.
+    expect(store.cameraOf(mapId).zoom).toBe(1)
+    expect(store.cameraOf(mapId).pan).toEqual({
+      x: 60.5 - VIEW.width / 2 / scale,
+      y: 60.5 - VIEW.height / 2 / scale,
+    })
+  })
+
+  it('still returns zoom to 1 when there is no canvas to centre against', () => {
+    const store = useTabsStore()
+    const mapId = store.activeTabId
+    store.setCamera(mapId, { pan: { x: 5, y: 5 }, zoom: 4 })
+
+    store.resetView(mapId)
+
+    expect(store.cameraOf(mapId).zoom).toBe(1)
+    expect(store.cameraOf(mapId).pan).toEqual({ x: 5, y: 5 })
+  })
+
+  // mod+0 is the browser's convention for "back to 100%", and keeping your
+  // place while doing it is the point of having both commands.
+  it('is not what the zoom-reset hotkey does', () => {
+    const store = useTabsStore()
+    store.setViewport(VIEW)
+    const mapId = store.activeTabId
+    store.setCamera(mapId, { pan: { x: 5, y: 5 }, zoom: 4 })
+
+    store.resetZoom(mapId)
+
+    expect(store.cameraOf(mapId).zoom).toBe(1)
+    expect(store.cameraOf(mapId).pan).toEqual({ x: 5, y: 5 })
+  })
+})

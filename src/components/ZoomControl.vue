@@ -18,7 +18,10 @@ const tabsStore = useTabsStore()
 
 const ZOOM_PRESETS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
 
-type ZoomValue = number | 'fit' | 'selection'
+// The commands share the zoom's model because they share its control. Only a
+// number is ever read back out: `get` answers the current zoom, so the field
+// shows a percentage whichever item was picked.
+type ZoomValue = number | 'reset' | 'fit' | 'selection'
 
 function formatZoom(value: unknown) {
   return `${Math.round(Number(value) * 100)}%`
@@ -27,10 +30,15 @@ function formatZoom(value: unknown) {
 const zoomModel = computed<ZoomValue>({
   get: () => tabsStore.activeTab?.zoom ?? 1,
   set: (value) => {
+    // Not `setZoom(1)`: this puts the tab back where it opened, which is what
+    // resets a view rather than just its scale. `mod+0` stays zoom-only on
+    // purpose, so the two are separate commands with separate names.
+    if (value === 'reset') {
+      tabsStore.resetView(tabsStore.activeTabId)
+      return
+    }
     if (value === 'fit' || value === 'selection') {
-      // TODO: the page bounds to fit against exist now (`activeTab.bounds`),
-      // but the viewport size to fit them *into* lives in CanvasRegion and
-      // there is no selection yet. Both arrive with the canvas work.
+      // TODO: there is no selection to fit against yet.
       return
     }
     tabsStore.setZoom(tabsStore.activeTabId, value)
@@ -133,7 +141,7 @@ function handleInputBlur(event: FocusEvent) {
         :side-offset="4"
       >
         <ComboboxViewport class="zoom-viewport">
-          <ComboboxItem class="popover-item" :value="1">{{ t('zoom.resetView') }}</ComboboxItem>
+          <ComboboxItem class="popover-item" value="reset">{{ t('zoom.resetView') }}</ComboboxItem>
           <ComboboxSeparator class="popover-separator" />
           <ComboboxItem
             v-for="preset in ZOOM_PRESETS"

@@ -101,30 +101,54 @@ export const useTabsStore = defineStore('tabs', () => {
     viewport.value = size.width > 0 && size.height > 0 ? { ...size } : null
   }
 
-  // The default view: a tab nobody has looked at opens centred on its content,
-  // or on the home rectangle when it has none. So a blank map opens with world
-  // (0,0) in the middle and an opened file opens on its rooms.
+  // The default view for a tab: centred on its content, or on the home
+  // rectangle when it has none. So a blank map is centred on world (0,0) and
+  // an opened file is centred on its rooms.
   //
   // The content rather than the page, because the page always contains home:
   // a map drawn far from the origin has a page spanning the gap between the
   // two, and centring that would look at the empty middle of the gap rather
   // than at the map.
   //
-  // Zoom is untouched. Where to look and how close are different questions,
-  // and a project that opened at some computed percentage rather than at 100%
-  // would make the readout the first thing a user had to interpret.
-  function centerIfUnseen(mapId: MapId): void {
+  // Null when there is nothing to compute it against: no canvas size yet, or
+  // no such map.
+  function defaultCamera(mapId: MapId, zoom: number): Camera | null {
     const size = viewport.value
-    if (!size || cameras.has(mapId)) return
+    if (!size) return null
     const map = model.project.mapsById.get(mapId)
-    if (!map) return
+    if (!map) return null
 
     const framed = paddedContentBounds(contentBounds(map)) ?? PAGE_HOME
     const middle = {
       x: (framed.minCol + framed.maxCol + 1) / 2,
       y: (framed.minRow + framed.maxRow + 1) / 2,
     }
-    setCameraOf(mapId, centerOn(cameraOf(mapId), middle, size, model.tileSize))
+    // Zoom first, then centre: what fills the viewport depends on the zoom, so
+    // centring a camera at the old one would be centring the wrong rectangle.
+    return centerOn({ pan: cameraOf(mapId).pan, zoom }, middle, size, model.tileSize)
+  }
+
+  // Where a tab opens. Zoom is untouched, because where to look and how close
+  // are different questions and a project opening at some computed percentage
+  // rather than at 100% would make the readout the first thing to interpret.
+  function centerIfUnseen(mapId: MapId): void {
+    if (cameras.has(mapId)) return
+    const camera = defaultCamera(mapId, cameraOf(mapId).zoom)
+    if (camera) setCameraOf(mapId, camera)
+  }
+
+  // Reset View is the default view applied on demand, rather than a second
+  // idea of where to look: a command that put you somewhere other than where
+  // the tab opened would be a third view to learn. Zoom and pan land in one
+  // write, so no intermediate frame renders.
+  //
+  // Zoom still returns to 1 when there is no canvas size to centre against.
+  // Half of the command working beats none of it, and the pan is meaningless
+  // without a viewport anyway.
+  function resetView(mapId: MapId): void {
+    const camera = defaultCamera(mapId, 1)
+    if (camera) setCameraOf(mapId, camera)
+    else setZoom(mapId, 1)
   }
 
   function setCameraOf(mapId: MapId, camera: Camera): void {
@@ -331,6 +355,7 @@ export const useTabsStore = defineStore('tabs', () => {
 
     setViewport,
     centerIfUnseen,
+    resetView,
     hasBeenSeen,
 
     setPan,
