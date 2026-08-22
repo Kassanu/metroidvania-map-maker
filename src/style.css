@@ -3,6 +3,11 @@
  * Theming is CSS-variable driven: light and dark, System Default through
  * prefers-color-scheme, plus a data-theme override the Appearance menu stamps on
  * :root. The values are placeholders; the structure is the part that is settled.
+ *
+ * Each data-theme block narrows `color-scheme` to the one it paints, so native
+ * widget chrome (scrollbars, selects, form controls) follows the app's choice
+ * rather than the OS. :root keeps both values, which is what System Default
+ * means: there the OS decides.
  */
 :root {
   --bg: #ffffff;
@@ -119,6 +124,8 @@
   --surface-active: #e2e2e2;
   --border: #d4d4d4;
 
+  color-scheme: light;
+
   --canvas-pasteboard: #e4e4e4;
   --canvas-page: #ffffff;
   --canvas-grid: #cccccc;
@@ -146,6 +153,8 @@
   --surface: #252526;
   --surface-active: #37373d;
   --border: #3c3c3c;
+
+  color-scheme: dark;
 
   --canvas-pasteboard: #1e1e1e;
   --canvas-page: #000000;

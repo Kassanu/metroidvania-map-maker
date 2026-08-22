@@ -29,12 +29,6 @@ export default defineConfig({
     // column scales down and one narrower never scales up.
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 2,
-    // The emulated OS preference, which the seeded theme does not cover.
-    // style.css leaves `color-scheme: light dark` on :root and never narrows it
-    // per theme, so native widget chrome (scrollbars, selects) follows the OS
-    // rather than the app's theme. Without this a dark screenshot would carry
-    // light scrollbars.
-    colorScheme: 'dark',
   },
   webServer,
 })

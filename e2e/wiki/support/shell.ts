@@ -6,8 +6,8 @@
 // click landed in.
 //
 // The theme seed is what puts the app in Dark, as opposed to System Default
-// resolving to dark. The config's `colorScheme: 'dark'` is a second, separate
-// thing and not a duplicate of this one: see playwright.wiki.config.ts.
+// resolving to dark. It carries native widget chrome with it, so the captures
+// do not depend on the emulated OS preference.
 //
 // Not a `.spec.ts`, so Playwright collects no tests from it.
 
