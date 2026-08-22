@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watchEffect } from 'vue'
 import AppShell from './components/layout/AppShell.vue'
+import ToastRegion from './components/layout/ToastRegion.vue'
 import { useHotkeys } from './hotkeys/useHotkeys'
 import { useApplyTheme } from './theme/useApplyTheme'
 import { useApplyLocale } from './i18n/useApplyLocale'
@@ -28,4 +29,8 @@ watchEffect(() => {
 <template>
   <h1 class="visually-hidden">{{ t('app.name') }}</h1>
   <AppShell />
+  <!-- Outside AppShell on purpose: the toast viewport is fixed-position, and a
+       fixed element that lost its positioning inside AppShell's grid would
+       become an unplaced grid item and displace every region. -->
+  <ToastRegion />
 </template>
