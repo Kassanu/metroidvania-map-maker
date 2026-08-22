@@ -107,6 +107,9 @@ test('a toast stacks above an open dialog', async ({ page }) => {
   expect(layers.toast).toBeGreaterThan(layers.dialog)
 })
 
+// Nine seconds of the budget go on waiting, which is most of the default under
+// a parallel run.
+test.slow()
 test('a sticky toast stays until it is closed', async ({ page }) => {
   await boot(page)
   await raise(page, STICKY)

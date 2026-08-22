@@ -35,6 +35,21 @@ async function download(page: Page, testInfo: { outputPath: (name: string) => st
 }
 
 test.describe('exporting', () => {
+  // The dialog is open for a decision and closes once the decision is spent,
+  // so what confirms the write is the message rather than the dialog.
+  test('closes and says so once the bytes have landed', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== DOWNLOAD_ONLY, 'needs the download provider')
+    await openApp(page)
+
+    await openExportDialog(page)
+    await download(page, testInfo)
+
+    // The dialog itself, not its tree: the Hierarchy panel is a tree too, and
+    // it is still on screen once this one has gone.
+    await expect(page.getByRole('dialog')).toBeHidden()
+    await expect(page.locator('.toast.toast-success')).toHaveCount(1)
+  })
+
   test('writes one JSON file holding the rooms that were ticked', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== DOWNLOAD_ONLY, 'needs the download provider')
     await openApp(page)

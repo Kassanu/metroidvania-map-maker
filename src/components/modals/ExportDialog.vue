@@ -10,9 +10,10 @@
 // a tree is a list of visible rows to everything that reads it. The tri-state
 // arithmetic lives in `scopeTree.ts` rather than here.
 //
-// The dialog reports its own outcome, because the app has no toast system yet:
-// it closes on success, keeps its selection and shows the reason on a failure,
-// and stays open on a cancelled destination so a retry costs no re-ticking.
+// The outcome is reported as a toast, so the dialog is only ever open for a
+// decision. It closes once the bytes have landed, and stays open on a failure
+// so a retry costs no re-ticking. A cancelled destination raises nothing at
+// all: the user dismissed a picker, not an export.
 
 import { computed, ref, watch } from 'vue'
 import {
@@ -28,6 +29,7 @@ import { useUiStore } from '@/stores/ui'
 import { exportProject } from '@/export'
 import type { ExportPackaging } from '@/export'
 import { allRooms, buildScopeTree, countOf, scopeOf, stateOf, toggle } from '@/export/scopeTree'
+import { notify } from '@/notify'
 import type { CheckedState, ScopeNode } from '@/export/scopeTree'
 import type { RoomId } from '@/core/ids'
 import { t } from '@/i18n'
@@ -44,7 +46,6 @@ const tree = computed(() => {
 const selected = ref<Set<RoomId>>(new Set())
 const packaging = ref<ExportPackaging>('combined')
 const busy = ref(false)
-const failure = ref<string | null>(null)
 
 // Everything ticked on every opening, and nothing carried over from the last
 // one: a remembered subset would silently omit a tab the user had forgotten
@@ -55,7 +56,6 @@ watch(
   (open) => {
     if (!open) return
     selected.value = allRooms(tree.value)
-    failure.value = null
   },
   { immediate: true },
 )
@@ -135,17 +135,22 @@ const PACKAGING_OPTIONS: { value: ExportPackaging; labelKey: MessageKey; hintKey
 async function run(): Promise<void> {
   if (nothingSelected.value || busy.value) return
   busy.value = true
-  failure.value = null
   try {
     const result = await exportProject(model.project, {
       packaging: packaging.value,
       scope: scopeOf(tree.value, selected.value),
     })
-    // Cancelled leaves everything as it was, including the dialog: the user
-    // dismissed a destination picker, not the export.
-    if (result.kind === 'written') ui.exportOpen = false
-    else if (result.kind === 'failed') {
-      failure.value = t('modal.export.failed', { message: result.message })
+    // Cancelled leaves everything as it was, including the dialog, and says
+    // nothing: dismissing a destination picker is not an outcome to report.
+    if (result.kind === 'written') {
+      ui.exportOpen = false
+      notify({ severity: 'success', bodyKey: 'modal.export.succeeded' })
+    } else if (result.kind === 'failed') {
+      notify({
+        severity: 'error',
+        bodyKey: 'modal.export.failed',
+        params: { message: result.message },
+      })
     }
   } finally {
     busy.value = false
@@ -213,8 +218,6 @@ async function run(): Promise<void> {
           </label>
         </RadioGroupRoot>
       </section>
-
-      <p v-if="failure" class="export-failure" role="alert">{{ failure }}</p>
 
       <div class="export-actions">
         <button type="button" class="export-cancel" @click="ui.exportOpen = false">
@@ -365,12 +368,6 @@ async function run(): Promise<void> {
 .export-option-hint {
   font-size: 0.75rem;
   opacity: 0.7;
-}
-
-.export-failure {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: #d64545;
 }
 
 .export-actions {

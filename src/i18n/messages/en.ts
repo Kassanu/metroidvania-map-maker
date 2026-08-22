@@ -219,7 +219,6 @@ export const en = {
   'update.title': 'A new version is available',
   'update.body': 'Please save your work and reload the page to update.',
   'update.reload': 'Reload',
-  'update.later': 'Later',
   'menu.edit': 'Edit',
   'menu.view': 'View',
   'menu.help': 'Help',
@@ -487,6 +486,9 @@ export const en = {
   'modal.export.emptyTab': 'No rooms',
   'modal.export.confirm': 'Export',
   'modal.export.working': 'Exporting\u2026',
+  // Both outcomes are reported outside the dialog, which closes on the one and
+  // stays open on the other.
+  'modal.export.succeeded': 'The export was written.',
   'modal.export.failed': 'The export could not be written: {message}',
 
   'modal.about.title': 'Metroidvania Map Maker',

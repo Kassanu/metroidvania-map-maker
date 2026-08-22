@@ -14,6 +14,7 @@ import { paintCells, renameRoom } from '@/core/ops/rooms'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { MapId, RoomId } from '@/core/ids'
 import * as exporter from '@/export'
+import { clearToasts, toasts } from '@/notify'
 
 // The dialog portals, so assertions read the document rather than the wrapper.
 const mounted: VueWrapper[] = []
@@ -115,7 +116,14 @@ afterEach(() => {
   for (const wrapper of mounted.splice(0)) wrapper.unmount()
   document.body.innerHTML = ''
   exportProject.mockReset()
+  clearToasts()
 })
+
+// What the dialog said about the run, read off the queue rather than the
+// document: the toasts render in ToastRegion, which this never mounts.
+function raised() {
+  return toasts.value.map(({ severity, bodyKey, params }) => ({ severity, bodyKey, params }))
+}
 
 describe('the tree it shows', () => {
   it('lists tab, area and room at three levels', async () => {
@@ -269,7 +277,49 @@ describe('exporting', () => {
     await nextTick()
 
     expect(useUiStore().exportOpen).toBe(true)
-    expect(text()).toContain('the disk went away')
+    expect(raised()).toMatchObject([
+      {
+        severity: 'error',
+        bodyKey: 'modal.export.failed',
+        params: { message: 'the disk went away' },
+      },
+    ])
+  })
+
+  it('says so once the bytes have landed', async () => {
+    seed()
+    await open()
+
+    await click(button('Export'))
+    await nextTick()
+
+    expect(raised()).toMatchObject([{ severity: 'success', bodyKey: 'modal.export.succeeded' }])
+  })
+
+  // Dismissing a destination picker is not an outcome, so there is nothing to
+  // report and nothing to read.
+  it('says nothing when the destination is dismissed', async () => {
+    seed()
+    exportProject.mockResolvedValue({ kind: 'cancelled' })
+    await open()
+
+    await click(button('Export'))
+    await nextTick()
+
+    expect(raised()).toEqual([])
+  })
+
+  // The message lives outside the dialog now, so the dialog must not also
+  // render it: two copies of one failure is worse than either alone.
+  it('does not report the failure inside itself', async () => {
+    seed()
+    exportProject.mockResolvedValue({ kind: 'failed', message: 'the disk went away' })
+    await open()
+
+    await click(button('Export'))
+    await nextTick()
+
+    expect(text()).not.toContain('the disk went away')
   })
 })
 
@@ -289,7 +339,10 @@ describe('reopening', () => {
     expect(rows().every((row) => row.state === 'true')).toBe(true)
   })
 
-  it('drops a failure from the last attempt', async () => {
+  // The dialog owns the decision and the toast owns the message, so reopening
+  // neither clears an earlier failure nor announces anything of its own. The
+  // message expires on its own clock.
+  it('neither clears nor repeats the message from the last attempt', async () => {
     seed()
     const ui = useUiStore()
     exportProject.mockResolvedValue({ kind: 'failed', message: 'the disk went away' })
@@ -302,6 +355,7 @@ describe('reopening', () => {
     ui.openExport()
     await nextTick()
 
+    expect(raised()).toMatchObject([{ severity: 'error', bodyKey: 'modal.export.failed' }])
     expect(text()).not.toContain('the disk went away')
   })
 })

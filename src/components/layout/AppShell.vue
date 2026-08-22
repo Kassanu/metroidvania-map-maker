@@ -12,7 +12,6 @@ import ExportDialog from '../modals/ExportDialog.vue'
 import ConfirmUnsavedChanges from '../modals/ConfirmUnsavedChanges.vue'
 import LoadOutcomeDialog from '../modals/LoadOutcomeDialog.vue'
 import RecoveryOffer from '../modals/RecoveryOffer.vue'
-import UpdateToast from './UpdateToast.vue'
 import { onMounted } from 'vue'
 import { useUiStore } from '@/stores/ui'
 import { useModelStore } from '@/stores/model'
@@ -118,7 +117,6 @@ function forgetFailedFile() {
       @discard="recovery.discard($event)"
       @dismiss="recovery.dismiss()"
     />
-    <UpdateToast :open="update.available" @install="update.install()" @dismiss="update.dismiss()" />
   </div>
 </template>
 
