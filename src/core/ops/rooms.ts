@@ -104,7 +104,8 @@ function deleteOrphanedIcons(tx: Transaction, map: MapModel, cells: Iterable<Cel
 
 // Splits a room that an edit disconnected. One group keeps the identity (the
 // one holding the top-most-then-left-most cell); the rest become new rooms
-// inheriting a copy of its properties (same area, name, notes).
+// inheriting a copy of every property it has: area, name, notes, heat and the
+// liquid level.
 function splitIfDisconnected(tx: Transaction, map: MapModel, room: Room): Room[] {
   if (room.cells.size === 0) return []
   const groups = connectedComponents(room.cells)
@@ -119,6 +120,10 @@ function splitIfDisconnected(tx: Transaction, map: MapModel, room: Room): Room[]
     const split = createRoom(room.areaId, tx.ids.mint('room'))
     split.name = room.name
     split.notes = room.notes
+    split.heated = room.heated
+    // A copy of the percentage, not of the surface: pieces of different
+    // heights therefore carry the same level to different heights.
+    split.liquidLevel = room.liquidLevel
     putRoom(tx, map, split, insertAt + created.length)
 
     for (const cell of group) {
@@ -913,6 +918,33 @@ export function assignRoomArea(
   areaId: AreaId,
 ): void {
   setRoomField(tx, map, mustGet(map.rooms, roomId, 'room'), 'areaId', areaId)
+}
+
+export function setRoomHeated(
+  tx: Transaction,
+  map: MapModel,
+  roomId: RoomId,
+  heated: boolean,
+): void {
+  setRoomField(tx, map, mustGet(map.rooms, roomId, 'room'), 'heated', heated)
+}
+
+// The only door into `liquidLevel`, which is what makes "a whole percent from
+// 0 to 100" true of the stored value by construction rather than by anyone
+// checking. Out of range clamps, fractional rounds, and non-finite lands on 0:
+// `Math.max(0, Math.round(NaN))` is NaN, so a clamp alone is not total.
+//
+// Total rather than refusing, because there is nothing a caller could do with
+// a refusal. The loader repairs and reports separately: only it has a user to
+// tell that a file held something else.
+export function setRoomLiquidLevel(
+  tx: Transaction,
+  map: MapModel,
+  roomId: RoomId,
+  level: number,
+): void {
+  const clamped = Number.isFinite(level) ? Math.min(100, Math.max(0, Math.round(level))) : 0
+  setRoomField(tx, map, mustGet(map.rooms, roomId, 'room'), 'liquidLevel', clamped)
 }
 
 // Hierarchy drag-reorder. The op exists so the Hierarchy panel has an entry

@@ -14,7 +14,7 @@ import {
   reorderMap,
 } from './maps'
 import { createTeleport } from './doors'
-import { paintCells } from './rooms'
+import { paintCells, setRoomHeated, setRoomLiquidLevel } from './rooms'
 import { placeIcon } from './markup'
 import {
   createNewArea,
@@ -249,6 +249,29 @@ describe('duplicate', () => {
     expect(sorted(copiedRoom.cells)).toEqual(sorted(room.cells))
     // Areas are project-wide and deliberately shared, not copied.
     expect(copiedRoom.areaId).toBe(room.areaId)
+  })
+
+  it('reproduces heat and the liquid level on every copied room', () => {
+    const { project, map } = setup()
+    const flooded = makeRoom(project, map, rect(0, 0, 2, 2))
+    const plain = makeRoom(project, map, rect(4, 0, 2, 2))
+    const seed = tx(map)
+    setRoomHeated(seed, map, flooded.id, true)
+    setRoomLiquidLevel(seed, map, flooded.id, 75)
+    seed.commit()
+
+    const transaction = tx()
+    const copy = duplicateMap(transaction, project, map.id, 'Map 1 copy')
+    transaction.commit()
+
+    const copies = [...copy.rooms.values()]
+    const copiedFlooded = copies.find((candidate) => candidate.cells.has('0,0'))!
+    const copiedPlain = copies.find((candidate) => candidate.cells.has('4,0'))!
+    expect(copiedFlooded.heated).toBe(true)
+    expect(copiedFlooded.liquidLevel).toBe(75)
+    expect(copiedPlain.heated).toBe(false)
+    expect(copiedPlain.liquidLevel).toBe(0)
+    void plain
   })
 
   it('counts the cross-tab links a copy would lose, and loses exactly those', () => {

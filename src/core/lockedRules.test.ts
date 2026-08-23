@@ -8,14 +8,26 @@ import { SIDES, edgeOfCell } from './cell'
 import type { CellKey, EdgeKey } from './cell'
 import { WORLD_AREA_ID } from './ids'
 import { ModelError } from './outcome'
+import { createRoom } from './factory'
 import { addCell } from './primitives'
 import { createTeleport } from './ops/doors'
-import { addMap } from './ops/maps'
+import { addMap, duplicateMap } from './ops/maps'
 import { placeIcon, repositionIcon } from './ops/markup'
-import { drawInnerWall, eraseCells, moveCellFragment, paintCells } from './ops/rooms'
+import { createNewArea } from './ops/project'
+import {
+  assignRoomArea,
+  drawInnerWall,
+  eraseCells,
+  moveCellFragment,
+  paintCells,
+  renameRoom,
+  setRoomHeated,
+  setRoomLiquidLevel,
+  setRoomNotes,
+} from './ops/rooms'
 import { fromJSON, toJSON } from './serialize'
 import type { LoadEvent, LoadEventKind, LoadReport } from './serialize'
-import type { MapModel, Room } from './types'
+import type { MapModel, ProjectModel, Room } from './types'
 import {
   checkInvariants,
   makeRoom,
@@ -396,6 +408,89 @@ describe('dragging an icon refuses before it destroys anything', () => {
 
     expect(map.icons.get(dragged.id)!.cell).toBe('0,0')
     expect(map.icons.size).toBe(2)
+    expect(checkInvariants(project)).toEqual([])
+  })
+})
+
+describe('every room field is carried at every site that copies a room by hand', () => {
+  // `createRoom` mints a room; several sites then copy one room's fields onto
+  // another by hand. A field missed in one of them vanishes on split, paste,
+  // duplicate or a tab copy while everything still compiles, which is what
+  // makes this worth a guard rather than a convention.
+  //
+  // The comparison enumerates the source room's own keys rather than naming
+  // them, so a field added to `Room` later joins it without anyone updating a
+  // list. What gives it teeth is `everyFieldIsSet`: each compared field has to
+  // differ from what `createRoom` mints, or two defaults would match and the
+  // comparison would prove nothing.
+
+  // Identity and geometry. A copy is a different room in a different place, so
+  // these are the fields it is supposed to disagree about.
+  const NOT_CARRIED = ['id', 'cells', 'innerWalls', 'rev', 'metaRev']
+
+  function carried(room: Room, dropped: readonly string[]): Record<string, unknown> {
+    const fields = room as unknown as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    for (const key of Object.keys(fields)) {
+      if (dropped.includes(key)) continue
+      out[key] = fields[key]
+    }
+    return out
+  }
+
+  function everyFieldIsSet(room: Room, dropped: readonly string[]): void {
+    const pristine = carried(createRoom(WORLD_AREA_ID), dropped)
+    const source = carried(room, dropped)
+    expect(Object.keys(source).length).toBeGreaterThan(0)
+    for (const [key, value] of Object.entries(pristine)) {
+      // A field left at its default here would let a site that drops it pass.
+      expect({ [key]: source[key] }).not.toEqual({ [key]: value })
+    }
+  }
+
+  // A room with every carried field set to something a fresh room would not
+  // have. Adding a field to `Room` means adding a line here; that is the point.
+  function distinctive(project: ProjectModel, map: MapModel, cells: CellKey[]): Room {
+    const area = tx()
+    const brinstar = createNewArea(area, project, 'Brinstar', '#2b6', '#efe')
+    area.commit()
+
+    const room = makeRoom(project, map, cells)
+    const edit = tx(map)
+    assignRoomArea(edit, map, room.id, brinstar.id)
+    renameRoom(edit, map, room.id, 'Landing Site')
+    setRoomNotes(edit, map, room.id, 'save point here')
+    setRoomHeated(edit, map, room.id, true)
+    setRoomLiquidLevel(edit, map, room.id, 40)
+    edit.commit()
+    return room
+  }
+
+  it('splitIfDisconnected gives the split-off room every field', () => {
+    const { project, map } = setup()
+    const room = distinctive(project, map, rect(0, 0, 3, 1))
+    everyFieldIsSet(room, NOT_CARRIED)
+
+    const cut = tx(map)
+    eraseCells(cut, project, map, ['1,0'])
+    cut.commit()
+
+    const split = [...map.rooms.values()].find((candidate) => candidate.id !== room.id)!
+    expect(carried(split, NOT_CARRIED)).toEqual(carried(room, NOT_CARRIED))
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('duplicateMap gives the copied room every field', () => {
+    const { project, map } = setup()
+    const room = distinctive(project, map, rect(0, 0, 2, 2))
+    everyFieldIsSet(room, NOT_CARRIED)
+
+    const copying = tx()
+    const copy = duplicateMap(copying, project, map.id, 'Map 1 copy')
+    copying.commit()
+
+    const copied = [...copy.rooms.values()][0]
+    expect(carried(copied, NOT_CARRIED)).toEqual(carried(room, NOT_CARRIED))
     expect(checkInvariants(project)).toEqual([])
   })
 })

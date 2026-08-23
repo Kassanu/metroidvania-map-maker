@@ -192,6 +192,8 @@ export function duplicateMap(
     const room = createRoom(original.areaId)
     room.name = original.name
     room.notes = original.notes
+    room.heated = original.heated
+    room.liquidLevel = original.liquidLevel
     putRoom(tx, copy, room)
     for (const cell of original.cells) addCell(tx, copy, room, cell)
     for (const [edge, style] of original.innerWalls) setInnerWall(tx, copy, room, edge, style)
