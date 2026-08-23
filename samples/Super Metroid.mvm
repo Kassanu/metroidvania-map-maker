@@ -1,6 +1,6 @@
 {
   "format": "metroidvania-map-maker",
-  "version": 2,
+  "version": 3,
   "project": {
     "name": "Super Metroid",
     "settings": {
@@ -103,6 +103,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Landing Site",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -2,
@@ -268,6 +270,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Crateria Power Bomb Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 5,
@@ -285,6 +289,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Crateria Tube",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 5,
@@ -298,6 +304,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Crateria Kihunter Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 6,
@@ -327,6 +335,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Red Brinstar Elevator Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 7,
@@ -340,6 +350,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "The Moat",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 9,
@@ -365,6 +377,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "West Ocean",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 11,
@@ -542,6 +556,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Pancakes and Wavers Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 14,
@@ -559,6 +575,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Flyway",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -5,
@@ -580,6 +598,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Bomb Torizo Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -2,
@@ -593,6 +613,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Parlor and Alcatraz",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -9,
@@ -646,6 +668,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Pre-Map Flyway",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -7,
@@ -667,6 +691,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Crateria Map Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -4,
@@ -680,6 +706,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Crateria Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -9,
@@ -693,6 +721,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Final Missile Bombway",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -10,
@@ -710,6 +740,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "230 Missile Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -11,
@@ -723,6 +755,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Guantlet Entrance",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -9,
@@ -752,6 +786,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Gauntlet Energy Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -15,
@@ -785,6 +821,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Green Pirates Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -16,
@@ -822,6 +860,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Statues Hallway",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -15,
@@ -851,6 +891,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Statues Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -10,
@@ -868,6 +910,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Lower Mushrooms",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -20,
@@ -893,6 +937,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Green Brinstar Elevator Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -21,
@@ -906,6 +952,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Climb",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -8,
@@ -963,6 +1011,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Pit Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -7,
@@ -988,6 +1038,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Blue Brinstar Elevator Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -4,
@@ -1001,6 +1053,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Climb Supers Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -6,
@@ -1066,6 +1120,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Terminator Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -12,
@@ -1107,6 +1163,8 @@
             "areaId": "area_61ww3xam",
             "name": "Attic",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 19,
@@ -1144,6 +1202,8 @@
             "areaId": "area_61ww3xam",
             "name": "Robot Assembly Line",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -1165,6 +1225,8 @@
             "areaId": "area_61ww3xam",
             "name": "Bowling Alley",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 19,
@@ -1339,6 +1401,8 @@
             "areaId": "area_61ww3xam",
             "name": "Wrecked Ship Main Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 23,
@@ -1400,6 +1464,8 @@
             "areaId": "area_61ww3xam",
             "name": "Gravity Suit Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 17,
@@ -1413,6 +1479,8 @@
             "areaId": "area_61ww3xam",
             "name": "Wrecked Ship Entrance",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 19,
@@ -1438,6 +1506,8 @@
             "areaId": "area_61ww3xam",
             "name": "Wrecked Ship West Super Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 22,
@@ -1451,6 +1521,8 @@
             "areaId": "area_61ww3xam",
             "name": "Wrecked Ship East Super Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 25,
@@ -1476,6 +1548,8 @@
             "areaId": "area_61ww3xam",
             "name": "Basement",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -1505,6 +1579,8 @@
             "areaId": "area_61ww3xam",
             "name": "Wrecked Ship Map Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 20,
@@ -1518,6 +1594,8 @@
             "areaId": "area_61ww3xam",
             "name": "Phantoon's Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -1531,6 +1609,8 @@
             "areaId": "area_61ww3xam",
             "name": "Wrecked Ship Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -1544,6 +1624,8 @@
             "areaId": "area_61ww3xam",
             "name": "Sponge Bath",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -1561,6 +1643,8 @@
             "areaId": "area_61ww3xam",
             "name": "Spiky Death Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -1578,6 +1662,8 @@
             "areaId": "area_61ww3xam",
             "name": "Wrecked Ship Energy Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 25,
@@ -1611,6 +1697,8 @@
             "areaId": "area_61ww3xam",
             "name": "Electric Death Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 28,
@@ -1632,6 +1720,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "East Ocean",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 29,
@@ -1697,6 +1787,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Forgotten Highway Kago Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 36,
@@ -1722,6 +1814,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Crab Maze",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 33,
@@ -1763,6 +1857,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Forgotten Highway Elbow",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 32,
@@ -1776,6 +1872,8 @@
             "areaId": "area_tmpmqwz8",
             "name": "Forgotten Highway Elevator",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 32,
@@ -1789,6 +1887,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Tourian First Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -10,
@@ -1806,6 +1906,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Metroid Room 1",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -16,
@@ -1839,6 +1941,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Metroid Room 2",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -17,
@@ -1856,6 +1960,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Metroid Room 3",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -16,
@@ -1889,6 +1995,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Metroid Room 4",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -10,
@@ -1906,6 +2014,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Tourian Hopper Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -11,
@@ -1923,6 +2033,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Dust Torizo Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -13,
@@ -1940,6 +2052,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Big Boy Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -17,
@@ -1965,6 +2079,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Seaweed Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -18,
@@ -1982,6 +2098,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Tourian Recharge Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -19,
@@ -1995,6 +2113,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Tourian Eye Door Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -17,
@@ -2020,6 +2140,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Rinka Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -13,
@@ -2041,6 +2163,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Lower Tourian Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -14,
@@ -2054,6 +2178,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Mother Brain Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -17,
@@ -2079,6 +2205,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Tourian Escape Room 1",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -19,
@@ -2096,6 +2224,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Tourian Escape Room 2",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -19,
@@ -2113,6 +2243,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Tourian Escape Room 3",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -18,
@@ -2170,6 +2302,8 @@
             "areaId": "area_4anqz9t1",
             "name": "Tourian Escape Room 4",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -12,
@@ -2239,6 +2373,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Green Brinstar Main Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -21,
@@ -2316,6 +2452,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Brinstar Pre-Map Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -24,
@@ -2337,6 +2475,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Brinstar Map Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -25,
@@ -2350,6 +2490,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Green Brinstar Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -22,
@@ -2363,6 +2505,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Green Brinstar Fireflea Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -24,
@@ -2388,6 +2532,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Green Brinstar Missile Refill",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -25,
@@ -2401,6 +2547,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Dachora Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -20,
@@ -2478,6 +2626,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Green Brinstar Beetom Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -22,
@@ -2491,6 +2641,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Etecoon Energy Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -24,
@@ -2555,6 +2707,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Etecoon Super Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -25,
@@ -2568,6 +2722,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Etecoon Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -25,
@@ -2581,6 +2737,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Dachora Energy Refill",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -21,
@@ -2594,6 +2752,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Waterway Energy Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -22,
@@ -2631,6 +2791,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Mission Impossible Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -15,
@@ -2683,6 +2845,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Early Supers Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -20,
@@ -2756,6 +2920,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Brinstar Reserve Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -17,
@@ -2773,6 +2939,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Big Pink Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -15,
@@ -2786,6 +2954,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Big Pink",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -14,
@@ -2879,6 +3049,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Pink Brinstar Wave Gate Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -11,
@@ -2904,6 +3076,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Wave Gate Energy Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -9,
@@ -2917,6 +3091,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Spore Spawn Kihunter Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -11,
@@ -2942,6 +3118,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Spore Spawn Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -8,
@@ -2963,6 +3141,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Spore Spawn Super Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -7,
@@ -3016,6 +3196,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Spore Spawn Farming Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -10,
@@ -3037,6 +3219,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Green Hill Zone",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -11,
@@ -3102,6 +3286,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Morph Ball Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -9,
@@ -3143,6 +3329,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Noob Bridge",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -3,
@@ -3176,6 +3364,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Construction Zone",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -1,
@@ -3193,6 +3383,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "First Missile Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -2,
@@ -3206,6 +3398,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Blue Brinstar Energy Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 2,
@@ -3235,6 +3429,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Blue Brinstar Boulder Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 0,
@@ -3252,6 +3448,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Billy Mays Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -1,
@@ -3265,6 +3463,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Red Tower",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 3,
@@ -3314,6 +3514,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Red Brinstar Fireflea Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -5,
@@ -3371,6 +3573,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "X-Ray Scope Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 -7,
@@ -3388,6 +3592,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Sloaters Refill",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 2,
@@ -3401,6 +3607,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Hellway",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 4,
@@ -3422,6 +3630,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Alpha Power Bomb Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 4,
@@ -3443,6 +3653,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Caterpillar Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 7,
@@ -3484,6 +3696,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Beta Power Bomb Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 5,
@@ -3505,6 +3719,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Caterpillar Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 8,
@@ -3518,6 +3734,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Skree Boost Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 4,
@@ -3535,6 +3753,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Below Spazer",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 6,
@@ -3560,6 +3780,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Spazer Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 8,
@@ -3573,6 +3795,8 @@
             "areaId": "area_4e03cyg4",
             "name": "West Glass Tube Tunnel",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 8,
@@ -3586,6 +3810,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Glass Tunnel",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 9,
@@ -3607,6 +3833,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Glass Tunnel Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 10,
@@ -3620,6 +3848,8 @@
             "areaId": "area_4e03cyg4",
             "name": "East Tunnel",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 10,
@@ -3649,6 +3879,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Warehouse Entrance",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 11,
@@ -3674,6 +3906,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Warehouse Energy Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 13,
@@ -3687,6 +3921,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Warehouse Zeela Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 14,
@@ -3708,6 +3944,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Warehouse Kihunter Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 15,
@@ -3737,6 +3975,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Kraid Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 19,
@@ -3750,6 +3990,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Baby Kraid Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 17,
@@ -3783,6 +4025,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Kraid Eye Door Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 23,
@@ -3804,6 +4048,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Kraid Recharge Station",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -3817,6 +4063,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Kraid Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 25,
@@ -3842,6 +4090,8 @@
             "areaId": "area_7s4x3v3n",
             "name": "Varia Suit Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 27,
@@ -3855,6 +4105,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Main Street",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 8,
@@ -3936,6 +4188,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Crab Gate Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 10,
@@ -3961,6 +4215,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Crab Hole",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 14,
@@ -3978,6 +4234,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Maridia Map Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 15,
@@ -3991,6 +4249,8 @@
             "areaId": "area_4e03cyg4",
             "name": "West Sand Hall Tunnel",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 15,
@@ -4004,6 +4264,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Mt. Everest",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 10,
@@ -4093,6 +4355,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Fish Tank",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 11,
@@ -4177,6 +4441,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Red Fish Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 10,
@@ -4202,6 +4468,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Mama Turtle Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 16,
@@ -4247,6 +4515,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Crab Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 16,
@@ -4276,6 +4546,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Pseudo Plasma Spark Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 16,
@@ -4329,6 +4601,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Northwest Maridia Bug Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 12,
@@ -4358,6 +4632,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Watering Hole",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 10,
@@ -4383,6 +4659,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Aqueduct Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 17,
@@ -4396,6 +4674,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Aqueduct",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 18,
@@ -4477,6 +4757,8 @@
             "areaId": "area_4e03cyg4",
             "name": "West Aqueduct Quicksand Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 19,
@@ -4494,6 +4776,8 @@
             "areaId": "area_4e03cyg4",
             "name": "East Aqueduct Quicksand Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -4511,6 +4795,8 @@
             "areaId": "area_4e03cyg4",
             "name": "West Sand Hole",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 18,
@@ -4536,6 +4822,8 @@
             "areaId": "area_4e03cyg4",
             "name": "East Sand Hole",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -4561,6 +4849,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Oasis",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 20,
@@ -4578,6 +4868,8 @@
             "areaId": "area_4e03cyg4",
             "name": "West Sand Hall",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 16,
@@ -4603,6 +4895,8 @@
             "areaId": "area_4e03cyg4",
             "name": "East Sand Hall",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -4624,6 +4918,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Pants Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -4665,6 +4961,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Shaktool Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -4690,6 +4988,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Spring Ball Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 30,
@@ -4711,6 +5011,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Botwoon's Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 22,
@@ -4728,6 +5030,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Botwoon Hallway",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 18,
@@ -4753,6 +5057,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Botwoon Energy Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -4790,6 +5096,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Botwoon Quicksand Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -4807,6 +5115,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Below Botwoon Energy Tank",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -4832,6 +5142,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Halfie Climb Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 31,
@@ -4869,6 +5181,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Maridia Missile Refill Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 36,
@@ -4882,6 +5196,8 @@
             "areaId": "area_4e03cyg4",
             "name": "East Cactus Alley Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -4931,6 +5247,8 @@
             "areaId": "area_4e03cyg4",
             "name": "West Cactus Alley Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 25,
@@ -4948,6 +5266,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Yoink Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -4961,6 +5281,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Butterfly Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -4974,6 +5296,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Thread The Needle Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 25,
@@ -5011,6 +5335,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Maridia Elevator Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 32,
@@ -5036,6 +5362,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Forgotten Highway Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 33,
@@ -5049,6 +5377,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Colosseum",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 32,
@@ -5114,6 +5444,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Draygon Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 39,
@@ -5127,6 +5459,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Maridia Health Refill Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 40,
@@ -5140,6 +5474,8 @@
             "areaId": "area_4e03cyg4",
             "name": "The Precious Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 39,
@@ -5165,6 +5501,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Draygon's Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 37,
@@ -5190,6 +5528,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Space Jump Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 36,
@@ -5203,6 +5543,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Plasma Spark Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -5280,6 +5622,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Kassiuz Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 23,
@@ -5305,6 +5649,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Plasma Tutorial Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -5318,6 +5664,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Plasma Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 25,
@@ -5351,6 +5699,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Business Center",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 11,
@@ -5380,6 +5730,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Norfair Map Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 10,
@@ -5393,6 +5745,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Hi Jump Energy Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 9,
@@ -5414,6 +5768,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Hi Jump Boots Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 8,
@@ -5427,6 +5783,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Cathedral Entrance",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 12,
@@ -5460,6 +5818,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Cathedral",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 15,
@@ -5493,6 +5853,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Frog Savestation",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 12,
@@ -5506,6 +5868,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Crocomire Escape",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 12,
@@ -5547,6 +5911,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Frog Speedway",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 13,
@@ -5588,6 +5954,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Upper Norfair Farming Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -5613,6 +5981,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Rising Tide",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 18,
@@ -5642,6 +6012,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Bubble Mountain",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 23,
@@ -5683,6 +6055,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Bubble Mountain Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 22,
@@ -5696,6 +6070,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Green Bubbles Missile Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -5713,6 +6089,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Norfair Reserve Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 19,
@@ -5730,6 +6108,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Bat Cave",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 25,
@@ -5747,6 +6127,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Speed Booster Hall",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -5816,6 +6198,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Speed Booster Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 38,
@@ -5829,6 +6213,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Ice Beam Gate Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 7,
@@ -5878,6 +6264,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Ice Beam Acid Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 5,
@@ -5895,6 +6283,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Ice Beam Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 6,
@@ -5908,6 +6298,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Ice Beam Tutorial Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 5,
@@ -5925,6 +6317,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Ice Beam Snake Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 4,
@@ -5950,6 +6344,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Crumble Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 3,
@@ -5975,6 +6371,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Crocomire Speedway",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 4,
@@ -6052,6 +6450,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Crocomire Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 17,
@@ -6065,6 +6465,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Acid Snakes Tunnel",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 17,
@@ -6090,6 +6492,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Red Pirate Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 20,
@@ -6111,6 +6515,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Nutella Refill",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -6124,6 +6530,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Lower Norfair Elevator Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -6137,6 +6545,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Crocomire's Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 13,
@@ -6178,6 +6588,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Post Crocomire Farming Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 11,
@@ -6203,6 +6615,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Post Crocomire Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 13,
@@ -6216,6 +6630,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Post Crocomire Power Bomb Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 10,
@@ -6229,6 +6645,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Post Crocomire Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 11,
@@ -6258,6 +6676,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Grapple Tutorial Room 3",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 8,
@@ -6291,6 +6711,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Grapple Tutorial Room 2",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 7,
@@ -6312,6 +6734,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Grapple Tutorial Room 1",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 5,
@@ -6329,6 +6753,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Grapple Beam Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 4,
@@ -6350,6 +6776,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Indiana Jones Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 5,
@@ -6431,6 +6859,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Cosine Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 12,
@@ -6456,6 +6886,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Purple Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 23,
@@ -6477,6 +6909,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Purple Farming Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -6490,6 +6924,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Magdollite Tunnel",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -6511,6 +6947,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Spiky Acid Snakes Tunnel",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 22,
@@ -6536,6 +6974,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Lower Norfair Elevator",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 22,
@@ -6549,6 +6989,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Kronic Boost Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 27,
@@ -6574,6 +7016,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Lava Dive Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 23,
@@ -6619,6 +7063,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Single Chamber",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 25,
@@ -6664,6 +7110,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Spiky Platforms Tunnel",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -6689,6 +7137,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Double Chamber",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -6730,6 +7180,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Wave Beam Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 30,
@@ -6743,6 +7195,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Three Musketeers' Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 31,
@@ -6776,6 +7230,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Lower Norfair Spring Ball Maze Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 34,
@@ -6813,6 +7269,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "The Jail",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 38,
@@ -6826,6 +7284,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Volcano Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 30,
@@ -6855,6 +7315,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Lower Norfair Fireflea Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 36,
@@ -6904,6 +7366,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Red Kihunter Shaft",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 36,
@@ -6941,6 +7405,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Red Kihunter Shaft Save Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 37,
@@ -6954,6 +7420,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Wasteland",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 33,
@@ -6995,6 +7463,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Metal Pirates Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 31,
@@ -7016,6 +7486,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Plowerhouse Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 28,
@@ -7037,6 +7509,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Lower Norfair Farming Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 25,
@@ -7058,6 +7532,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Ridley's Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -7075,6 +7551,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Ridley Tank Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 23,
@@ -7088,6 +7566,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "The Worst Room In The Game",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 31,
@@ -7121,6 +7601,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Mickey Mouse Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 30,
@@ -7162,6 +7644,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Fast Pillars Setup Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 26,
@@ -7183,6 +7667,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Pillar Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 27,
@@ -7208,6 +7694,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Main Hall",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 18,
@@ -7249,6 +7737,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Fast Ripper Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 22,
@@ -7274,6 +7764,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Golden Torizo Energy Recharge",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 22,
@@ -7287,6 +7779,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Screw Attack Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 21,
@@ -7308,6 +7802,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Golden Torizo's Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 19,
@@ -7333,6 +7829,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Acid Statue Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 16,
@@ -7370,6 +7868,8 @@
             "areaId": "area_4e03cyg4",
             "name": "Plasma Beach Quicksand Room",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 24,
@@ -7383,6 +7883,8 @@
             "areaId": "area_7w3g7bm5",
             "name": "Amphitheatre",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 33,

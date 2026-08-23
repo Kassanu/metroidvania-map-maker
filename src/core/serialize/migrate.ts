@@ -34,9 +34,19 @@ function v1ToV2(file: JsonFile): JsonFile {
   return { ...file, version: 2 }
 }
 
+// v3 added `heated` and `liquidLevel` to a room. Both are absent in a v2 file
+// and an absent field is its documented default, so nothing here has a value
+// to change. The step still has to exist: the loop below throws on a version
+// with no step registered, so leaving this out refuses every file already
+// saved rather than reading it unchanged.
+function v2ToV3(file: JsonFile): JsonFile {
+  return { ...file, version: 3 }
+}
+
 // Each entry upgrades a file *from* the keyed version to the next one.
 const STEPS: Record<number, (file: JsonFile) => JsonFile> = {
   1: v1ToV2,
+  2: v2ToV3,
 }
 
 export function migrate(file: JsonFile): JsonFile {

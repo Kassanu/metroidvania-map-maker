@@ -7,12 +7,13 @@
 // after generation. Real ids are 8 random base32 chars; nothing in the loader
 // cares, and a hand-edited file is a supported input.
 //
-// When these tests fail, the format changed. A field that is additive and
-// optional, and that the loader defaults, is declared in the round-trip test
-// below and owes no migration: bumping `FILE_VERSION` for one would make older
-// builds reject a file they can read correctly. Anything else owes a `STEPS`
-// entry in `migrate.ts` for every project a user already saved. Do not
-// regenerate the fixture; that deletes the evidence.
+// When these tests fail, the format changed. Every field the format has gained
+// since is declared in the round-trip test below, with the default the loader
+// supplies. Whether it also bumped `FILE_VERSION` turns on whether it holds
+// user data, not on whether it is additive: an added field owes a `STEPS` entry
+// that stamps the version and changes nothing, and a replaced one owes a step
+// that translates every project a user already saved. Do not regenerate the
+// fixture; that deletes the evidence.
 
 import { describe, expect, it } from 'vitest'
 import { openProject, toJSON } from './index'
@@ -51,15 +52,21 @@ describe('the frozen v1 file', () => {
     icon.glyphColor = '#202020'
 
     // v2 replaced `oneWay: boolean` with `direction`, which is the one change
-    // here that is a migration rather than a defaulted addition: the writer
-    // stamps the new version, and every v1 one-way becomes `aToB` because v1
-    // could only express a one-way in its own A-to-B order.
-    expected.version = 2
+    // here that translates a value rather than defaulting an absent one: every
+    // v1 one-way becomes `aToB` because v1 could only express a one-way in its
+    // own A-to-B order. v3 added the two room fields, whose step stamps the
+    // version and touches nothing, so they arrive here as defaults the writer
+    // then states on every room.
+    expected.version = 3
     for (const map of expected.project.maps) {
       for (const transition of map.transitions) {
         const legacy = transition as { oneWay?: boolean }
         transition.direction = legacy.oneWay ? 'aToB' : 'both'
         delete legacy.oneWay
+      }
+      for (const room of map.rooms) {
+        room.heated = false
+        room.liquidLevel = 0
       }
     }
 

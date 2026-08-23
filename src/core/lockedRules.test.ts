@@ -540,6 +540,29 @@ describe('every room field is carried at every site that copies a room by hand',
     expect(checkInvariants(project)).toEqual([])
   })
 
+  it('the loader gives every piece of a split room every field', () => {
+    // The sixth site, and the only one that mints a room the file never
+    // described. A hand-edited file can hold a room whose cells are not
+    // connected, and the loader splits it the way an erase does.
+    const { project, map } = setup()
+    const room = distinctive(project, map, rect(0, 0, 3, 1))
+    everyFieldIsSet(room, NOT_CARRIED)
+
+    const file = toJSON(project)
+    const jsonRoom = file.project.maps[0].rooms[0]
+    jsonRoom.cells = jsonRoom.cells.filter(([x]) => x !== 1)
+
+    const { project: loaded, report } = fromJSON(file)
+    const rooms = [...loaded.mapsById.get(loaded.maps[0])!.rooms.values()]
+
+    expect(eventsOf(report, 'room-split')).toHaveLength(1)
+    expect(rooms).toHaveLength(2)
+    for (const piece of rooms) {
+      expect(carried(piece, NOT_CARRIED)).toEqual(carried(room, NOT_CARRIED))
+    }
+    expect(checkInvariants(loaded)).toEqual([])
+  })
+
   it('duplicateMap gives the copied room every field', () => {
     const { project, map } = setup()
     const room = distinctive(project, map, rect(0, 0, 2, 2))

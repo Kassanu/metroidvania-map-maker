@@ -41,6 +41,11 @@ function populated() {
   const b = paintCells(content, project, map, rect(2, 0, 2, 3), { areaId: WORLD_AREA_ID })!
   a.name = 'Landing Site'
   a.notes = 'ship'
+  // Neither at its default, and the two rooms disagree, so a writer or reader
+  // that lost one of them cannot pass by writing the same value everywhere.
+  a.heated = true
+  a.liquidLevel = 65
+  b.liquidLevel = 100
   drawInnerWall(content, map, a.id, edgeOfCell('0,0', 'S'), 'dotted')
   // Deliberately not the loader's fallback pair: colours that survive the
   // round trip only because they were written and read back.
@@ -86,6 +91,26 @@ describe('round trip', () => {
 
     // Serialising the reload must produce byte-identical JSON.
     expect(toJSON(reloaded)).toEqual(toJSON(project))
+  })
+
+  it('carries heat and the liquid level back and forth', () => {
+    const { project, map } = populated()
+    const written = toJSON(project).project.maps[0].rooms
+    const { project: reloaded } = fromJSON(toJSON(project))
+
+    // Stated on every room, including the ones holding the defaults: a file
+    // says what it holds rather than leaving the reader to infer it.
+    expect(written.map((room) => [room.heated, room.liquidLevel])).toEqual([
+      [true, 65],
+      [false, 100],
+    ])
+
+    const copy = reloaded.mapsById.get(reloaded.maps[0])!
+    for (const roomId of map.roomOrder) {
+      const before = map.rooms.get(roomId)!
+      const after = copy.rooms.get(roomId)!
+      expect([after.heated, after.liquidLevel]).toEqual([before.heated, before.liquidLevel])
+    }
   })
 
   it('preserves tab order and Hierarchy room order', () => {

@@ -137,6 +137,8 @@ function serializeMap(map: MapModel): JsonMap {
         areaId: room.areaId,
         name: room.name,
         notes: room.notes,
+        heated: room.heated,
+        liquidLevel: room.liquidLevel,
         // Only cells and inner walls: outer walls are derived at load, never
         // stored, because the user can never draw one by hand.
         //
@@ -267,6 +269,12 @@ export type LoadEvent =
   // A colour that was not a colour. `what` names the field, since the value
   // is by definition not worth quoting back.
   | { kind: 'color-reset'; what: string }
+  // A liquid level the file stated outside the whole percents 0-100, brought
+  // back into them. Reported apart from the flag below because clamping a
+  // number and coercing a flag are different repairs.
+  | { kind: 'level-repaired'; map: string; room: string }
+  // A `heated` that was not a boolean, read for its truthiness.
+  | { kind: 'heat-reset'; map: string; room: string }
   // An icon whose type could not be a registry key, so it draws as unknown.
   | { kind: 'icon-type-reset'; map: string }
   // A field the file left out that the loader had to assume a value for. Only
@@ -409,6 +417,39 @@ function textOf(raw: unknown, fallback: string, cap: number, what: string, log: 
   if (value.length <= cap) return value
   log.add({ kind: 'text-truncated', what })
   return value.slice(0, cap)
+}
+
+// A room's liquid level: a whole percent from 0 to 100. Absent is the
+// documented default and silent, the same way an absent colour is; anything
+// else is repaired and reported, because a level the file stated and the app
+// then draws differently is the user's data having changed.
+//
+// The repair is a clamp rather than a refusal, and a level is not a
+// coordinate: the surface it derives is bounded by the room's own box whatever
+// the number says, so no value here can cost a render loop.
+//
+// `setRoomLiquidLevel` applies the same three rules and reports nothing. The
+// two are deliberately separate: only a load has a user to tell that a file
+// held something else.
+function levelOf(raw: unknown, map: string, room: string, log: LoadLog): number {
+  if (raw === undefined) return 0
+  const repaired =
+    typeof raw === 'number' && Number.isFinite(raw)
+      ? Math.min(100, Math.max(0, Math.round(raw)))
+      : 0
+  if (raw !== repaired) log.add({ kind: 'level-repaired', map, room })
+  return repaired
+}
+
+// A room's heat flag. Absent is silent for the same reason as above; anything
+// that is not a boolean is read for its truthiness and reported, so the `1`
+// and `0` a hand-edited file is likely to carry mean what whoever wrote them
+// meant.
+function heatOf(raw: unknown, map: string, room: string, log: LoadLog): boolean {
+  if (raw === undefined) return false
+  if (typeof raw === 'boolean') return raw
+  log.add({ kind: 'heat-reset', map, room })
+  return Boolean(raw)
 }
 
 export function fromJSON(raw: unknown): LoadResult {
@@ -639,6 +680,8 @@ function loadRooms(
     const room = createRoom(areaId, roomId)
     room.name = name
     room.notes = textOf(jsonRoom.notes, '', LIMITS.notesLength, 'room notes', log)
+    room.heated = heatOf(jsonRoom.heated, map.name, label, log)
+    room.liquidLevel = levelOf(jsonRoom.liquidLevel, map.name, label, log)
 
     // Both caps are checked before the cells are walked, not after: the walk
     // is the cost being bounded.
@@ -719,8 +762,13 @@ function attachRooms(
       index === keepIndex ? room : createRoom(room.areaId, uniqueId('room', seenIds) as RoomId)
     if (target !== room) {
       seenIds.add(target.id)
+      // Every non-geometric field, copied by hand. A split is the one place a
+      // load mints a room the file did not describe, so a field missed here
+      // reaches the user as a piece that lost it.
       target.name = room.name
       target.notes = room.notes
+      target.heated = room.heated
+      target.liquidLevel = room.liquidLevel
     }
     target.cells = group
     for (const cell of group) map.cellOwner.set(cell, target.id)

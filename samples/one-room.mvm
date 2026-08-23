@@ -1,6 +1,6 @@
 {
   "format": "metroidvania-map-maker",
-  "version": 2,
+  "version": 3,
   "project": {
     "name": "One Room",
     "settings": {
@@ -43,6 +43,8 @@
             "areaId": "world",
             "name": "",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 0,

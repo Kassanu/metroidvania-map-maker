@@ -1,6 +1,6 @@
 {
   "format": "metroidvania-map-maker",
-  "version": 2,
+  "version": 3,
   "project": {
     "name": "One Of Everything",
     "settings": {
@@ -56,6 +56,8 @@
             "areaId": "area_01",
             "name": "Landing Site",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 0,
@@ -115,6 +117,8 @@
             "areaId": "world",
             "name": "Corridor",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 3,
@@ -140,6 +144,8 @@
             "areaId": "area_01",
             "name": "West Wing",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 0,
@@ -165,6 +171,8 @@
             "areaId": "world",
             "name": "East Wing",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 5,
@@ -190,6 +198,8 @@
             "areaId": "world",
             "name": "Sub Level",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 0,
@@ -223,6 +233,8 @@
             "areaId": "area_01",
             "name": "Annex",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 3,
@@ -240,6 +252,8 @@
             "areaId": "world",
             "name": "Yard",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 0,
@@ -273,6 +287,8 @@
             "areaId": "world",
             "name": "Shed",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 5,
@@ -513,6 +529,8 @@
             "areaId": "area_01",
             "name": "Vault",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 0,

@@ -156,6 +156,8 @@ export const en = {
   'load.lockRemapped': 'Locks reset to Open: {count}',
   'load.settingReset': 'Settings reset: {count}',
   'load.colorReset': 'Colours reset: {count}',
+  'load.levelRepaired': 'Liquid levels repaired: {count}',
+  'load.heatReset': 'Heat settings reset: {count}',
   'load.iconTypeReset': 'Icons of an unknown type: {count}',
   'load.assumedDefault': 'Missing values assumed: {count}',
   'load.idRemapped': 'Duplicate ids reissued: {count}',
