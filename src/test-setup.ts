@@ -1,6 +1,8 @@
 import { vi, type Mock } from 'vitest'
 import { createApp } from 'vue'
 import { createAppPinia } from '@/stores/pinia'
+import { wasRefused } from '@/core/outcome'
+import type { GestureStart } from '@/gestures/gestureStart'
 
 // Pinia only applies plugins registered with pinia.use() once the instance
 // has been installed into a Vue app, so a store test doing nothing but
@@ -150,4 +152,13 @@ if (typeof HTMLCanvasElement !== 'undefined') {
     if (!fakeContexts.has(this)) fakeContexts.set(this, createFakeContext2D())
     return fakeContexts.get(this)
   } as typeof HTMLCanvasElement.prototype.getContext
+}
+
+// A gesture a test expects to have started. It fails where the refusal is,
+// rather than at the first property poke a dozen lines later, and it narrows,
+// so the test that follows reads as it did before the gesture layer grew a
+// refusal. A test about the refusal itself asserts on the value instead.
+export function mustStart<T>(begun: GestureStart<T>): T {
+  if (wasRefused(begun)) throw new Error(`gesture refused: ${begun.refused}`)
+  return begun
 }

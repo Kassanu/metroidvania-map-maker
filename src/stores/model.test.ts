@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia } from 'pinia'
 import { isReactive, nextTick, watch } from 'vue'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { PROJECT_SCOPE, mapScope, useModelStore } from './model'
 import { addMap, renameMap } from '@/core/ops/maps'
 import { renameProject } from '@/core/ops/project'
@@ -9,11 +9,18 @@ import { paintCells } from '@/core/ops/rooms'
 import { createProject } from '@/core/factory'
 import { checkInvariants } from '@/core/testUtils'
 import { WORLD_AREA_ID } from '@/core/ids'
-import { ModelError } from '@/core/outcome'
+import { ModelError, wasRefused } from '@/core/outcome'
 import type { MapId } from '@/core/ids'
 
 function firstMapId(project: { maps: MapId[] }): MapId {
   return project.maps[0]
+}
+
+function paintTwo(store: ReturnType<typeof useModelStore>, map: { id: MapId }) {
+  return (tx: Parameters<Parameters<typeof store.run>[2]>[0]) =>
+    paintCells(tx, store.project, store.project.mapsById.get(map.id)!, ['0,0', '1,0'], {
+      areaId: WORLD_AREA_ID,
+    })
 }
 
 // Stands in for what `openProject(raw).accept()` hands back.
@@ -164,7 +171,7 @@ describe('useModelStore', () => {
     it('moves the model but publishes nothing until it commits', () => {
       const store = useModelStore()
       const rev = store.rev
-      const gesture = store.beginGesture('Paint', mapScope(firstMapId(store.project)))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(firstMapId(store.project))))
 
       gesture.reapply(paint(store, ['0,0']))
       expect(store.project.mapsById.get(firstMapId(store.project))!.rooms.size).toBe(1)
@@ -181,7 +188,7 @@ describe('useModelStore', () => {
     it('rewinds the previous apply rather than stacking them', () => {
       const store = useModelStore()
       const map = store.project.mapsById.get(firstMapId(store.project))!
-      const gesture = store.beginGesture('Paint', mapScope(map.id))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(map.id)))
 
       gesture.reapply(paint(store, ['0,0', '1,0']))
       gesture.reapply(paint(store, ['0,0', '1,0', '2,0']))
@@ -193,7 +200,7 @@ describe('useModelStore', () => {
 
     it('leaves no undo step when nothing changed', () => {
       const store = useModelStore()
-      const gesture = store.beginGesture('Paint', mapScope(firstMapId(store.project)))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(firstMapId(store.project))))
 
       gesture.reapply(() => {})
       gesture.commit()
@@ -208,7 +215,7 @@ describe('useModelStore', () => {
       store.run('Setup', mapScope(map.id), paint(store, ['9,9']))
       const rev = store.rev
 
-      const gesture = store.beginGesture('Paint', mapScope(map.id))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(map.id)))
       gesture.reapply(paint(store, ['0,0', '1,0']))
       gesture.cancel()
 
@@ -225,7 +232,7 @@ describe('useModelStore', () => {
     it('is settled once, whichever call gets there first', () => {
       const store = useModelStore()
       const map = store.project.mapsById.get(firstMapId(store.project))!
-      const gesture = store.beginGesture('Paint', mapScope(map.id))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(map.id)))
 
       gesture.reapply(paint(store, ['0,0']))
       gesture.cancel()
@@ -239,7 +246,7 @@ describe('useModelStore', () => {
     it('rolls back and closes when the body throws', () => {
       const store = useModelStore()
       const map = store.project.mapsById.get(firstMapId(store.project))!
-      const gesture = store.beginGesture('Paint', mapScope(map.id))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(map.id)))
 
       expect(() =>
         gesture.reapply((tx) => {
@@ -252,6 +259,70 @@ describe('useModelStore', () => {
       expect(checkInvariants(store.project)).toEqual([])
       gesture.commit()
       expect(store.status.canUndo).toBe(false)
+    })
+  })
+
+  // `reapply` rewinds and replays the whole gesture against one journal stack
+  // that takes no lock, so two live transactions interleave their rewinds and
+  // corrupt it. Refusing the second is the only answer that neither corrupts
+  // the journal nor commits a drag the user has not released.
+  describe('one gesture at a time', () => {
+    function begin(store: ReturnType<typeof useModelStore>) {
+      return store.beginGesture('Paint', mapScope(firstMapId(store.project)))
+    }
+
+    it('refuses a second gesture while one is live', () => {
+      const store = useModelStore()
+      mustStart(begin(store))
+
+      expect(begin(store)).toEqual({ refused: 'gesture-live' })
+    })
+
+    it('leaves the first gesture untouched by the refusal', () => {
+      const store = useModelStore()
+      const map = store.project.mapsById.get(firstMapId(store.project))!
+      const first = mustStart(begin(store))
+      first.reapply(paintTwo(store, map))
+
+      const second = begin(store)
+
+      expect(wasRefused(second)).toBe(true)
+      expect(store.gestureActive).toBe(true)
+      first.commit()
+      expect(store.status.undoLabel).toBe('Paint')
+      expect(map.rooms.size).toBe(1)
+    })
+
+    // Every settle route frees the slot, or the first drag of a session would
+    // be the last one the app ever accepted.
+    it('takes a new gesture after the live one commits', () => {
+      const store = useModelStore()
+      mustStart(begin(store)).commit()
+
+      expect(wasRefused(begin(store))).toBe(false)
+    })
+
+    it('takes a new gesture after the live one cancels', () => {
+      const store = useModelStore()
+      mustStart(begin(store)).cancel()
+
+      expect(wasRefused(begin(store))).toBe(false)
+    })
+
+    // The route that is easiest to leave out, and the worst one to: a gesture
+    // whose body threw would otherwise refuse every gesture after it for the
+    // rest of the session.
+    it('takes a new gesture after a body throws', () => {
+      const store = useModelStore()
+      const gesture = mustStart(begin(store))
+
+      expect(() =>
+        gesture.reapply(() => {
+          throw new ModelError('boom')
+        }),
+      ).toThrow('boom')
+
+      expect(wasRefused(begin(store))).toBe(false)
     })
   })
 
@@ -405,7 +476,7 @@ describe('useModelStore', () => {
 
     it('is true from the start of a gesture until it commits', () => {
       const store = useModelStore()
-      const gesture = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(store.project.maps[0])))
       expect(store.gestureActive).toBe(true)
 
       gesture.commit()
@@ -414,7 +485,7 @@ describe('useModelStore', () => {
 
     it('is false again once a gesture is cancelled', () => {
       const store = useModelStore()
-      const gesture = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(store.project.maps[0])))
       gesture.cancel()
       expect(store.gestureActive).toBe(false)
     })
@@ -423,11 +494,11 @@ describe('useModelStore', () => {
     // settling twice must not leave the count reading below zero.
     it('is unmoved by settling twice', () => {
       const store = useModelStore()
-      const gesture = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(store.project.maps[0])))
       gesture.cancel()
       gesture.commit()
 
-      const second = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      const second = mustStart(store.beginGesture('Paint', mapScope(store.project.maps[0])))
       expect(store.gestureActive).toBe(true)
       second.cancel()
       expect(store.gestureActive).toBe(false)
@@ -435,7 +506,7 @@ describe('useModelStore', () => {
 
     it('is false again after a gesture body throws', () => {
       const store = useModelStore()
-      const gesture = store.beginGesture('Paint', mapScope(store.project.maps[0]))
+      const gesture = mustStart(store.beginGesture('Paint', mapScope(store.project.maps[0])))
       expect(() =>
         gesture.reapply(() => {
           throw new Error('bad op')

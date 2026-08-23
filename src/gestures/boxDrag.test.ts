@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginBoxDrag, type BoxDrag } from './boxDrag'
 import { mapScope, useModelStore, PROJECT_SCOPE } from '@/stores/model'
 import { useDoorDefaultsStore } from '@/stores/doorDefaults'
@@ -53,7 +53,7 @@ describe('beginBoxDrag', () => {
   }
 
   function drag(from: string): BoxDrag {
-    const box = beginBoxDrag(firstMap().mapId, from, onChange)
+    const box = mustStart(beginBoxDrag(firstMap().mapId, from, onChange))
     expect(box).not.toBeNull()
     return box!
   }
@@ -111,6 +111,9 @@ describe('beginBoxDrag', () => {
       const door = drag('0,1')
       door.moveTo(centre(0, 2))
       expect(door.preview?.outcome).toBe('edge')
+      // Settled before the next one opens: one gesture transaction is live at
+      // a time, and a second is refused.
+      door.cancel()
 
       // The same seam, one cell deeper on each side: 4 thick, so it cancels.
       // Note what it is not: this is also a 1-thick box, so it falls through
@@ -362,6 +365,6 @@ describe('beginBoxDrag', () => {
   })
 
   it('answers null when the map is gone', () => {
-    expect(beginBoxDrag('map_gone' as MapId, '0,0', onChange)).toBeNull()
+    expect(beginBoxDrag('map_gone' as MapId, '0,0', onChange)).toEqual({ refused: 'no-target' })
   })
 })

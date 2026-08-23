@@ -25,6 +25,7 @@
 // the Esc handling are the gesture; what a swept rectangle names is the table.
 
 import { pushEscHandler } from '@/hotkeys/escStack'
+import { refuseGesture, type GestureStart } from './gestureStart'
 import { useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
 import { ownedCellsIn, roomsOverlapping, type CellBounds } from '@/core/derive/bounds'
@@ -91,19 +92,21 @@ function sweptRefs(map: MapModel, bounds: CellBounds, subMode: SelectSubMode): O
 // shift-marquee unions with it. Read once, like every other press-time
 // modifier.
 //
-// Returns null when the map is gone: nothing to select on, and the caller
-// simply does not start a gesture.
+// Refused when the map is gone: nothing to select on, and the caller simply
+// does not start a gesture. It can never be refused for a live gesture, opening
+// no transaction of its own, but it answers the same union as everything else
+// in the layer: two ways to say "could not start" is what that union removes.
 export function beginMarquee(
   mapId: MapId,
   from: WorldPoint,
   subMode: SelectSubMode,
   additive: boolean,
   onChange: () => void,
-): Marquee | null {
+): GestureStart<Marquee> {
   const model = useModelStore()
   const selection = useSelectionStore()
   const map = model.project.mapsById.get(mapId)
-  if (!map) return null
+  if (!map) return refuseGesture('no-target')
 
   let bounds = boundsFor(from, from)
   let settled = false

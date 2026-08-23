@@ -16,6 +16,8 @@
 // honest before release without this file knowing the threshold.
 
 import { beginGhostGesture, NO_CELLS, type GhostGesture } from './ghostGesture'
+import { wasRefused } from '@/core/outcome'
+import type { GestureStart } from './gestureStart'
 import { parseCell } from '@/core/cell'
 import type { WorldPoint } from '@/canvas/stroke'
 import type { CellKey } from '@/core/cell'
@@ -44,7 +46,7 @@ export interface LinePeelSpec {
   apply(transaction: Transaction, count: number): void
 }
 
-export function beginLinePeel(spec: LinePeelSpec): LinePeel {
+export function beginLinePeel(spec: LinePeelSpec): GestureStart<LinePeel> {
   const { points, atStart } = spec
   let count = 0
 
@@ -57,6 +59,7 @@ export function beginLinePeel(spec: LinePeelSpec): LinePeel {
     // the speculative result has already taken them off.
     absorbing: () => NO_CELLS,
   })
+  if (wasRefused(driver)) return driver
 
   return {
     get absorbing() {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginLinePeel } from './linePeel'
 import { mapScope, useModelStore } from '@/stores/model'
 import { createLine, peelLine } from '@/core/ops/markup'
@@ -35,16 +35,18 @@ function pointsOf(mapId: MapId, line: LineId): readonly CellKey[] | undefined {
 
 function peelOf(mapId: MapId, line: LineId, atStart: boolean) {
   const map = mapOf(mapId)
-  return beginLinePeel({
-    mapId,
-    points: map.lines.get(line)!.points,
-    atStart,
-    label: 'Erase Line',
-    onChange: () => {},
-    apply: (tx, count) => {
-      peelLine(tx, map, line, atStart, count)
-    },
-  })
+  return mustStart(
+    beginLinePeel({
+      mapId,
+      points: map.lines.get(line)!.points,
+      atStart,
+      label: 'Erase Line',
+      onChange: () => {},
+      apply: (tx, count) => {
+        peelLine(tx, map, line, atStart, count)
+      },
+    }),
+  )
 }
 
 // The centre of a cell, which is where the count measures from.
@@ -168,18 +170,20 @@ describe('the line peel', () => {
     const { mapId, line } = setup()
     const map = mapOf(mapId)
     let repaints = 0
-    const peel = beginLinePeel({
-      mapId,
-      points: map.lines.get(line)!.points,
-      atStart: false,
-      label: 'Erase Line',
-      onChange: () => {
-        repaints++
-      },
-      apply: (tx, count) => {
-        peelLine(tx, map, line, false, count)
-      },
-    })
+    const peel = mustStart(
+      beginLinePeel({
+        mapId,
+        points: map.lines.get(line)!.points,
+        atStart: false,
+        label: 'Erase Line',
+        onChange: () => {
+          repaints++
+        },
+        apply: (tx, count) => {
+          peelLine(tx, map, line, false, count)
+        },
+      }),
+    )
 
     peel.moveTo(centre(3, 0))
     expect(repaints).toBe(1)

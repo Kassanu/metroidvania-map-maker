@@ -18,6 +18,8 @@
 // different from cells picked up off bare grid.
 
 import { beginGhostGesture, NO_CELLS, type CellMove } from './ghostGesture'
+import { refuseGesture, type GestureStart } from './gestureStart'
+import { wasRefused } from '@/core/outcome'
 import { useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
 import { moveRooms } from '@/core/ops/rooms'
@@ -64,20 +66,20 @@ function absorbedCells(
   return absorbed
 }
 
-// Returns null when there is nothing a drag could move: an empty selection, a
+// Refused when there is nothing a drag could move: an empty selection, a
 // missing map, or a selection holding only transitions. A transition is
 // anchored to the edge between two rooms and its geometry is derived from them,
-// so dragging one is a documented dead cell. Answering null rather than opening
-// a transaction that would apply nothing is what makes that visible here.
+// so dragging one is a documented dead cell. Refusing rather than opening a
+// transaction that would apply nothing is what makes that visible here.
 export function beginSelectionMove(
   mapId: MapId,
   from: CellKey,
   onChange: () => void,
-): CellMove | null {
+): GestureStart<CellMove> {
   const model = useModelStore()
   const selection = useSelectionStore()
   const map = model.project.mapsById.get(mapId)
-  if (!map) return null
+  if (!map) return refuseGesture('no-target')
 
   // Captured at press. The selection cannot change under a live drag, and
   // re-reading it per frame would put the store on the re-apply path for no
@@ -93,7 +95,7 @@ export function beginSelectionMove(
     .map((iconId) => ({ id: iconId, cell: map.icons.get(iconId)?.cell }))
     .filter((icon): icon is { id: IconId; cell: CellKey } => icon.cell !== undefined)
 
-  if (rooms.length + icons.length + lines.length === 0) return null
+  if (rooms.length + icons.length + lines.length === 0) return refuseGesture('no-target')
 
   const origin = parseCell(from)
   let to = from
@@ -129,6 +131,7 @@ export function beginSelectionMove(
       for (const lineId of lines) translateLine(transaction, map, lineId, dx, dy)
     },
   })
+  if (wasRefused(driver)) return driver
 
   return {
     get to() {

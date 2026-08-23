@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginSelectionMove } from './selectionMove'
 import type { CellMove } from './ghostGesture'
 import { mapScope, useModelStore } from '@/stores/model'
@@ -89,7 +89,7 @@ describe('the Drag column of Object Mode', () => {
   }
 
   function drag(from: CellKey): CellMove {
-    const move = beginSelectionMove(mapId(), from, onChange)
+    const move = mustStart(beginSelectionMove(mapId(), from, onChange))
     expect(move).not.toBeNull()
     return move!
   }
@@ -157,9 +157,9 @@ describe('the Drag column of Object Mode', () => {
       const before = model.status.undoLabel
       const geometry = edgesOf(opening)
 
-      const move = beginSelectionMove(mapId(), '0,0', onChange)
-      move?.moveTo('3,3')
-      move?.commit()
+      // A transition is anchored to the edge between two rooms and has no
+      // geometry of its own, so there is nothing here a drag could move.
+      expect(beginSelectionMove(mapId(), '0,0', onChange)).toEqual({ refused: 'no-target' })
 
       expect(cellsOf(a)).toEqual(['0,0', '0,1'])
       expect(cellsOf(b)).toEqual(['1,0', '1,1'])
@@ -429,6 +429,8 @@ describe('the Drag column of Object Mode', () => {
   })
 
   it('answers null when the map is gone', () => {
-    expect(beginSelectionMove('map_gone' as MapId, '0,0', onChange)).toBeNull()
+    expect(beginSelectionMove('map_gone' as MapId, '0,0', onChange)).toEqual({
+      refused: 'no-target',
+    })
   })
 })

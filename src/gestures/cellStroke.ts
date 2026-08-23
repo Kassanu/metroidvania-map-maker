@@ -22,6 +22,8 @@
 // tested without jsdom.
 
 import { beginGhostGesture, type GhostGesture } from './ghostGesture'
+import { wasRefused } from '@/core/outcome'
+import type { GestureStart } from './gestureStart'
 import { useToolsStore } from '@/stores/tools'
 import { cellsAlong, type WorldPoint } from '@/canvas/stroke'
 import { brushCellsAt, brushOffset } from '@/canvas/brush'
@@ -58,7 +60,7 @@ export interface CellStrokeSpec {
   absorbing?(cells: ReadonlySet<CellKey>): ReadonlySet<CellKey>
 }
 
-export function beginCellStroke(spec: CellStrokeSpec): CellStroke {
+export function beginCellStroke(spec: CellStrokeSpec): GestureStart<CellStroke> {
   // Locked at press time, like the origin room. `[` and `]` still work while
   // the button is down, but the stroke that is already running keeps the size
   // it started with: the union is re-applied from scratch on every move, so a
@@ -98,6 +100,7 @@ export function beginCellStroke(spec: CellStrokeSpec): CellStroke {
     apply: (transaction) => spec.apply(transaction, cells),
     absorbing: spec.absorbing && (() => spec.absorbing!(cells)),
   })
+  if (wasRefused(driver)) return driver
 
   // The first cell locks in on press.
   driver.refresh()

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginSelectionMove } from './selectionMove'
 import { mapScope, useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
@@ -83,7 +83,7 @@ describe('the selection move', () => {
   // Runs a whole drag, the way the component does: press on a cell, move, let
   // go. Returns nothing, because what is asserted is the model afterwards.
   function drag(mapId: MapId, from: string, to: string) {
-    const move = beginSelectionMove(mapId, from, () => {})
+    const move = mustStart(beginSelectionMove(mapId, from, () => {}))
     expect(move).not.toBeNull()
     move!.moveTo(to)
     move!.commit()
@@ -104,7 +104,7 @@ describe('the selection move', () => {
       const { mapId, roomA } = fixture()
       select(mapId, [room(roomA)])
 
-      const move = beginSelectionMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginSelectionMove(mapId, '0,0', () => {}))
       move.moveTo('0,1')
 
       expect(cellsOf(mapId, roomA)).toEqual(['0,1', '1,1'])
@@ -115,7 +115,7 @@ describe('the selection move', () => {
       const { mapId, roomA } = fixture()
       select(mapId, [room(roomA)])
 
-      const move = beginSelectionMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginSelectionMove(mapId, '0,0', () => {}))
       move.moveTo('0,5')
       move.moveTo('0,1')
       move.commit()
@@ -258,7 +258,7 @@ describe('the selection move', () => {
       const { mapId, roomA } = fixture()
       select(mapId, [room(roomA)])
 
-      const move = beginSelectionMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginSelectionMove(mapId, '0,0', () => {}))
       move.moveTo('1,0')
 
       // Room A slides one right onto (1,0) and (2,0). The first is its own
@@ -271,7 +271,7 @@ describe('the selection move', () => {
       const { mapId, roomA, roomB } = fixture()
       select(mapId, [room(roomA), room(roomB)])
 
-      const move = beginSelectionMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginSelectionMove(mapId, '0,0', () => {}))
       move.moveTo('1,0')
 
       expect(sorted(move.absorbing)).toEqual([])
@@ -282,7 +282,7 @@ describe('the selection move', () => {
       const { mapId, roomA } = fixture()
       select(mapId, [room(roomA)])
 
-      const move = beginSelectionMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginSelectionMove(mapId, '0,0', () => {}))
       move.moveTo('1,0')
       move.commit()
 
@@ -297,7 +297,7 @@ describe('the selection move', () => {
       select(mapId, [room(roomA)])
       const before = model.status.undoLabel
 
-      const move = beginSelectionMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginSelectionMove(mapId, '0,0', () => {}))
       move.moveTo('3,3')
       move.moveTo('0,0')
       move.commit()
@@ -312,7 +312,7 @@ describe('the selection move', () => {
       select(mapId, [room(roomA)])
       const before = model.status.undoLabel
 
-      const move = beginSelectionMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginSelectionMove(mapId, '0,0', () => {}))
       move.moveTo('0,1')
       expect(resolveEscape()).toBe(true)
 
@@ -331,7 +331,7 @@ describe('the selection move', () => {
       const { mapId, door } = fixture()
       select(mapId, [transition(door)])
 
-      expect(beginSelectionMove(mapId, '2,0', () => {})).toBeNull()
+      expect(beginSelectionMove(mapId, '2,0', () => {})).toEqual({ refused: 'no-target' })
     })
 
     it('moves the rest of a selection that also holds a transition', () => {
@@ -346,21 +346,23 @@ describe('the selection move', () => {
     it('starts nothing for an empty selection', () => {
       const { mapId } = fixture()
 
-      expect(beginSelectionMove(mapId, '0,0', () => {})).toBeNull()
+      expect(beginSelectionMove(mapId, '0,0', () => {})).toEqual({ refused: 'no-target' })
     })
 
     it('starts nothing for a selection belonging to another tab', () => {
       const { mapId, roomA } = fixture()
       select('map_elsewhere' as MapId, [room(roomA)])
 
-      expect(beginSelectionMove(mapId, '0,0', () => {})).toBeNull()
+      expect(beginSelectionMove(mapId, '0,0', () => {})).toEqual({ refused: 'no-target' })
     })
 
     it('starts nothing when the map is gone', () => {
       const { mapId, roomA } = fixture()
       select(mapId, [room(roomA)])
 
-      expect(beginSelectionMove('map_missing' as MapId, '0,0', () => {})).toBeNull()
+      expect(beginSelectionMove('map_missing' as MapId, '0,0', () => {})).toEqual({
+        refused: 'no-target',
+      })
     })
   })
 })

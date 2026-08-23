@@ -16,6 +16,8 @@
 
 import { useModelStore, mapScope } from '@/stores/model'
 import { pushEscHandler } from '@/hotkeys/escStack'
+import { wasRefused } from '@/core/outcome'
+import type { GestureStart } from './gestureStart'
 import type { CellKey } from '@/core/cell'
 import type { Transaction } from '@/core/journal'
 import type { MapId } from '@/core/ids'
@@ -88,9 +90,14 @@ export interface GhostGestureDriver extends GhostGesture {
 
 export const NO_CELLS: ReadonlySet<CellKey> = new Set()
 
-export function beginGhostGesture(spec: GhostGestureSpec): GhostGestureDriver {
+// Refused when one transaction is already open, which every gesture built on
+// this inherits: the seam decides it, and nothing below has to ask. The refusal
+// comes back before the `Esc` handler is pushed, so a gesture that never
+// started leaves nothing on the stack.
+export function beginGhostGesture(spec: GhostGestureSpec): GestureStart<GhostGestureDriver> {
   const model = useModelStore()
   const gesture = model.beginGesture(spec.label, mapScope(spec.mapId))
+  if (wasRefused(gesture)) return gesture
 
   let absorbing: ReadonlySet<CellKey> = NO_CELLS
 

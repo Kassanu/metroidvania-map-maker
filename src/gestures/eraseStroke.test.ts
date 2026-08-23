@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginEraseStroke } from './eraseStroke'
 import { mapScope, useModelStore } from '@/stores/model'
 import { pushEscHandler, resolveEscape } from '@/hotkeys/escStack'
@@ -32,7 +32,7 @@ describe('beginEraseStroke', () => {
   }
 
   function press(x: number, y: number): CellStroke {
-    const stroke = beginEraseStroke(firstMap().mapId, centre(x, y), onChange)
+    const stroke = mustStart(beginEraseStroke(firstMap().mapId, centre(x, y), onChange))
     expect(stroke).not.toBeNull()
     return stroke!
   }
@@ -347,6 +347,8 @@ describe('beginEraseStroke', () => {
   })
 
   it('declines to start on a map that is not there', () => {
-    expect(beginEraseStroke('map_gone' as MapId, centre(0, 0), onChange)).toBeNull()
+    expect(beginEraseStroke('map_gone' as MapId, centre(0, 0), onChange)).toEqual({
+      refused: 'no-target',
+    })
   })
 })

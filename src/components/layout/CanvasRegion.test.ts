@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import CanvasRegion from './CanvasRegion.vue'
@@ -5253,5 +5253,109 @@ describe('CanvasRegion repaint tick', () => {
 
     expect(second.repaints()).toBeGreaterThan(before)
     second.wrapper.unmount()
+  })
+})
+
+// A live gesture does not outlive its holder. `startPointerDrag` binds its
+// listeners to the target element, so a component that unmounts mid-drag never
+// sees the release. Before the refusal that only stalled autosave; with it, one
+// leaked transaction refuses every gesture after it and the canvas goes dead.
+describe('CanvasRegion unmounting mid-gesture', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    const viewport = wrapper.get('.canvas-viewport').element as HTMLElement
+    viewport.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 }) as DOMRect
+    viewport.setPointerCapture = () => {}
+    return { wrapper, viewport }
+  }
+
+  function pointer(type: string, init: PointerEventInit = {}) {
+    return new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, ...init })
+  }
+
+  function screenOf(col: number, row: number) {
+    const tabsStore = useTabsStore()
+    const tile = useModelStore().tileSize
+    const camera = tabsStore.cameraOf(tabsStore.activeTabId)
+    return {
+      clientX: (col + 0.5 - camera.pan.x) * tile * camera.zoom,
+      clientY: (row + 0.5 - camera.pan.y) * tile * camera.zoom,
+    }
+  }
+
+  // Commit, not cancel: the canvas settles the way its own `pointercancel`
+  // does, and a stroke's accumulated cells are unrecoverable work.
+  it('settles a paint stroke the way its pointercancel would', () => {
+    const { wrapper, viewport } = mountCanvas()
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+
+    viewport.dispatchEvent(pointer('pointerdown', screenOf(0, 0)))
+    viewport.dispatchEvent(pointer('pointermove', screenOf(2, 0)))
+    wrapper.unmount()
+
+    expect(model.gestureActive).toBe(false)
+    expect(model.project.mapsById.get(mapId)!.cellOwner.get('2,0')).toBeDefined()
+    expect(model.status.undoLabel).toBe('Paint')
+  })
+
+  // The reason it is fatal rather than untidy: the next canvas has to be able
+  // to open a gesture at all.
+  it('leaves the seam able to open the next gesture', () => {
+    const first = mountCanvas()
+    first.viewport.dispatchEvent(pointer('pointerdown', screenOf(0, 0)))
+    first.wrapper.unmount()
+
+    const second = mountCanvas()
+    second.viewport.dispatchEvent(pointer('pointerdown', screenOf(5, 5)))
+    second.viewport.dispatchEvent(pointer('pointerup', screenOf(5, 5)))
+
+    const model = useModelStore()
+    expect(
+      model.project.mapsById.get(useTabsStore().activeTabId)!.cellOwner.get('5,5'),
+    ).toBeDefined()
+    second.wrapper.unmount()
+  })
+
+  // The case the rule exists for: one finger on a panel control, one on the
+  // grid. The press has to read the refusal and decline to start, because two
+  // live transactions interleave their rewinds and corrupt the journal.
+  it('starts no stroke while a gesture opened elsewhere is live', () => {
+    const { wrapper, viewport } = mountCanvas()
+    const model = useModelStore()
+    const mapId = useTabsStore().activeTabId
+    const held = mustStart(model.beginGesture('Liquid', mapScope(mapId)))
+
+    viewport.dispatchEvent(pointer('pointerdown', screenOf(0, 0)))
+    viewport.dispatchEvent(pointer('pointermove', screenOf(2, 0)))
+    viewport.dispatchEvent(pointer('pointerup', screenOf(2, 0)))
+
+    const map = model.project.mapsById.get(mapId)!
+    expect(map.rooms.size).toBe(0)
+    expect(model.status.canUndo).toBe(false)
+
+    // The first gesture is untouched by the press that was refused.
+    expect(model.gestureActive).toBe(true)
+    held.commit()
+    wrapper.unmount()
+  })
+
+  // The marquee holds no transaction, so it cannot wedge the refusal on. What
+  // it does hold is a handler on the gesture Esc tier for the life of the drag,
+  // which a leaked band leaves there to swallow every later Esc.
+  it('takes the marquee off the Esc tier', () => {
+    useModeStore().setMode('select')
+    const { wrapper, viewport } = mountCanvas()
+
+    viewport.dispatchEvent(pointer('pointerdown', screenOf(0, 0)))
+    viewport.dispatchEvent(pointer('pointermove', screenOf(4, 4)))
+    wrapper.unmount()
+
+    // Nothing registered anywhere: the band's handler went with it.
+    expect(resolveEscape()).toBe(false)
   })
 })

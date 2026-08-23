@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginRunResize, handleGrabAllowed, type RunResize } from './runResize'
 import { mapScope, useModelStore } from '@/stores/model'
 import { pushEscHandler, resolveEscape } from '@/hotkeys/escStack'
@@ -51,7 +51,9 @@ describe('beginRunResize', () => {
   }
 
   function grab(roomId: RoomId, side: Side): RunResize {
-    const resize = beginRunResize(firstMap().mapId, roomId, runOn(roomId, side), onChange)
+    const resize = mustStart(
+      beginRunResize(firstMap().mapId, roomId, runOn(roomId, side), onChange),
+    )
     expect(resize).not.toBeNull()
     return resize!
   }
@@ -188,7 +190,7 @@ describe('beginRunResize', () => {
       const run = runOn(id, 'E')
       expect(run.cells).toEqual(['1,0', '1,1'])
 
-      const resize = beginRunResize(firstMap().mapId, id, run, onChange)!
+      const resize = mustStart(beginRunResize(firstMap().mapId, id, run, onChange))
       resize.moveTo(centre(2, 0)) // squares the room off into a 3x3
       resize.moveTo(centre(3, 0))
       resize.commit()
@@ -512,7 +514,7 @@ describe('beginRunResize', () => {
   it('declines to start on a map that is not there', () => {
     const id = room(['0,0', '1,0', '0,1', '1,1'])
     const run = runOn(id, 'E')
-    expect(beginRunResize('map_gone' as MapId, id, run, onChange)).toBeNull()
+    expect(beginRunResize('map_gone' as MapId, id, run, onChange)).toEqual({ refused: 'no-target' })
   })
 })
 

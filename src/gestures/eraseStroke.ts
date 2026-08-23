@@ -24,22 +24,23 @@
 //     could not otherwise see, and there is nothing here that qualifies.
 
 import { beginCellStroke, type CellStroke } from './cellStroke'
+import { refuseGesture, type GestureStart } from './gestureStart'
 import { useModelStore } from '@/stores/model'
 import { eraseCells } from '@/core/ops/rooms'
 import { t } from '@/i18n'
 import type { WorldPoint } from '@/canvas/stroke'
 import type { MapId } from '@/core/ids'
 
-// Returns null when the map is gone, like paint: the caller simply does not
-// start a stroke.
+// Refused when the map is gone, like paint: the caller simply does not start a
+// stroke.
 export function beginEraseStroke(
   mapId: MapId,
   origin: WorldPoint,
   onChange: () => void,
-): CellStroke | null {
+): GestureStart<CellStroke> {
   const model = useModelStore()
   const map = model.project.mapsById.get(mapId)
-  if (!map) return null
+  if (!map) return refuseGesture('no-target')
 
   return beginCellStroke({
     mapId,

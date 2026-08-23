@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginMarquee, type Marquee } from './marquee'
 import { mapScope, useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
@@ -70,7 +70,9 @@ describe('beginMarquee', () => {
     additive = false,
     subMode: SelectSubMode = 'rooms',
   ): Marquee {
-    const band = beginMarquee(firstMap().mapId, centre(...from), subMode, additive, onChange)
+    const band = mustStart(
+      beginMarquee(firstMap().mapId, centre(...from), subMode, additive, onChange),
+    )
     expect(band).not.toBeNull()
     return band!
   }
@@ -394,6 +396,8 @@ describe('beginMarquee', () => {
   })
 
   it('starts nothing when the map is gone', () => {
-    expect(beginMarquee('map_missing' as MapId, centre(0, 0), 'rooms', false, onChange)).toBeNull()
+    expect(beginMarquee('map_missing' as MapId, centre(0, 0), 'rooms', false, onChange)).toEqual({
+      refused: 'no-target',
+    })
   })
 })

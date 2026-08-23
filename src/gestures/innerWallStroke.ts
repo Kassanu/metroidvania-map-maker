@@ -26,6 +26,7 @@
 // call as drawing new.
 
 import { beginEdgeStroke, type EdgeStroke } from './edgeStroke'
+import { refuseGesture, type GestureStart } from './gestureStart'
 import { useModelStore } from '@/stores/model'
 import { drawInnerWall, eraseInnerWall } from '@/core/ops/rooms'
 import { t } from '@/i18n'
@@ -34,8 +35,8 @@ import type { EdgeKey } from '@/core/cell'
 import type { MapId, RoomId } from '@/core/ids'
 import type { WallStyle } from '@/core/types'
 
-// Returns null when the map or the room is gone: nothing to draw on, and the
-// caller simply does not start a stroke.
+// Refused when the map or the room is gone: nothing to draw on, and the caller
+// simply does not start a stroke.
 export function beginInnerWallStroke(
   mapId: MapId,
   roomId: RoomId,
@@ -43,11 +44,11 @@ export function beginInnerWallStroke(
   style: WallStyle,
   onChange: () => void,
   seed?: readonly EdgeKey[],
-): EdgeStroke | null {
+): GestureStart<EdgeStroke> {
   const model = useModelStore()
   const map = model.project.mapsById.get(mapId)
   const room = map?.rooms.get(roomId)
-  if (!map || !room) return null
+  if (!map || !room) return refuseGesture('no-target')
 
   return beginEdgeStroke({
     mapId,
@@ -76,11 +77,11 @@ export function beginInnerWallErase(
   origin: WorldPoint,
   onChange: () => void,
   seed?: readonly EdgeKey[],
-): EdgeStroke | null {
+): GestureStart<EdgeStroke> {
   const model = useModelStore()
   const map = model.project.mapsById.get(mapId)
   const room = map?.rooms.get(roomId)
-  if (!map || !room) return null
+  if (!map || !room) return refuseGesture('no-target')
 
   return beginEdgeStroke({
     mapId,

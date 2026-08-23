@@ -25,6 +25,8 @@
 // `apply` that already closes over what it needs.
 
 import { beginGhostGesture, NO_CELLS, type GhostGesture } from './ghostGesture'
+import { wasRefused } from '@/core/outcome'
+import type { GestureStart } from './gestureStart'
 import { stepsAlong, type WorldPoint } from '@/canvas/stroke'
 import { parseCell } from '@/core/cell'
 import type { CellKey } from '@/core/cell'
@@ -52,7 +54,7 @@ export interface LineStrokeSpec {
   apply(transaction: Transaction, points: readonly CellKey[]): void
 }
 
-export function beginLineStroke(spec: LineStrokeSpec): LineStroke {
+export function beginLineStroke(spec: LineStrokeSpec): GestureStart<LineStroke> {
   const points: CellKey[] = [spec.origin]
 
   const driver = beginGhostGesture({
@@ -65,6 +67,7 @@ export function beginLineStroke(spec: LineStrokeSpec): LineStroke {
     // none of them.
     absorbing: () => NO_CELLS,
   })
+  if (wasRefused(driver)) return driver
 
   return {
     points,

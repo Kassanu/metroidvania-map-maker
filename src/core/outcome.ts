@@ -51,7 +51,15 @@ export function refuse<R extends RefusalReason>(reason: R): Refused<R> {
 
 // Narrowing helper, so call sites read as a question rather than a property
 // poke. `if (wasRefused(result)) return show(result.refused)`.
-export function wasRefused<T>(result: T | Refused): result is Refused {
+//
+// Generic over the reason as well as the value: a layer with reasons of its own
+// (the gesture layer's `GestureStart`) carries a `Refused<R>` whose `R` is not
+// in `RefusalReason`, and pinning this to the app-wide union would refuse the
+// argument, widen the reason in the positive branch, and leave the refusal in
+// the negative one.
+export function wasRefused<T, R extends string = RefusalReason>(
+  result: T | Refused<R>,
+): result is Refused<R> {
   return typeof result === 'object' && result !== null && 'refused' in result
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginCellFragmentMove } from './cellFragmentMove'
 import { mapScope, useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
@@ -70,7 +70,7 @@ describe('the cell-fragment move', () => {
 
   // A whole drag, the way the component runs one: press on a cell, move, let go.
   function drag(mapId: MapId, from: CellKey, to: CellKey) {
-    const move = beginCellFragmentMove(mapId, from, () => {})
+    const move = mustStart(beginCellFragmentMove(mapId, from, () => {}))
     expect(move).not.toBeNull()
     move!.moveTo(to)
     move!.commit()
@@ -174,7 +174,7 @@ describe('the cell-fragment move', () => {
       const { mapId, roomA } = fixture()
       select(mapId, ['0,0'])
 
-      const move = beginCellFragmentMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginCellFragmentMove(mapId, '0,0', () => {}))
       move.moveTo('0,4')
 
       expect(cellsOf(mapId, roomA)).toEqual(['1,0', '2,0'])
@@ -187,7 +187,7 @@ describe('the cell-fragment move', () => {
       const { mapId } = fixture()
       select(mapId, ['0,0'])
 
-      const move = beginCellFragmentMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginCellFragmentMove(mapId, '0,0', () => {}))
       move.moveTo('0,4')
       move.moveTo('0,3')
       move.commit()
@@ -202,7 +202,7 @@ describe('the cell-fragment move', () => {
       const before = model.status.undoLabel
       select(mapId, ['0,0'])
 
-      const move = beginCellFragmentMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginCellFragmentMove(mapId, '0,0', () => {}))
       move.moveTo('0,4')
       move.moveTo('0,0')
       move.commit()
@@ -217,7 +217,7 @@ describe('the cell-fragment move', () => {
       const before = model.status.undoLabel
       select(mapId, ['0,0'])
 
-      const move = beginCellFragmentMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginCellFragmentMove(mapId, '0,0', () => {}))
       move.moveTo('0,4')
       expect(resolveEscape()).toBe(true)
 
@@ -236,7 +236,7 @@ describe('the cell-fragment move', () => {
       const { mapId } = fixture()
       select(mapId, ['0,0'])
 
-      const move = beginCellFragmentMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginCellFragmentMove(mapId, '0,0', () => {}))
       move.moveTo('0,6')
 
       expect([...move.absorbing]).toEqual(['0,6'])
@@ -249,7 +249,7 @@ describe('the cell-fragment move', () => {
       const { mapId } = fixture()
       select(mapId, ['0,0', '1,0'])
 
-      const move = beginCellFragmentMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginCellFragmentMove(mapId, '0,0', () => {}))
       move.moveTo('1,0')
 
       expect([...move.absorbing]).toEqual(['2,0'])
@@ -263,7 +263,7 @@ describe('the cell-fragment move', () => {
       const { mapId } = fixture()
       select(mapId, ['0,0', '1,0'])
 
-      const move = beginCellFragmentMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginCellFragmentMove(mapId, '0,0', () => {}))
       move.moveTo('0,4')
 
       expect(sorted(move.becoming)).toEqual(['0,4', '1,4'])
@@ -274,7 +274,7 @@ describe('the cell-fragment move', () => {
       const { mapId } = fixture()
       select(mapId, ['0,0'])
 
-      const move = beginCellFragmentMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginCellFragmentMove(mapId, '0,0', () => {}))
       move.moveTo('0,4')
       move.commit()
 
@@ -299,7 +299,7 @@ describe('the cell-fragment move', () => {
       const { mapId } = fixture()
       select(mapId, ['0,0'])
 
-      const move = beginCellFragmentMove(mapId, '0,0', () => {})!
+      const move = mustStart(beginCellFragmentMove(mapId, '0,0', () => {}))
       move.moveTo('0,4')
       move.cancel()
 
@@ -310,7 +310,7 @@ describe('the cell-fragment move', () => {
   describe('what starts nothing', () => {
     it('refuses an empty selection', () => {
       const { mapId } = fixture()
-      expect(beginCellFragmentMove(mapId, '0,0', () => {})).toBeNull()
+      expect(beginCellFragmentMove(mapId, '0,0', () => {})).toEqual({ refused: 'no-target' })
     })
 
     // A selection of another kind holds no cell, so there is no fragment to
@@ -318,7 +318,7 @@ describe('the cell-fragment move', () => {
     it('refuses a selection holding no cells', () => {
       const { mapId, roomA } = fixture()
       selection().set([{ kind: 'room', id: roomA }], mapId)
-      expect(beginCellFragmentMove(mapId, '0,0', () => {})).toBeNull()
+      expect(beginCellFragmentMove(mapId, '0,0', () => {})).toEqual({ refused: 'no-target' })
     })
 
     // A cell that lost its owner cannot be dragged out of a room it is no
@@ -326,12 +326,14 @@ describe('the cell-fragment move', () => {
     it('refuses a selection holding only cells no room owns', () => {
       const { mapId } = fixture()
       select(mapId, ['9,9'])
-      expect(beginCellFragmentMove(mapId, '9,9', () => {})).toBeNull()
+      expect(beginCellFragmentMove(mapId, '9,9', () => {})).toEqual({ refused: 'no-target' })
     })
 
     it('refuses a map that is gone', () => {
       fixture()
-      expect(beginCellFragmentMove('map_missing' as MapId, '0,0', () => {})).toBeNull()
+      expect(beginCellFragmentMove('map_missing' as MapId, '0,0', () => {})).toEqual({
+        refused: 'no-target',
+      })
     })
   })
 })

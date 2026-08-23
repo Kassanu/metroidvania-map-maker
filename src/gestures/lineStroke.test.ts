@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginLineStroke } from './lineStroke'
 import { mapScope, useModelStore } from '@/stores/model'
 import { createLine, extendLine, normalizePath } from '@/core/ops/markup'
@@ -30,28 +30,32 @@ function linesOn(mapId: MapId) {
 // A new-line drag, driven the way CanvasRegion drives it.
 function drawFrom(mapId: MapId, origin: CellKey) {
   const map = mapOf(mapId)
-  return beginLineStroke({
-    mapId,
-    origin,
-    label: 'Draw Line',
-    onChange: () => {},
-    apply: (tx, points) => {
-      createLine(tx, map, [...points], STYLE)
-    },
-  })
+  return mustStart(
+    beginLineStroke({
+      mapId,
+      origin,
+      label: 'Draw Line',
+      onChange: () => {},
+      apply: (tx, points) => {
+        createLine(tx, map, [...points], STYLE)
+      },
+    }),
+  )
 }
 
 function extendFrom(mapId: MapId, id: LineId, atStart: boolean, anchor: CellKey) {
   const map = mapOf(mapId)
-  return beginLineStroke({
-    mapId,
-    origin: anchor,
-    label: 'Extend Line',
-    onChange: () => {},
-    apply: (tx, points) => {
-      extendLine(tx, map, id, atStart, [...points].slice(1))
-    },
-  })
+  return mustStart(
+    beginLineStroke({
+      mapId,
+      origin: anchor,
+      label: 'Extend Line',
+      onChange: () => {},
+      apply: (tx, points) => {
+        extendLine(tx, map, id, atStart, [...points].slice(1))
+      },
+    }),
+  )
 }
 
 describe('the line drag', () => {

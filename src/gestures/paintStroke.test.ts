@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginPaintStroke } from './paintStroke'
 import type { CellStroke } from './cellStroke'
 import { mapScope, useModelStore } from '@/stores/model'
@@ -37,7 +37,7 @@ describe('beginPaintStroke', () => {
   }
 
   function press(x: number, y: number): CellStroke {
-    const stroke = beginPaintStroke(firstMap().mapId, centre(x, y), onChange)
+    const stroke = mustStart(beginPaintStroke(firstMap().mapId, centre(x, y), onChange))
     expect(stroke).not.toBeNull()
     return stroke!
   }
@@ -398,6 +398,8 @@ describe('beginPaintStroke', () => {
   })
 
   it('declines to start on a map that is not there', () => {
-    expect(beginPaintStroke('map_gone' as MapId, centre(0, 0), onChange)).toBeNull()
+    expect(beginPaintStroke('map_gone' as MapId, centre(0, 0), onChange)).toEqual({
+      refused: 'no-target',
+    })
   })
 })

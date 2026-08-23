@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginIconDrag } from './iconDrag'
 import { mapScope, useModelStore } from '@/stores/model'
 import { placeIcon, repositionIcon } from '@/core/ops/markup'
@@ -33,15 +33,17 @@ function mapOf(mapId: MapId) {
 
 function dragOf(mapId: MapId, iconId: IconId, from: CellKey, replace = false) {
   const map = mapOf(mapId)
-  return beginIconDrag({
-    mapId,
-    from,
-    label: 'Move Icon',
-    onChange: () => {},
-    apply: (tx, to) => {
-      repositionIcon(tx, map, iconId, to, { replace })
-    },
-  })
+  return mustStart(
+    beginIconDrag({
+      mapId,
+      from,
+      label: 'Move Icon',
+      onChange: () => {},
+      apply: (tx, to) => {
+        repositionIcon(tx, map, iconId, to, { replace })
+      },
+    }),
+  )
 }
 
 describe('the icon drag', () => {

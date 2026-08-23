@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginPaintStroke } from './paintStroke'
 import { beginEraseStroke } from './eraseStroke'
 import { mapScope, useModelStore } from '@/stores/model'
@@ -49,7 +49,7 @@ describe('brush footprint through a stroke', () => {
     it('paints one footprint on a click', () => {
       useToolsStore().setBrushSize(3)
 
-      const stroke = beginPaintStroke(firstMap().mapId, centre(5, 5), onChange)!
+      const stroke = mustStart(beginPaintStroke(firstMap().mapId, centre(5, 5), onChange))
       stroke.commit()
 
       expect(paintedCells()).toHaveLength(9)
@@ -59,7 +59,7 @@ describe('brush footprint through a stroke', () => {
     it('paints a swath the width of the brush on a drag', () => {
       useToolsStore().setBrushSize(3)
 
-      const stroke = beginPaintStroke(firstMap().mapId, centre(1, 5), onChange)!
+      const stroke = mustStart(beginPaintStroke(firstMap().mapId, centre(1, 5), onChange))
       stroke.extendTo(centre(4, 5))
       stroke.commit()
 
@@ -72,7 +72,7 @@ describe('brush footprint through a stroke', () => {
       existingRoom(['5,5'])
       useToolsStore().setBrushSize(3)
 
-      const stroke = beginPaintStroke(firstMap().mapId, centre(5, 5), onChange)!
+      const stroke = mustStart(beginPaintStroke(firstMap().mapId, centre(5, 5), onChange))
       stroke.commit()
 
       expect(firstMap().map.rooms.size).toBe(1)
@@ -83,7 +83,7 @@ describe('brush footprint through a stroke', () => {
       const model = useModelStore()
       useToolsStore().setBrushSize(4)
 
-      const stroke = beginPaintStroke(firstMap().mapId, centre(5, 5), onChange)!
+      const stroke = mustStart(beginPaintStroke(firstMap().mapId, centre(5, 5), onChange))
       for (let x = 6; x <= 12; x++) stroke.extendTo(centre(x, 5))
       stroke.commit()
 
@@ -101,7 +101,7 @@ describe('brush footprint through a stroke', () => {
       existingRoom(['4,4', '5,4', '6,4', '4,5', '5,5', '6,5', '4,6', '5,6', '6,6', '8,8'])
       useToolsStore().setBrushSize(3)
 
-      const stroke = beginEraseStroke(firstMap().mapId, centre(5, 5), onChange)!
+      const stroke = mustStart(beginEraseStroke(firstMap().mapId, centre(5, 5), onChange))
       stroke.commit()
 
       expect(paintedCells()).toEqual(['8,8'])
@@ -112,12 +112,12 @@ describe('brush footprint through a stroke', () => {
       const at = { x: 5.2, y: 5.8 }
 
       useToolsStore().setBrushSize(size)
-      const paint = beginPaintStroke(firstMap().mapId, at, onChange)!
+      const paint = mustStart(beginPaintStroke(firstMap().mapId, at, onChange))
       paint.commit()
       const painted = paintedCells()
       expect(painted).toHaveLength(size * size)
 
-      const erase = beginEraseStroke(firstMap().mapId, at, onChange)!
+      const erase = mustStart(beginEraseStroke(firstMap().mapId, at, onChange))
       erase.commit()
 
       expect(paintedCells()).toEqual([])
@@ -132,7 +132,7 @@ describe('brush footprint through a stroke', () => {
       const tools = useToolsStore()
       tools.setBrushSize(1)
 
-      const stroke = beginPaintStroke(firstMap().mapId, centre(5, 5), onChange)!
+      const stroke = mustStart(beginPaintStroke(firstMap().mapId, centre(5, 5), onChange))
       tools.setBrushSize(5)
       stroke.extendTo(centre(7, 5))
       stroke.commit()
@@ -143,10 +143,10 @@ describe('brush footprint through a stroke', () => {
     it('picks up the new size on the next stroke', () => {
       const tools = useToolsStore()
       tools.setBrushSize(1)
-      beginPaintStroke(firstMap().mapId, centre(0, 0), onChange)!.commit()
+      mustStart(beginPaintStroke(firstMap().mapId, centre(0, 0), onChange)).commit()
 
       tools.setBrushSize(3)
-      beginPaintStroke(firstMap().mapId, centre(5, 5), onChange)!.commit()
+      mustStart(beginPaintStroke(firstMap().mapId, centre(5, 5), onChange)).commit()
 
       expect(paintedCells()).toHaveLength(10)
     })
@@ -156,7 +156,7 @@ describe('brush footprint through a stroke', () => {
     it('is 1×1, so nothing changes until the brush is resized', () => {
       expect(useToolsStore().brushSize).toBe(1)
 
-      const stroke = beginPaintStroke(firstMap().mapId, centre(5, 5), onChange)!
+      const stroke = mustStart(beginPaintStroke(firstMap().mapId, centre(5, 5), onChange))
       stroke.extendTo(centre(7, 5))
       stroke.commit()
 
@@ -168,7 +168,7 @@ describe('brush footprint through a stroke', () => {
     const model = useModelStore()
     useToolsStore().setBrushSize(6)
 
-    const stroke = beginPaintStroke(firstMap().mapId, centre(0, 0), onChange)!
+    const stroke = mustStart(beginPaintStroke(firstMap().mapId, centre(0, 0), onChange))
     for (let i = 0; i < 60; i++) stroke.extendTo(centre(i % 12, Math.floor(i / 12)))
     stroke.commit()
 
