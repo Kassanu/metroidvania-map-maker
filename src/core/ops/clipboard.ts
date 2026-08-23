@@ -13,24 +13,25 @@
 //     no room owner, so a room- or cell-copy does not pick up a line crossing
 //     the selection; a line travels only as its own object.
 
-import { cellKey, edgeCells, parseCell, translate, translateEdge } from '../cell'
+import { edgeCells, parseCell, translate, translateEdge } from '../cell'
 import type { CellKey, EdgeKey } from '../cell'
-import { connectedComponents } from '../derive/connectivity'
+import { connectedComponents, topLeftMost } from '../derive/connectivity'
 import { createRoom } from '../factory'
-import { WORLD_AREA_ID } from '../ids'
-import type { AreaId, LineId, RoomId } from '../ids'
+import type { LineId, RoomId } from '../ids'
 import type { Transaction } from '../journal'
 import { addCell, putIcon, putLine, putRoom, setInnerWall } from '../primitives'
-import type { LineObject, MapModel, ProjectModel, Room, WallStyle } from '../types'
-import { deleteRooms, eraseCells } from './rooms'
+import type { LineObject, MapModel, ProjectModel, Room, RoomDescription, WallStyle } from '../types'
+import { deleteRooms, describeRoom, descriptionForGroup, eraseCells, undescribed } from './rooms'
 import { deleteLine } from './markup'
 
 // One copied room's worth of payload. Named because `paste` carries it through
 // as the identity of the room it is about to create, rather than re-deriving
 // that from a cell lookup.
-export interface PayloadRoom {
+//
+// A fragment copy fills the description and leaves the identity blank, which is
+// the whole difference between the two kinds of payload.
+export interface PayloadRoom extends RoomDescription {
   cells: CellKey[]
-  areaId: AreaId
   name: string
   notes: string
 }
@@ -92,20 +93,13 @@ export function isClipboardEmpty(payload: ClipboardPayload): boolean {
 }
 
 // The offset origin: top-most-then-left-most, the same anchor the split rule
-// and the fragment-area tiebreak use.
+// and the fragment tiebreak use, from the one function that defines it.
+//
+// For a concave selection this is not the bounding-box corner, and the payload
+// geometry is relative to it, so cells can carry negative coordinates.
 function originOf(cells: Iterable<CellKey>): { x: number; y: number } {
-  let x = 0
-  let y = 0
-  let seen = false
-  for (const cell of cells) {
-    const point = parseCell(cell)
-    if (!seen || point.y < y || (point.y === y && point.x < x)) {
-      x = point.x
-      y = point.y
-      seen = true
-    }
-  }
-  return { x, y }
+  const anchor = topLeftMost(cells)
+  return anchor === null ? { x: 0, y: 0 } : parseCell(anchor)
 }
 
 // ---------------------------------------------------------------------------
@@ -136,7 +130,7 @@ export function copyRooms(
   for (const room of rooms) {
     payload.rooms.push({
       cells: [...room.cells].map((cell) => offset(cell, -origin.x, -origin.y)),
-      areaId: room.areaId,
+      ...describeRoom(room),
       name: room.name,
       notes: room.notes,
     })
@@ -150,7 +144,8 @@ export function copyRooms(
 }
 
 // Cell-select copy: shape plus on-cell content, no room identity. Each source
-// room's area is remembered per cell so the fragment-area tiebreak can run on paste.
+// room's description is remembered per cell so the fragment tiebreak can run on
+// paste.
 export function copyCells(map: MapModel, cells: Iterable<CellKey>): ClipboardPayload {
   const selected = [...cells].filter((cell) => map.cellOwner.has(cell))
   if (selected.length === 0) return emptyClipboard()
@@ -174,7 +169,8 @@ export function copyCells(map: MapModel, cells: Iterable<CellKey>): ClipboardPay
     if (!room) continue
     payload.rooms.push({
       cells: roomCells.map((cell) => offset(cell, -origin.x, -origin.y)),
-      areaId: room.areaId,
+      // Description travels, identity does not.
+      ...describeRoom(room),
       name: '',
       notes: '',
     })
@@ -378,11 +374,18 @@ export function paste(
   // Clear the destination: incoming wins.
   eraseCells(tx, project, map, destinations)
 
-  // Which source area each destination cell came from, for the fragment
-  // tiebreak: a fragment has no room of its own to ask.
-  const areaByCell = new Map<CellKey, AreaId>()
+  // What each destination cell describes, for the fragment tiebreak: a
+  // fragment has no room of its own to ask. Keyed by destination, which is what
+  // lets the same resolver serve this and a fragment move.
+  const describedAt = new Map<CellKey, RoomDescription>()
   for (const room of payload.rooms) {
-    for (const cell of room.cells) areaByCell.set(translate(cell, dx, dy), room.areaId)
+    for (const cell of room.cells) {
+      describedAt.set(translate(cell, dx, dy), {
+        areaId: room.areaId,
+        heated: room.heated,
+        liquidLevel: room.liquidLevel,
+      })
+    }
   }
 
   // How the pasted cells divide into rooms. For a fragment payload, connectivity
@@ -398,8 +401,13 @@ export function paste(
     : connectedComponents(destinations).map((cells) => ({ cells, source: null }))
 
   groups.forEach(({ cells, source }, index) => {
-    const areaId = source?.areaId ?? areaByCell.get(topLeftOf(cells)) ?? WORLD_AREA_ID
-    const room = createRoom(areaId, tx.ids.mint('room'))
+    // A whole room states its own description; a fragment resolves one from
+    // the top-left-most cell of the group, the same tiebreak a fragment move
+    // uses and through the same function.
+    const described = source ?? descriptionForGroup(cells, describedAt) ?? undescribed()
+    const room = createRoom(described.areaId, tx.ids.mint('room'))
+    room.heated = described.heated
+    room.liquidLevel = described.liquidLevel
     room.name = options.nameFor?.({ name: source?.name ?? '', index }) ?? ''
     // A whole-room copy keeps its notes; a fragment carries no identity.
     if (source) room.notes = source.notes
@@ -435,11 +443,6 @@ export function paste(
   }
 
   return { rooms: created, lines: pastedLines }
-}
-
-function topLeftOf(cells: Iterable<CellKey>): CellKey {
-  const { x, y } = originOf(cells)
-  return cellKey(x, y)
 }
 
 // How many columns the payload spans. Not simply `max x + 1`: payload cells

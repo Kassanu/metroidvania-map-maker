@@ -16,7 +16,15 @@ import {
 } from './clipboard'
 import { createFromBox } from './doors'
 import { createLine, placeIcon } from './markup'
-import { drawInnerWall, moveRooms, paintCells, renameRoom } from './rooms'
+import {
+  drawInnerWall,
+  moveRooms,
+  paintCells,
+  renameRoom,
+  setRoomHeated,
+  setRoomLiquidLevel,
+  setRoomNotes,
+} from './rooms'
 import { cellsOf, checkInvariants, grid, makeRoom, ok, rect, setup, sorted, tx } from '../testUtils'
 
 const LINE_DEFAULTS = { color: '#ffcc00', arrowStart: false, arrowEnd: true }
@@ -163,6 +171,150 @@ describe('copy and paste: cell fragments', () => {
     const { rooms } = paste(transaction, project, map, payload, { at: { x: 0, y: 6 } })
     expect(rooms[0].innerWalls.get(edgeOfCell('0,6', 'E'))).toBe('solid')
     expect(rooms[0].innerWalls.size).toBe(1)
+  })
+})
+
+describe('a fragment carries description, not identity', () => {
+  // B8.1's amendment: heat and a water line describe the space rather than the
+  // room, so they travel with a fragment from the same top-left-most cell that
+  // already decides its area. Name and notes still do not.
+
+  // Two rooms side by side, `flooded` naming which of them is heated and full.
+  // A fragment of ('1,0', '2,0') straddles them, and its top-left-most cell is
+  // ('1,0'), which is always in the left room.
+  function pair(flooded: 'left' | 'right') {
+    const { project, map } = setup()
+    const left = makeRoom(project, map, rect(0, 0, 2, 1))
+    const right = makeRoom(project, map, rect(2, 0, 2, 1))
+    const wet = flooded === 'left' ? left : right
+
+    const seed = tx(map)
+    renameRoom(seed, map, wet.id, 'Norfair')
+    setRoomNotes(seed, map, wet.id, 'bring the varia suit')
+    setRoomHeated(seed, map, wet.id, true)
+    setRoomLiquidLevel(seed, map, wet.id, 70)
+    seed.commit()
+    return { project, map }
+  }
+
+  it('leaves the identity out of the payload as well as out of the paste', () => {
+    // Belt and braces, and worth its own test because it is only that: the
+    // paste path reads no name from a fragment payload whatever `copyCells`
+    // puts there, so filling these in would change nothing observable and
+    // nothing else would notice the payload had started carrying identity.
+    const { project, map } = pair('left')
+    const payload = copyCells(map, ['0,0', '1,0'])
+
+    expect(payload.rooms).not.toHaveLength(0)
+    for (const room of payload.rooms) {
+      expect(room.name).toBe('')
+      expect(room.notes).toBe('')
+      expect(room.liquidLevel).toBe(70)
+    }
+    void project
+  })
+
+  it('takes the top-left-most cell’s heat and level, and none of its identity', () => {
+    const { project, map } = pair('left')
+    const payload = copyCells(map, ['1,0', '2,0'])
+
+    const transaction = tx(map)
+    const { rooms } = paste(transaction, project, map, payload, { at: { x: 0, y: 8 } })
+    expect(rooms).toHaveLength(1)
+    expect(rooms[0].heated).toBe(true)
+    expect(rooms[0].liquidLevel).toBe(70)
+    expect(rooms[0].name).toBe('')
+    expect(rooms[0].notes).toBe('')
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('takes the plain room’s values when the top-left-most cell is the plain one', () => {
+    // The control. Without it, a paste that carried nothing at all would pass
+    // the test above whenever the fragment happened to start in a dry room.
+    const { project, map } = pair('right')
+    const payload = copyCells(map, ['1,0', '2,0'])
+
+    const transaction = tx(map)
+    const { rooms } = paste(transaction, project, map, payload, { at: { x: 0, y: 8 } })
+    expect(rooms[0].heated).toBe(false)
+    expect(rooms[0].liquidLevel).toBe(0)
+  })
+
+  it('resolves top-most before left-most', () => {
+    // The upper room is further right, so a left-most-then-top-most tiebreak
+    // would read the lower one and this is what tells the two apart.
+    const { project, map } = setup()
+    const upper = makeRoom(project, map, ['1,0'])
+    makeRoom(project, map, ['0,1', '1,1'])
+
+    const seed = tx(map)
+    setRoomHeated(seed, map, upper.id, true)
+    setRoomLiquidLevel(seed, map, upper.id, 30)
+    seed.commit()
+
+    // Deliberately not in row-major order. A group's iteration order follows
+    // the cells it was given, so a tiebreak that took "whichever came first"
+    // would pass with the anchor listed first and nothing would say so.
+    const payload = copyCells(map, ['1,1', '0,1', '1,0'])
+    const transaction = tx(map)
+    const { rooms } = paste(transaction, project, map, payload, { at: { x: 0, y: 8 } })
+    expect(rooms).toHaveLength(1)
+    expect(rooms[0].heated).toBe(true)
+    expect(rooms[0].liquidLevel).toBe(30)
+  })
+
+  it('gives each disconnected group its own answer', () => {
+    // One payload, two groups, two different source rooms: the tiebreak runs
+    // per group, so a resolver hoisted out of the loop would fail here.
+    const { project, map } = setup()
+    const wet = makeRoom(project, map, ['0,0'])
+    const dry = makeRoom(project, map, ['5,0'])
+
+    const seed = tx(map)
+    setRoomLiquidLevel(seed, map, wet.id, 90)
+    seed.commit()
+    void dry
+
+    const payload = copyCells(map, ['0,0', '5,0'])
+    const transaction = tx(map)
+    const { rooms } = paste(transaction, project, map, payload, { at: { x: 0, y: 8 } })
+    expect(rooms).toHaveLength(2)
+    const byColumn = [...rooms].sort((a, b) => cellsOf(a)[0].localeCompare(cellsOf(b)[0]))
+    expect(byColumn[0].liquidLevel).toBe(90)
+    expect(byColumn[1].liquidLevel).toBe(0)
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('carries both through cut and through duplicate', () => {
+    // Both route through copy and paste, so this checks the free ride rather
+    // than assuming it.
+    const { project, map } = pair('left')
+
+    const cutting = tx(map)
+    const payload = cutCells(cutting, project, map, ['1,0', '2,0'])
+    const { rooms: pasted } = paste(cutting, project, map, payload, { at: { x: 0, y: 8 } })
+    cutting.commit()
+    expect(pasted[0].heated).toBe(true)
+    expect(pasted[0].liquidLevel).toBe(70)
+
+    const duplicating = tx(map)
+    const copies = duplicateCells(duplicating, project, map, ['0,0'])
+    duplicating.commit()
+    expect(copies[0].heated).toBe(true)
+    expect(copies[0].liquidLevel).toBe(70)
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('a whole-room paste reproduces both, alongside the identity it does carry', () => {
+    const { project, map } = pair('left')
+    const left = map.rooms.get(map.cellOwner.get('0,0')!)!
+
+    const payload = copyRooms(map, [left.id])
+    const transaction = tx(map)
+    const { rooms } = paste(transaction, project, map, payload, { at: { x: 0, y: 8 } })
+    expect(rooms[0].heated).toBe(true)
+    expect(rooms[0].liquidLevel).toBe(70)
+    expect(rooms[0].notes).toBe('bring the varia suit')
   })
 })
 
