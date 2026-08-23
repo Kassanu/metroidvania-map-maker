@@ -467,6 +467,91 @@ describe('cell-fragment move', () => {
     expect(map.rooms.size).toBe(3)
     expect(cellsOf(room)).toEqual(['0,0', '1,0'])
   })
+
+  // Two rooms side by side, `flooded` naming which is heated and full. A
+  // fragment of ('1,0', '2,0') straddles them and its top-left-most cell is
+  // ('1,0'), which is always in the left room.
+  function pair(flooded: 'left' | 'right') {
+    const { project, map } = setup()
+    const left = makeRoom(project, map, rect(0, 0, 2, 1))
+    const right = makeRoom(project, map, rect(2, 0, 2, 1))
+    const wet = flooded === 'left' ? left : right
+
+    const seed = tx(map)
+    renameRoom(seed, map, wet.id, 'Norfair')
+    setRoomHeated(seed, map, wet.id, true)
+    setRoomLiquidLevel(seed, map, wet.id, 70)
+    seed.commit()
+    return { project, map }
+  }
+
+  it('carries heat and the liquid level from the top-left-most cell, but no name', () => {
+    const { project, map } = pair('left')
+
+    const move = tx(map)
+    const created = moveCellFragment(move, project, map, ['1,0', '2,0'], 0, 6)
+    move.commit()
+
+    expect(created).toHaveLength(1)
+    expect(created[0].heated).toBe(true)
+    expect(created[0].liquidLevel).toBe(70)
+    expect(created[0].name).toBe('')
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('takes the plain room’s values when the top-left-most cell is the plain one', () => {
+    const { project, map } = pair('right')
+
+    const move = tx(map)
+    const created = moveCellFragment(move, project, map, ['1,0', '2,0'], 0, 6)
+    move.commit()
+
+    expect(created[0].heated).toBe(false)
+    expect(created[0].liquidLevel).toBe(0)
+  })
+
+  it('resolves top-most before left-most', () => {
+    // The upper room sits further right, so a left-most-then-top-most tiebreak
+    // would read the lower one instead.
+    const { project, map } = setup()
+    const upper = makeRoom(project, map, ['1,0'])
+    makeRoom(project, map, ['0,1', '1,1'])
+
+    const seed = tx(map)
+    setRoomLiquidLevel(seed, map, upper.id, 30)
+    seed.commit()
+
+    // Deliberately not in row-major order. A group's iteration order follows
+    // the cells it was given, so a tiebreak that took "whichever came first"
+    // would pass with the anchor listed first and nothing would say so.
+    const move = tx(map)
+    const created = moveCellFragment(move, project, map, ['1,1', '0,1', '1,0'], 0, 6)
+    move.commit()
+
+    expect(created).toHaveLength(1)
+    expect(created[0].liquidLevel).toBe(30)
+  })
+
+  it('resolves each disconnected group against its own source room', () => {
+    const { project, map } = setup()
+    const wet = makeRoom(project, map, rect(0, 0, 2, 1))
+    makeRoom(project, map, rect(5, 0, 2, 1))
+
+    const seed = tx(map)
+    setRoomLiquidLevel(seed, map, wet.id, 90)
+    seed.commit()
+
+    // One grab, two groups: the resolver runs per group, not per fragment.
+    const move = tx(map)
+    const created = moveCellFragment(move, project, map, ['0,0', '5,0'], 0, 6)
+    move.commit()
+
+    expect(created).toHaveLength(2)
+    const byColumn = [...created].sort((a, b) => cellsOf(a)[0].localeCompare(cellsOf(b)[0]))
+    expect(byColumn[0].liquidLevel).toBe(90)
+    expect(byColumn[1].liquidLevel).toBe(0)
+    expect(checkInvariants(project)).toEqual([])
+  })
 })
 
 // These four had no test at all, which is why converting them from Room to

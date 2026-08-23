@@ -167,6 +167,15 @@ export interface Room {
   metaRev: number
 }
 
+// What a cell fragment carries when it becomes a room of its own: the fields
+// that describe the space rather than identify the room. A field belongs here
+// if a piece cut out of a room still has it; `name` and `notes` do not, which
+// is why a moved or pasted fragment comes back unnamed.
+//
+// Both fragment paths resolve all of these from one cell, so a field added
+// here starts travelling with no further change at either site.
+export type RoomDescription = Pick<Room, 'areaId' | 'heated' | 'liquidLevel'>
+
 // ---------------------------------------------------------------------------
 // Transitions
 // ---------------------------------------------------------------------------

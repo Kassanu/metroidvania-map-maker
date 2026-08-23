@@ -11,6 +11,7 @@ import { ModelError } from './outcome'
 import { createRoom } from './factory'
 import { addCell } from './primitives'
 import { createTeleport } from './ops/doors'
+import { copyCells, copyRooms, paste } from './ops/clipboard'
 import { addMap, duplicateMap } from './ops/maps'
 import { placeIcon, repositionIcon } from './ops/markup'
 import { createNewArea } from './ops/project'
@@ -427,6 +428,9 @@ describe('every room field is carried at every site that copies a room by hand',
   // Identity and geometry. A copy is a different room in a different place, so
   // these are the fields it is supposed to disagree about.
   const NOT_CARRIED = ['id', 'cells', 'innerWalls', 'rev', 'metaRev']
+  // A fragment is a piece of space rather than a room, so it drops the room's
+  // identity as well. Everything left is what `RoomDescription` names.
+  const NOT_CARRIED_BY_A_FRAGMENT = [...NOT_CARRIED, 'name', 'notes']
 
   function carried(room: Room, dropped: readonly string[]): Record<string, unknown> {
     const fields = room as unknown as Record<string, unknown>
@@ -477,6 +481,62 @@ describe('every room field is carried at every site that copies a room by hand',
 
     const split = [...map.rooms.values()].find((candidate) => candidate.id !== room.id)!
     expect(carried(split, NOT_CARRIED)).toEqual(carried(room, NOT_CARRIED))
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('paste gives a whole-room copy every field', () => {
+    const { project, map } = setup()
+    const room = distinctive(project, map, rect(0, 0, 2, 2))
+    everyFieldIsSet(room, NOT_CARRIED)
+
+    const payload = copyRooms(map, [room.id])
+    const pasting = tx(map)
+    // A whole-room paste routes the name through `nameFor`, which is where the
+    // "<name> copy" convention lives, so the identity it carries is the
+    // argument that reaches it rather than a field written directly.
+    const { rooms } = paste(pasting, project, map, payload, {
+      at: { x: 0, y: 9 },
+      nameFor: ({ name }) => name,
+    })
+    pasting.commit()
+
+    expect(carried(rooms[0], NOT_CARRIED)).toEqual(carried(room, NOT_CARRIED))
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('paste gives a fragment every field a fragment carries', () => {
+    const { project, map } = setup()
+    const room = distinctive(project, map, rect(0, 0, 2, 2))
+    everyFieldIsSet(room, NOT_CARRIED_BY_A_FRAGMENT)
+
+    const payload = copyCells(map, ['0,0', '1,0'])
+    const pasting = tx(map)
+    const { rooms } = paste(pasting, project, map, payload, { at: { x: 0, y: 9 } })
+    pasting.commit()
+
+    expect(carried(rooms[0], NOT_CARRIED_BY_A_FRAGMENT)).toEqual(
+      carried(room, NOT_CARRIED_BY_A_FRAGMENT),
+    )
+    // And the identity it is supposed to drop really is dropped.
+    expect(rooms[0].name).toBe('')
+    expect(rooms[0].notes).toBe('')
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('moveCellFragment gives the moved fragment every field a fragment carries', () => {
+    const { project, map } = setup()
+    const room = distinctive(project, map, rect(0, 0, 3, 1))
+    everyFieldIsSet(room, NOT_CARRIED_BY_A_FRAGMENT)
+
+    const move = tx(map)
+    const created = moveCellFragment(move, project, map, ['2,0'], 0, 9)
+    move.commit()
+
+    expect(carried(created[0], NOT_CARRIED_BY_A_FRAGMENT)).toEqual(
+      carried(room, NOT_CARRIED_BY_A_FRAGMENT),
+    )
+    expect(created[0].name).toBe('')
+    expect(created[0].notes).toBe('')
     expect(checkInvariants(project)).toEqual([])
   })
 

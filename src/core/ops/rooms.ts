@@ -17,13 +17,17 @@ import {
   edgeCells,
   edgeOfCell,
   neighborOn,
-  parseCell,
   translate,
   SIDES,
   SIDE_DELTA,
 } from '../cell'
 import type { CellKey, EdgeKey } from '../cell'
-import { connectedComponents, originalGroupIndex, transformCells } from '../derive/connectivity'
+import {
+  connectedComponents,
+  originalGroupIndex,
+  topLeftMost,
+  transformCells,
+} from '../derive/connectivity'
 import type { Transform } from '../derive/connectivity'
 import { isInnerWallEdge } from '../derive/walls'
 import type { EdgeRun } from '../derive/walls'
@@ -45,7 +49,7 @@ import {
 } from '../primitives'
 import { mustGet, refuse } from '../outcome'
 import type { Outcome } from '../outcome'
-import type { MapModel, ProjectModel, Room, WallStyle } from '../types'
+import type { MapModel, ProjectModel, Room, RoomDescription, WallStyle } from '../types'
 import { cascadeTransitions, removeTransitionsTouching } from './transitions'
 
 // ---------------------------------------------------------------------------
@@ -760,15 +764,17 @@ export function moveCellFragment(
   const grabbed = new Set([...cells].filter((cell) => map.cellOwner.has(cell)))
   if (grabbed.size === 0) return []
 
-  // Remember each grabbed cell's source area before anything moves: a
-  // fragment spanning two areas takes its top-left-most cell's area.
-  const sourceArea = new Map<CellKey, AreaId>()
+  // Remember what each grabbed cell describes before anything moves: a
+  // fragment spanning two rooms takes its top-left-most cell's area, heat and
+  // liquid level. Keyed by where the cell is going, so the tiebreak reads the
+  // group it is handed without reversing the mapping.
+  const describedAt = new Map<CellKey, RoomDescription>()
   const carriedWalls: [EdgeKey, WallStyle][] = []
   for (const cell of grabbed) {
     const ownerId = map.cellOwner.get(cell)
     if (ownerId === undefined) continue
     const owner = map.rooms.get(ownerId)
-    if (owner) sourceArea.set(cell, owner.areaId)
+    if (owner) describedAt.set(translate(cell, dx, dy), describeRoom(owner))
   }
   // Segments strictly interior to the grabbed cells travel; one straddling the
   // cut boundary is carried by neither piece.
@@ -800,8 +806,12 @@ export function moveCellFragment(
   const groups = connectedComponents(destinations)
   const created: Room[] = []
   groups.forEach((group, index) => {
-    const areaId = areaForGroup(group, mapping, sourceArea)
-    const room = createRoom(areaId, tx.ids.mint('room'))
+    const described = descriptionForGroup(group, describedAt) ?? undescribed()
+    const room = createRoom(described.areaId, tx.ids.mint('room'))
+    // Description travels, identity does not: the fragment is a piece of
+    // space, and a name is the room's own.
+    room.heated = described.heated
+    room.liquidLevel = described.liquidLevel
     if (nameFor) room.name = nameFor(index)
     putRoom(tx, map, room)
     for (const cell of group) addCell(tx, map, room, cell)
@@ -833,34 +843,32 @@ export function moveCellFragment(
   return created
 }
 
-function areaForGroup(
-  group: Set<CellKey>,
-  mapping: Map<CellKey, CellKey>,
-  sourceArea: Map<CellKey, AreaId>,
-): AreaId {
-  // Walk back from destination cells to their sources, then take the
-  // top-left-most source's area.
-  const reverse = new Map<CellKey, CellKey>()
-  for (const [from, to] of mapping) reverse.set(to, from)
+// The three fields a fragment carries out of the room it was cut from.
+export function describeRoom(room: Room): RoomDescription {
+  return { areaId: room.areaId, heated: room.heated, liquidLevel: room.liquidLevel }
+}
 
-  let best: AreaId | undefined
-  let bestX = 0
-  let bestY = 0
-  for (const cell of group) {
-    const from = reverse.get(cell)
-    if (from === undefined) continue
-    const area = sourceArea.get(from)
-    if (area === undefined) continue
-    const { x, y } = parseCell(from)
-    if (best === undefined || y < bestY || (y === bestY && x < bestX)) {
-      best = area
-      bestX = x
-      bestY = y
-    }
-  }
-  // Nothing to inherit from (every grabbed cell was unowned) falls back to the
-  // guaranteed area rather than leaving a dangling reference.
-  return best ?? [...sourceArea.values()][0] ?? WORLD_AREA_ID
+// What a fragment lands with when nothing can be inherited. Reachable only if
+// `cellOwner` names a room that is not in `map.rooms`, which the invariants
+// forbid; both fragment paths share it so they cannot answer that case
+// differently.
+export function undescribed(): RoomDescription {
+  return { areaId: WORLD_AREA_ID, heated: false, liquidLevel: 0 }
+}
+
+// The fragment tiebreak, in one place because there are two fragment paths and
+// a drift between them is invisible: each looks right on its own.
+//
+// `byCell` is keyed by *destination* cell. Both callers translate uniformly, so
+// the top-left-most destination cell is the translated top-left-most source
+// cell, and keying that way means neither has to walk back through its mapping.
+export function descriptionForGroup(
+  group: Iterable<CellKey>,
+  byCell: ReadonlyMap<CellKey, RoomDescription>,
+): RoomDescription | null {
+  const anchor = topLeftMost(group)
+  if (anchor === null) return null
+  return byCell.get(anchor) ?? null
 }
 
 // ---------------------------------------------------------------------------
