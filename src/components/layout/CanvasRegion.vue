@@ -25,6 +25,7 @@ import {
 } from '@/selection/deletePlan'
 import { screenToWorld, worldToScreen, type ScreenPoint } from '@/canvas/viewport'
 import { pageBounds } from '@/canvas/page'
+import { repaintTick } from '@/canvas/repaint'
 import { contentBounds } from '@/core/derive/bounds'
 import { centerOn, panByScreen, wheelZoom } from '@/canvas/camera'
 import {
@@ -1778,6 +1779,12 @@ watch(
 )
 
 watch([() => model.rev, () => model.structureRev], () => draw())
+
+// A gesture driven from somewhere that does not own `draw()` asks for the
+// repaint its speculative apply needs. No revision has moved, and none will
+// until it commits, so this is the only thing that says the canvas is stale.
+watch(repaintTick, () => draw())
+
 watch(
   () => pendingTeleport.isPending,
   () => {

@@ -25,6 +25,7 @@ import { WORLD_AREA_ID } from '@/core/ids'
 import { runAction } from '@/hotkeys/actions'
 import { checkInvariants } from '@/core/testUtils'
 import { screenToWorld } from '@/canvas/viewport'
+import { requestRepaint } from '@/canvas/repaint'
 import { PAGE_HOME, PAGE_PADDING } from '@/canvas/page'
 import { DRAG_DEAD_ZONE } from '@/config/constants'
 import type { IconId, MapId } from '@/core/ids'
@@ -5199,5 +5200,58 @@ describe('CanvasRegion page during a gesture', () => {
     viewport.dispatchEvent(pointer('pointerup', screenOf(20, 0)))
     expect(tabsStore.activeTab!.bounds.maxCol).toBe(20 + PAGE_PADDING)
     wrapper.unmount()
+  })
+})
+
+// The seam a gesture driven from outside the canvas repaints through. The tick
+// itself is `canvas/repaint.test.ts`; what is proved here is that the canvas
+// listens to it, and that listening costs no model revision.
+describe('CanvasRegion repaint tick', () => {
+  beforeEach(() => {
+    setActivePinia(createTestPinia())
+  })
+
+  function mountCanvas() {
+    const wrapper = mount(CanvasRegion, { attachTo: document.body })
+    const canvasEl = wrapper.get('.canvas').element as HTMLCanvasElement
+    const ctx = canvasEl.getContext('2d') as unknown as FakeContext2D
+    return { wrapper, repaints: () => ctx.clearRect.mock.calls.length }
+  }
+
+  it('redraws on a repaint asked for from outside, with no revision having moved', async () => {
+    const { wrapper, repaints } = mountCanvas()
+    const model = useModelStore()
+    const before = repaints()
+    const rev = model.rev
+    const structureRev = model.structureRev
+
+    requestRepaint()
+    // The tick is a watch, so the repaint lands a microtask later. That delay
+    // is why the canvas keeps calling draw() directly for its own gestures.
+    await nextTick()
+
+    expect(repaints()).toBeGreaterThan(before)
+    expect(model.rev).toBe(rev)
+    expect(model.structureRev).toBe(structureRev)
+    wrapper.unmount()
+  })
+
+  // The tick is module-level state shared by every mount in this file, and it
+  // is never reset. A watch records the current value when it starts, so a
+  // mount that comes after several requests still reacts to the next one; a
+  // reset is what would leave this one watching a value already gone by.
+  it('reaches a mount that started watching after earlier requests', async () => {
+    requestRepaint()
+    const first = mountCanvas()
+    requestRepaint()
+    first.wrapper.unmount()
+
+    const second = mountCanvas()
+    const before = second.repaints()
+    requestRepaint()
+    await nextTick()
+
+    expect(second.repaints()).toBeGreaterThan(before)
+    second.wrapper.unmount()
   })
 })
