@@ -75,3 +75,78 @@ test.describe('inline rename', () => {
     await expect(titleButton(page)).toHaveText(startingName)
   })
 })
+
+// The disabled look is CSS, and CSS is invisible to a component test: jsdom
+// loads no stylesheet, and these rules live in Toolbar.vue's scoped block.
+test.describe('toolbar undo and redo', () => {
+  const style = (locator: ReturnType<Page['locator']>, property: keyof CSSStyleDeclaration) =>
+    locator.evaluate(
+      (element, name) => String(getComputedStyle(element)[name as never]),
+      property as string,
+    )
+
+  test('looks disabled and refuses the hover highlight until there is a step to move', async ({
+    page,
+  }) => {
+    await dismissWelcome(page)
+    const undo = page.locator('.undo-button')
+    const zen = page.locator('.zen-toggle-button')
+
+    await expect(undo).toBeDisabled()
+    expect(await style(undo, 'cursor')).toBe('default')
+    expect(Number(await style(undo, 'opacity'))).toBeLessThan(1)
+
+    // Hovering a button that cannot be pressed changes nothing.
+    const unlit = await style(undo, 'backgroundColor')
+    await undo.hover()
+    expect(await style(undo, 'backgroundColor')).toBe(unlit)
+
+    // The same rule still lights an enabled button, so what the exclusion
+    // removed is the disabled state rather than the highlight itself.
+    const zenUnlit = await style(zen, 'backgroundColor')
+    await zen.hover()
+    expect(await style(zen, 'backgroundColor')).not.toBe(zenUnlit)
+
+    // An edit puts a step on the stack, and undo goes live: full strength, a
+    // pointer cursor, and the highlight back.
+    await page.locator('.project-title-button').click()
+    await page.keyboard.type('Zebes')
+    await page.keyboard.press('Enter')
+
+    await expect(undo).toBeEnabled()
+    expect(await style(undo, 'cursor')).toBe('pointer')
+    expect(await style(undo, 'opacity')).toBe('1')
+    await undo.hover()
+    expect(await style(undo, 'backgroundColor')).not.toBe(unlit)
+  })
+
+  // What the buttons are for, through the DOM rather than the stores: the
+  // toolbar moves the same stack the Edit menu names.
+  test('reverts the last step and replays it', async ({ page }) => {
+    await dismissWelcome(page)
+    const title = page.locator('.project-title-button')
+    // The button carries the unsaved-work dot beside the name, and an undo
+    // does not clear it: what is compared here is the name alone.
+    const name = async () => (await title.textContent())?.replace('•', '').trim() ?? ''
+    const before = await name()
+
+    await title.click()
+    await page.keyboard.type('Zebes')
+    await page.keyboard.press('Enter')
+    await expect.poll(name).toBe('Zebes')
+    await expect(page.locator('.undo-button')).toHaveAttribute(
+      'title',
+      'Undo Rename Project (Ctrl+Z)',
+    )
+
+    await page.locator('.undo-button').click()
+    await expect.poll(name).toBe(before)
+
+    await expect(page.locator('.redo-button')).toHaveAttribute(
+      'title',
+      'Redo Rename Project (Ctrl+Shift+Z)',
+    )
+    await page.locator('.redo-button').click()
+    await expect.poll(name).toBe('Zebes')
+  })
+})

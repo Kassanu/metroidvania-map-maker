@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import ZoomControl from '../ZoomControl.vue'
 import DrawToolbar from './DrawToolbar.vue'
 import SelectToolbar from './SelectToolbar.vue'
@@ -7,10 +8,39 @@ import MarkupToolbar from './MarkupToolbar.vue'
 
 import { useModeStore } from '@/stores/mode'
 import { useUiStore } from '@/stores/ui'
+import { useModelStore } from '@/stores/model'
+import { combosForAction } from '@/hotkeys/keymap'
+import { formatCombo } from '@/hotkeys/combo'
+import type { ActionId } from '@/hotkeys/keymap'
 import { t } from '@/i18n'
 
 const modeStore = useModeStore()
 const ui = useUiStore()
+const model = useModelStore()
+
+// The first combo the keymap binds to the action, in insertion order: redo has
+// two, and the tooltip has room for one. The other stays in the cheat sheet.
+function primaryCombo(actionId: ActionId): string {
+  const [combo] = combosForAction(actionId)
+  return combo ? formatCombo(combo) : ''
+}
+
+// "Undo Paint (Ctrl+Z)": the step name is the transaction's own, so the button
+// says what it would revert. It falls back to the bare verb on an empty stack,
+// where there is nothing to name. The chord is derived, never written down.
+const undoTitle = computed(() => {
+  const combo = primaryCombo('undo')
+  return model.status.undoLabel
+    ? t('toolbar.undoStep', { label: model.status.undoLabel, combo })
+    : t('toolbar.undo', { combo })
+})
+
+const redoTitle = computed(() => {
+  const combo = primaryCombo('redo')
+  return model.status.redoLabel
+    ? t('toolbar.redoStep', { label: model.status.redoLabel, combo })
+    : t('toolbar.redo', { combo })
+})
 </script>
 
 <template>
@@ -18,8 +48,26 @@ const ui = useUiStore()
     <div class="toolbar-group persistent">
       <ZoomControl />
       <span class="toolbar-divider" aria-hidden="true" />
-      <button type="button" class="toolbar-button" :title="t('toolbar.undo')">↶</button>
-      <button type="button" class="toolbar-button" :title="t('toolbar.redo')">↷</button>
+      <!-- Straight to the store, the same call the Edit menu makes: both
+           surfaces mean "move the stack", so neither goes through an action. -->
+      <button
+        type="button"
+        class="toolbar-button undo-button"
+        :title="undoTitle"
+        :disabled="!model.status.canUndo"
+        @click="model.undo()"
+      >
+        ↶
+      </button>
+      <button
+        type="button"
+        class="toolbar-button redo-button"
+        :title="redoTitle"
+        :disabled="!model.status.canRedo"
+        @click="model.redo()"
+      >
+        ↷
+      </button>
     </div>
     <span class="toolbar-divider" aria-hidden="true" />
     <!-- One component per mode, and every mode has one. -->
@@ -71,8 +119,16 @@ const ui = useUiStore()
   color: var(--fg);
   cursor: pointer;
 }
-:deep(.toolbar-button:hover) {
+/* :hover matches a disabled button, so the highlight has to exclude it or a
+ * button that cannot be pressed lights up under the pointer. One rule for the
+ * whole bar rather than one per button: undo, redo and the brush steppers all
+ * disable, and every mode's section inherits these. */
+:deep(.toolbar-button:hover:not(:disabled)) {
   background: var(--surface-active);
+}
+:deep(.toolbar-button:disabled) {
+  opacity: 0.4;
+  cursor: default;
 }
 /* Every toggle in the bar reads the same way pressed: Zen, erase, and the
  * sub-mode lock when it arrives. One rule rather than one per button. */

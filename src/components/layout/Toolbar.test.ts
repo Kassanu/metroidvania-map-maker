@@ -11,7 +11,10 @@ import { runAction } from '@/hotkeys/actions'
 import { PROJECT_SCOPE, useModelStore } from '@/stores/model'
 import { useDrawAreaStore } from '@/stores/drawArea'
 import { useDoorDefaultsStore } from '@/stores/doorDefaults'
-import { createNewArea, createNewLockType, deleteArea } from '@/core/ops/project'
+import { createNewArea, createNewLockType, deleteArea, renameProject } from '@/core/ops/project'
+import { combosForAction } from '@/hotkeys/keymap'
+import { formatCombo } from '@/hotkeys/combo'
+import { en } from '@/i18n/messages/en'
 import { WORLD_AREA_ID } from '@/core/ids'
 import { MAX_BRUSH_SIZE } from '@/canvas/brush'
 
@@ -340,6 +343,82 @@ describe('Toolbar', () => {
       useModeStore().setMode('door')
       await nextTick()
       expect(wrapper.find('.area-select').exists()).toBe(false)
+    })
+  })
+
+  // The persistent pair. They are the only undo affordance a user who has
+  // found neither the chord nor the Edit menu will see, so they have to move
+  // the same stack the menu moves and say the same thing about it.
+  describe('undo and redo', () => {
+    function rename(name: string) {
+      const model = useModelStore()
+      model.run('Rename Project', PROJECT_SCOPE, (tx) => renameProject(tx, model.project, name))
+    }
+
+    it('disables both when their side of the stack is empty', async () => {
+      const wrapper = mount(Toolbar)
+      const undo = () => wrapper.get('.undo-button')
+      const redo = () => wrapper.get('.redo-button')
+
+      expect(undo().attributes('disabled')).toBeDefined()
+      expect(redo().attributes('disabled')).toBeDefined()
+
+      rename('Zebes')
+      await nextTick()
+      expect(undo().attributes('disabled')).toBeUndefined()
+      expect(redo().attributes('disabled')).toBeDefined()
+
+      await undo().trigger('click')
+      expect(undo().attributes('disabled')).toBeDefined()
+      expect(redo().attributes('disabled')).toBeUndefined()
+    })
+
+    it('moves the model back and forward, the same as the Edit menu', async () => {
+      const model = useModelStore()
+      const wrapper = mount(Toolbar)
+      rename('Zebes')
+      await nextTick()
+
+      await wrapper.get('.undo-button').trigger('click')
+      expect(model.project.name).toBe('Untitled Project')
+
+      await wrapper.get('.redo-button').trigger('click')
+      expect(model.project.name).toBe('Zebes')
+    })
+
+    it('names the step it would move, and falls back to the bare verb', async () => {
+      const wrapper = mount(Toolbar)
+      const undoTitle = () => wrapper.get('.undo-button').attributes('title')!
+      const redoTitle = () => wrapper.get('.redo-button').attributes('title')!
+
+      expect(undoTitle()).toBe('Undo (Ctrl+Z)')
+      expect(redoTitle()).toBe('Redo (Ctrl+Shift+Z)')
+
+      rename('Zebes')
+      await nextTick()
+      expect(undoTitle()).toBe('Undo Rename Project (Ctrl+Z)')
+      expect(redoTitle()).toBe('Redo (Ctrl+Shift+Z)')
+
+      await wrapper.get('.undo-button').trigger('click')
+      expect(undoTitle()).toBe('Undo (Ctrl+Z)')
+      expect(redoTitle()).toBe('Redo Rename Project (Ctrl+Shift+Z)')
+    })
+
+    // The chord in the tooltip is rendered from the keymap, so a remap moves
+    // the tooltip with it instead of leaving a stale chord behind.
+    it('takes the chord from the keymap rather than the catalogue', async () => {
+      const wrapper = mount(Toolbar)
+
+      expect(en['toolbar.undo']).not.toContain('Ctrl')
+      expect(en['toolbar.redo']).not.toContain('Ctrl')
+      expect(wrapper.get('.undo-button').attributes('title')).toContain(
+        formatCombo(combosForAction('undo')[0]),
+      )
+      // Two combos are bound to redo; the tooltip carries the first.
+      expect(combosForAction('redo').length).toBeGreaterThan(1)
+      expect(wrapper.get('.redo-button').attributes('title')).toContain(
+        formatCombo(combosForAction('redo')[0]),
+      )
     })
   })
 
