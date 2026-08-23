@@ -111,6 +111,16 @@ export interface ExportRoom {
   id: string
   name: string
   notes: string
+  // Neither is a colour. Both change how the room's cells are painted, from
+  // the colour its area already supplies, and the resolved result stays in the
+  // app: its transform constants are an app-level preference, so exporting
+  // them would make two people's export of one project differ in bytes. The
+  // area's own `cellColor` is here, so a reader can apply its own transform.
+  heated: boolean
+  // Whole percent, 0-100, of the room's bounding box filled from the bottom.
+  // The surface it derives is not exported: a reader holding this and `bounds`
+  // computes the same line.
+  liquidLevel: number
   area: ExportArea
   cells: ExportCell[]
   bounds: ExportBounds

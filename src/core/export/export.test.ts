@@ -6,7 +6,8 @@ import { createFromBox, createTeleport, setDirection, setLock } from '../ops/doo
 import { addMap } from '../ops/maps'
 import { placeIcon } from '../ops/markup'
 import { createNewArea, createNewLockType } from '../ops/project'
-import { drawInnerWall, paintCells } from '../ops/rooms'
+import { drawInnerWall, paintCells, setRoomHeated, setRoomLiquidLevel } from '../ops/rooms'
+import { liquidSurface } from '../derive/liquid'
 import { openProject } from '../serialize'
 import { makeRoom, ok, rect, setup, tx, TEST_ICON_COLORS } from '../testUtils'
 import example from './fixtures/example-export.json'
@@ -192,6 +193,55 @@ describe('the room object', () => {
       },
     ])
     expect(roomOf(tabs, right.id).icons.map((each) => each.type)).toEqual(['missile'])
+  })
+
+  it('carries heat and the liquid level', () => {
+    const { project, map, left, right } = twoRooms()
+    const wetting = tx(map)
+    setRoomHeated(wetting, map, right.id, true)
+    setRoomLiquidLevel(wetting, map, right.id, 40)
+    wetting.commit()
+
+    const tabs = toCombinedExport(project).tabs
+    // The untouched room is half the assertion: both defaults are falsy, so a
+    // builder that emitted constants would pass on it alone.
+    expect(roomOf(tabs, left.id)).toMatchObject({ heated: false, liquidLevel: 0 })
+    expect(roomOf(tabs, right.id)).toMatchObject({ heated: true, liquidLevel: 40 })
+  })
+
+  it('ships the stored level rather than the surface it derives', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 1, 5))
+    const wetting = tx(map)
+    setRoomLiquidLevel(wetting, map, room.id, 40)
+    wetting.commit()
+
+    // A five-row box at 40% puts the surface at y = 3, which is neither the
+    // level nor a value any other field holds. A reader recomputes it from
+    // `liquidLevel` and `bounds`.
+    expect(liquidSurface(map.rooms.get(room.id)!)).toBe(3)
+    const exported = roomOf(toCombinedExport(project).tabs, room.id)
+    expect(exported.liquidLevel).toBe(40)
+    expect(Object.values(exported)).not.toContain(3)
+  })
+
+  it('ships no colour derived from the transform', () => {
+    const { project, map } = setup()
+    const naming = tx()
+    const area = createNewArea(naming, project, 'Norfair', '#bd0000', '#7fb2d9')
+    naming.commit()
+    const painting = tx(map)
+    const room = paintCells(painting, project, map, rect(0, 0, 1, 1), { areaId: area.id })
+    setRoomHeated(painting, map, room.id, true)
+    setRoomLiquidLevel(painting, map, room.id, 100)
+    painting.commit()
+
+    // The area's stored colour, untransformed, and no second colour beside it:
+    // the lighten and darken constants are an app-level preference, so a
+    // resolved colour would differ between two people exporting this project.
+    const exported = roomOf(toCombinedExport(project).tabs, room.id)
+    expect(exported.area.cellColor).toBe('#bd0000')
+    expect(JSON.stringify(exported).match(/#[0-9a-f]{6}/gi)).toEqual(['#bd0000', '#7fb2d9'])
   })
 })
 

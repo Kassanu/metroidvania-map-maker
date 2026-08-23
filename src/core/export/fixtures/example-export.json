@@ -17,6 +17,8 @@
           "id": "room_01",
           "name": "Landing Site",
           "notes": "",
+          "heated": false,
+          "liquidLevel": 0,
           "area": {
             "id": "area_01",
             "name": "Crateria",
@@ -196,6 +198,8 @@
           "id": "room_02",
           "name": "Corridor",
           "notes": "",
+          "heated": false,
+          "liquidLevel": 0,
           "area": {
             "id": "world",
             "name": "World",
@@ -303,6 +307,8 @@
           "id": "room_03",
           "name": "Vault",
           "notes": "",
+          "heated": false,
+          "liquidLevel": 0,
           "area": {
             "id": "area_01",
             "name": "Crateria",

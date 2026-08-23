@@ -115,6 +115,8 @@ function buildRoom(project: ProjectModel, map: MapModel, room: Room): ExportRoom
     id: room.id,
     name: room.name,
     notes: room.notes,
+    heated: room.heated,
+    liquidLevel: room.liquidLevel,
     area: buildArea(project, room),
     cells: cells.map(toExportCell),
     bounds: {
