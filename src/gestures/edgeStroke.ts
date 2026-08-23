@@ -17,6 +17,8 @@
 // where the pointer is.
 
 import { beginGhostGesture, type GhostGesture } from './ghostGesture'
+import { wasRefused } from '@/core/outcome'
+import type { GestureStart } from './gestureStart'
 import { nearestVertex, verticesAlong, type Vertex } from '@/canvas/vertexPath'
 import { isInnerWallEdge } from '@/core/derive/walls'
 import { edgeFromSegment } from '@/core/cell'
@@ -50,7 +52,7 @@ export interface EdgeStrokeSpec {
   onCommit?(): void
 }
 
-export function beginEdgeStroke(spec: EdgeStrokeSpec): EdgeStroke {
+export function beginEdgeStroke(spec: EdgeStrokeSpec): GestureStart<EdgeStroke> {
   const room = spec.room
   const edges = new Set<EdgeKey>(spec.seed ?? [])
   // Where the next segment starts. Tracked as a vertex rather than as the raw
@@ -67,6 +69,7 @@ export function beginEdgeStroke(spec: EdgeStrokeSpec): EdgeStroke {
     onCommit: spec.onCommit,
     apply: (transaction) => spec.apply(transaction, edges),
   })
+  if (wasRefused(driver)) return driver
 
   // Only when the press already had something to do: a bare click on a vertex
   // has an empty union, and applying it would be a repaint announcing nothing.

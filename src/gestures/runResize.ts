@@ -13,6 +13,8 @@
 // longer be the run you grabbed.
 
 import { beginGhostGesture, NO_CELLS, type GhostGesture } from './ghostGesture'
+import { refuseGesture, type GestureStart } from './gestureStart'
+import { wasRefused } from '@/core/outcome'
 import { useModelStore } from '@/stores/model'
 import { resizeRun } from '@/core/ops/rooms'
 import { SIDE_DELTA, parseCell, translate } from '@/core/cell'
@@ -49,17 +51,17 @@ export function handleGrabAllowed(pointerType: string, roomWasArmed: boolean): b
   return pointerType !== 'touch' || roomWasArmed
 }
 
-// Returns null when the map is gone: nothing to resize, and the caller simply
-// does not start a gesture.
+// Refused when the map is gone: nothing to resize, and the caller simply does
+// not start a gesture.
 export function beginRunResize(
   mapId: MapId,
   roomId: RoomId,
   run: EdgeRun,
   onChange: () => void,
-): RunResize | null {
+): GestureStart<RunResize> {
   const model = useModelStore()
   const map = model.project.mapsById.get(mapId)
-  if (!map) return null
+  if (!map) return refuseGesture('no-target')
 
   const { dx, dy } = SIDE_DELTA[run.side]
   // Any cell of the run will do: a run is straight, so its cells share the
@@ -94,6 +96,7 @@ export function beginRunResize(
       resizeRun(transaction, model.project, map, roomId, run, distance)
     },
   })
+  if (wasRefused(driver)) return driver
 
   return {
     get absorbing() {

@@ -21,6 +21,8 @@
 // alike, and only one of them can be undone by dragging back.
 
 import { beginGhostGesture, type CellMove } from './ghostGesture'
+import { refuseGesture, type GestureStart } from './gestureStart'
+import { wasRefused } from '@/core/outcome'
 import { useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
 import { moveCellFragment } from '@/core/ops/rooms'
@@ -57,24 +59,24 @@ function absorbedCells(
   return absorbed
 }
 
-// Returns null when there is nothing a fragment drag could move: a missing map,
-// or a selection holding no cell this map owns. A cell that lost its owner
-// cannot be dragged out of a room it is no longer in.
+// Refused when there is nothing a fragment drag could move: a missing map, or a
+// selection holding no cell this map owns. A cell that lost its owner cannot be
+// dragged out of a room it is no longer in.
 export function beginCellFragmentMove(
   mapId: MapId,
   from: CellKey,
   onChange: () => void,
-): CellFragmentMove | null {
+): GestureStart<CellFragmentMove> {
   const model = useModelStore()
   const selection = useSelectionStore()
   const map = model.project.mapsById.get(mapId)
-  if (!map) return null
+  if (!map) return refuseGesture('no-target')
 
   // Captured at press, like every other press-time reading. These are also the
   // cells the op filters to, so the gesture and the op agree about what was
   // grabbed without either asking the other.
   const grabbed = new Set(selection.cellsOn(mapId).filter((cell) => map.cellOwner.has(cell)))
-  if (grabbed.size === 0) return null
+  if (grabbed.size === 0) return refuseGesture('no-target')
 
   const origin = parseCell(from)
   let to = from
@@ -116,6 +118,7 @@ export function beginCellFragmentMove(
       )
     },
   })
+  if (wasRefused(driver)) return driver
 
   return {
     get to() {

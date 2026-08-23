@@ -15,6 +15,8 @@
 // scene input for both.
 
 import { beginGhostGesture, type GhostGesture } from './ghostGesture'
+import { refuseGesture, type GestureStart } from './gestureStart'
+import { wasRefused } from '@/core/outcome'
 import { useModelStore } from '@/stores/model'
 import { useDoorDefaultsStore } from '@/stores/doorDefaults'
 import { classifyBox, createFromBox } from '@/core/ops/doors'
@@ -43,13 +45,17 @@ export interface BoxDrag extends GhostGesture {
   moveTo(point: WorldPoint): void
 }
 
-// Returns null when the map is gone. Nothing to draw a box on, and the caller
-// simply does not start a gesture.
-export function beginBoxDrag(mapId: MapId, from: CellKey, onChange: () => void): BoxDrag | null {
+// Refused when the map is gone. Nothing to draw a box on, and the caller simply
+// does not start a gesture.
+export function beginBoxDrag(
+  mapId: MapId,
+  from: CellKey,
+  onChange: () => void,
+): GestureStart<BoxDrag> {
   const model = useModelStore()
   const doorDefaults = useDoorDefaultsStore()
   const map = model.project.mapsById.get(mapId)
-  if (!map) return null
+  if (!map) return refuseGesture('no-target')
 
   let to = from
   let outcome: BoxOutcome = 'invalid'
@@ -71,6 +77,7 @@ export function beginBoxDrag(mapId: MapId, from: CellKey, onChange: () => void):
       createFromBox(transaction, model.project, map, from, to, doorDefaults.options)
     },
   })
+  if (wasRefused(driver)) return driver
 
   return {
     get absorbing() {

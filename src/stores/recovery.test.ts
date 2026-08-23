@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { setStorageProvider, setRecoveryStore } from '@/storage'
 import type { RecoveryStore, SnapshotAbout, SnapshotInfo, StorageProvider } from '@/storage'
 import { toJSON } from '@/core/serialize'
@@ -194,7 +194,7 @@ describe('autosave', () => {
     makeDirty()
 
     const mapId = model.project.maps[0]
-    const gesture = model.beginGesture('draw', mapScope(mapId))
+    const gesture = mustStart(model.beginGesture('draw', mapScope(mapId)))
     await settle()
     expect(store.writes).toBe(0)
 
@@ -226,7 +226,7 @@ describe('autosave', () => {
     useRecoveryStore()
     const model = useModelStore()
     makeDirty()
-    const gesture = model.beginGesture('draw', mapScope(model.project.maps[0]))
+    const gesture = mustStart(model.beginGesture('draw', mapScope(model.project.maps[0])))
 
     hide()
     await nextTick()
@@ -244,7 +244,7 @@ describe('autosave', () => {
     const model = useModelStore()
     makeDirty()
 
-    const gesture = model.beginGesture('draw', mapScope(model.project.maps[0]))
+    const gesture = mustStart(model.beginGesture('draw', mapScope(model.project.maps[0])))
     await settle()
     expect(store.writes).toBe(0)
 

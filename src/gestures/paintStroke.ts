@@ -10,6 +10,7 @@
 // what makes a stroke a paint stroke: the origin room, and the ghost.
 
 import { beginCellStroke, type CellStroke } from './cellStroke'
+import { refuseGesture, type GestureStart } from './gestureStart'
 import { useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
 import { useDrawAreaStore } from '@/stores/drawArea'
@@ -21,17 +22,17 @@ import type { CellKey } from '@/core/cell'
 import type { MapId, RoomId } from '@/core/ids'
 import type { MapModel } from '@/core/types'
 
-// Returns null when the map is gone: nothing to paint on, and the caller
-// simply does not start a stroke.
+// Refused when the map is gone: nothing to paint on, and the caller simply
+// does not start a stroke.
 export function beginPaintStroke(
   mapId: MapId,
   origin: WorldPoint,
   onChange: () => void,
-): CellStroke | null {
+): GestureStart<CellStroke> {
   const model = useModelStore()
   const drawArea = useDrawAreaStore()
   const map = model.project.mapsById.get(mapId)
-  if (!map) return null
+  if (!map) return refuseGesture('no-target')
 
   // The room where the stroke started always wins, decided at press time and
   // never re-read: deciding it per frame would make the winner depend on

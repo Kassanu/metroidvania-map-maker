@@ -578,9 +578,9 @@ describe('inner-wall strokes', () => {
 
   it('declines to start when the map or the room is gone', () => {
     const id = square3()
-    expect(
-      beginInnerWallStroke('map_gone' as MapId, id, vertex(1, 1), 'solid', onChange),
-    ).toBeNull()
+    expect(beginInnerWallStroke('map_gone' as MapId, id, vertex(1, 1), 'solid', onChange)).toEqual({
+      refused: 'no-target',
+    })
     expect(
       beginInnerWallStroke(
         firstMap().mapId,
@@ -589,9 +589,9 @@ describe('inner-wall strokes', () => {
         'solid',
         onChange,
       ),
-    ).toBeNull()
+    ).toEqual({ refused: 'no-target' })
     expect(
       beginInnerWallErase(firstMap().mapId, 'room_gone' as RoomId, vertex(1, 1), onChange),
-    ).toBeNull()
+    ).toEqual({ refused: 'no-target' })
   })
 })

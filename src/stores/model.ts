@@ -41,6 +41,7 @@ import type { Transaction, TransactionScope } from '@/core/journal'
 import { newId } from '@/core/ids'
 import type { MapId } from '@/core/ids'
 import type { ProjectModel } from '@/core/types'
+import { refuseGesture, type GestureStart } from '@/gestures/gestureStart'
 
 export { PROJECT_SCOPE }
 
@@ -134,10 +135,14 @@ export const useModelStore = defineStore('model', () => {
   // cheapest thing to watch for "the project was swapped".
   const projectKeyState = ref(newProjectKey())
 
-  // How many gestures are mid-drag. Non-zero means the model is holding
-  // speculative state that has not been committed and may yet be cancelled,
-  // so anything reading the project for storage has to wait.
-  const liveGestures = ref(0)
+  // The gesture mid-drag, or null. One slot, not a count: at most one
+  // transaction is live at a time, and this is what says so. Non-null means the
+  // model is holding speculative state that has not been committed and may yet
+  // be cancelled, so anything reading the project for storage has to wait.
+  //
+  // `shallowRef` because the value closes over an open `Transaction`, which is
+  // core's and must not come back proxied.
+  const liveGesture = shallowRef<Gesture | null>(null)
 
   // The published projection. Private refs behind computeds: a caller that can
   // assign to `rev` can desynchronise the UI from the model in a way that looks
@@ -246,15 +251,23 @@ export const useModelStore = defineStore('model', () => {
   // The drag loop, in the seam so no gesture has to remember to `reset()`
   // first. See the `Gesture` interface above for what each method promises.
   //
+  // At most one is live at a time, and a second is refused rather than queued
+  // or allowed alongside: `reapply` rewinds and replays the whole gesture
+  // against one journal stack that takes no lock, so two live transactions
+  // interleave their rewinds and corrupt the journal. Settling the first
+  // implicitly would commit a drag the user has not released, so the refusal is
+  // a value and the caller's answer is "do not start this drag".
+  //
   // Settling is idempotent on purpose. `Esc` mid-drag followed by the eventual
   // pointerup is the normal abort sequence, so the second call has to be a
   // no-op rather than a throw about committing a rolled-back transaction.
-  function beginGesture(label: string, scope: TransactionScope): Gesture {
+  function beginGesture(label: string, scope: TransactionScope): GestureStart<Gesture> {
+    if (liveGesture.value) return refuseGesture('gesture-live')
+
     const transaction = stack.value.begin(label, scope)
     let live = true
-    liveGestures.value++
 
-    return {
+    const gesture: Gesture = {
       reapply(body) {
         if (!live) return
         transaction.reset()
@@ -262,24 +275,26 @@ export const useModelStore = defineStore('model', () => {
           body(transaction)
         } catch (error) {
           // Same reasoning as `run`: a half-applied change that was never
-          // journaled is the one state the model cannot recover from.
+          // journaled is the one state the model cannot recover from. The slot
+          // is released here too, or a gesture that threw would refuse every
+          // gesture after it for the rest of the session.
           transaction.rollback()
           live = false
-          liveGestures.value--
+          liveGesture.value = null
           throw error
         }
       },
       commit() {
         if (!live) return
         live = false
-        liveGestures.value--
+        liveGesture.value = null
         stack.value.commit(transaction)
         sync()
       },
       cancel() {
         if (!live) return
         live = false
-        liveGestures.value--
+        liveGesture.value = null
         transaction.rollback()
         // Deliberately no `sync()`. Rolling back restores exactly the state the
         // published counters already describe, so republishing would spend a
@@ -289,6 +304,9 @@ export const useModelStore = defineStore('model', () => {
         // does need doing.
       },
     }
+
+    liveGesture.value = gesture
+    return gesture
   }
 
   function undo(): HistoryEffect | null {
@@ -347,7 +365,7 @@ export const useModelStore = defineStore('model', () => {
     tileSize: computed(() => tileSizeState.value),
     status: computed(() => statusState.value),
     projectKey: computed(() => projectKeyState.value),
-    gestureActive: computed(() => liveGestures.value > 0),
+    gestureActive: computed(() => liveGesture.value !== null),
     // A map that has never been touched reads 0, the same as a fresh one, so a
     // caller never has to distinguish "no entry" from "no changes".
     mapRev: computed(() => (mapId: MapId) => mapRevState.value.get(mapId) ?? 0),

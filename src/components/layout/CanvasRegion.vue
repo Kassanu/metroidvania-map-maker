@@ -26,6 +26,8 @@ import {
 import { screenToWorld, worldToScreen, type ScreenPoint } from '@/canvas/viewport'
 import { pageBounds } from '@/canvas/page'
 import { repaintTick } from '@/canvas/repaint'
+import { wasRefused } from '@/core/outcome'
+import type { GestureStart } from '@/gestures/gestureStart'
 import { contentBounds } from '@/core/derive/bounds'
 import { centerOn, panByScreen, wheelZoom } from '@/canvas/camera'
 import {
@@ -215,6 +217,14 @@ const draggingIconId = ref<IconId | null>(null)
 // A pan drag is in flight. DOM state like `draggingIconId`: it owns the cursor
 // while it runs, over whatever the zone resolver would otherwise have said.
 const panning = ref(false)
+
+// This component's answer to a refused gesture and to a row that starts nothing
+// is the same one: do not start the drag. Converted here, at the boundary, so
+// the gesture layer goes on saying it as a value and the rows below go on
+// reading as a table.
+function started<T>(begun: GestureStart<T>): T | null {
+  return wasRefused(begun) ? null : begun
+}
 
 const { draw, resize, repaintForTheme } = useCanvasRenderer(
   { container, main: canvas, topRuler: topRulerCanvas, leftRuler: leftRulerCanvas },
@@ -476,7 +486,11 @@ function handleDoorPress(event: PointerEvent) {
   }
 
   const origin = gestureOriginCell(target)
-  const box = origin ? beginBoxDrag(tab.id, origin, draw) : null
+  // A refusal reads the same as no origin: this press opens no box drag. The
+  // click column below still runs, which is what a press with nowhere to drag
+  // to has always done.
+  const opened = origin ? beginBoxDrag(tab.id, origin, draw) : null
+  const box = opened && !wasRefused(opened) ? opened : null
   if (box) {
     gesture = box
     boxDrag = box
@@ -632,15 +646,17 @@ function beginMarkupIconDrag(target: MarkupTarget): IconDrag | null {
   if (!tab || !map || target.kind !== 'icon') return null
 
   const iconId = target.id
-  return beginIconDrag({
-    mapId: tab.id,
-    from: target.cell,
-    label: t('history.moveIcon'),
-    onChange: draw,
-    apply: (tx, to) => {
-      repositionIcon(tx, map, iconId, to, { replace: markupDefaults.replace })
-    },
-  })
+  return started(
+    beginIconDrag({
+      mapId: tab.id,
+      from: target.cell,
+      label: t('history.moveIcon'),
+      onChange: draw,
+      apply: (tx, to) => {
+        repositionIcon(tx, map, iconId, to, { replace: markupDefaults.replace })
+      },
+    }),
+  )
 }
 
 // The line-body row of the drag column, for a line that is already selected:
@@ -661,16 +677,18 @@ function beginMarkupLineDrag(target: MarkupTarget): IconDrag | null {
 
   const lineId = target.id
   const origin = parseCell(target.cell)
-  return beginIconDrag({
-    mapId: tab.id,
-    from: target.cell,
-    label: t('history.moveLine'),
-    onChange: draw,
-    apply: (tx, to) => {
-      const at = parseCell(to)
-      translateLine(tx, map, lineId, at.x - origin.x, at.y - origin.y)
-    },
-  })
+  return started(
+    beginIconDrag({
+      mapId: tab.id,
+      from: target.cell,
+      label: t('history.moveLine'),
+      onChange: draw,
+      apply: (tx, to) => {
+        const at = parseCell(to)
+        translateLine(tx, map, lineId, at.x - origin.x, at.y - origin.y)
+      },
+    }),
+  )
 }
 
 function beginMarkupLine(target: MarkupTarget): LineStroke | null {
@@ -681,30 +699,34 @@ function beginMarkupLine(target: MarkupTarget): LineStroke | null {
 
   if (target.kind === 'line-end') {
     const { id, atStart } = target
-    return beginLineStroke({
-      mapId: tab.id,
-      // The line's own endpoint, not the pressed cell: the grab radius reaches
-      // beyond the cell the endpoint sits in, so a press near it must extend
-      // from the end rather than from wherever the pointer landed.
-      origin: endpointCellOf(map, id, atStart),
-      label: t('history.extendLine'),
-      onChange: draw,
-      apply: (tx, points) => {
-        extendLine(tx, map, id, atStart, [...points].slice(1))
-      },
-    })
+    return started(
+      beginLineStroke({
+        mapId: tab.id,
+        // The line's own endpoint, not the pressed cell: the grab radius reaches
+        // beyond the cell the endpoint sits in, so a press near it must extend
+        // from the end rather than from wherever the pointer landed.
+        origin: endpointCellOf(map, id, atStart),
+        label: t('history.extendLine'),
+        onChange: draw,
+        apply: (tx, points) => {
+          extendLine(tx, map, id, atStart, [...points].slice(1))
+        },
+      }),
+    )
   }
 
   const defaults = markupDefaults.lineDefaults
-  return beginLineStroke({
-    mapId: tab.id,
-    origin: target.cell,
-    label: t('history.drawLine'),
-    onChange: draw,
-    apply: (tx, points) => {
-      createLine(tx, map, [...points], defaults)
-    },
-  })
+  return started(
+    beginLineStroke({
+      mapId: tab.id,
+      origin: target.cell,
+      label: t('history.drawLine'),
+      onChange: draw,
+      apply: (tx, points) => {
+        createLine(tx, map, [...points], defaults)
+      },
+    }),
+  )
 }
 
 function endpointCellOf(map: MapModel, id: LineId, atStart: boolean): CellKey {
@@ -737,16 +759,19 @@ function beginMarkupErase(event: PointerEvent, target: MarkupTarget) {
   const line = map.lines.get(id)
   if (!line) return
 
-  const peel = beginLinePeel({
-    mapId: tab.id,
-    points: line.points,
-    atStart,
-    label: t('history.peelLine'),
-    onChange: draw,
-    apply: (tx, count) => {
-      peelLine(tx, map, id, atStart, count)
-    },
-  })
+  const peel = started(
+    beginLinePeel({
+      mapId: tab.id,
+      points: line.points,
+      atStart,
+      label: t('history.peelLine'),
+      onChange: draw,
+      apply: (tx, count) => {
+        peelLine(tx, map, id, atStart, count)
+      },
+    }),
+  )
+  if (!peel) return
   gesture = peel
 
   // No dead zone and no click/drag latch, unlike the paint column above. A
@@ -941,7 +966,7 @@ function handleSelectPress(event: PointerEvent) {
   // is not decided until the press turns out to be a drag.
   const band =
     bandableAt(target, subMode) && world
-      ? beginMarquee(tab.id, world, subMode, additive, draw)
+      ? started(beginMarquee(tab.id, world, subMode, additive, draw))
       : null
   marquee = band
 
@@ -1072,9 +1097,9 @@ function beginObjectMove(mapId: MapId, target: SelectTarget, additive: boolean):
   if (target.kind !== 'object') return null
   if (!movesOnDrag(target.ref)) selection.clickSelect(target.ref, mapId, additive)
 
-  const started = beginSelectionMove(mapId, target.cell, draw)
-  if (started) gesture = started
-  return started
+  const move = started(beginSelectionMove(mapId, target.cell, draw))
+  if (move) gesture = move
+  return move
 }
 
 // The Drag column's other half, one granularity over: a press on a cell that is
@@ -1085,12 +1110,12 @@ function beginObjectMove(mapId: MapId, target: SelectTarget, additive: boolean):
 // the cells were selected before the press.
 function beginFragmentMove(mapId: MapId, target: SelectTarget): CellMove | null {
   if (target.kind !== 'cell') return null
-  const started = beginCellFragmentMove(mapId, target.cell, draw)
-  if (started) {
-    gesture = started
-    fragment = started
+  const move = started(beginCellFragmentMove(mapId, target.cell, draw))
+  if (move) {
+    gesture = move
+    fragment = move
   }
-  return started
+  return move
 }
 
 // A middle-drag pans, in every mode, ahead of everything else. The button
@@ -1246,7 +1271,7 @@ function beginGestureFor(
   // on the canvas whether or not its room is armed, so there is no invisible
   // target to protect a finger from.
   if (action === 'erase' && zone.kind === 'innerWall' && rows.innerWall) {
-    const erase = beginInnerWallErase(mapId, zone.roomId, world, draw, [zone.edge])
+    const erase = started(beginInnerWallErase(mapId, zone.roomId, world, draw, [zone.edge]))
     if (erase) return { gesture: erase, move: (point) => erase.extendTo(point) }
   }
 
@@ -1255,11 +1280,10 @@ function beginGestureFor(
   // performs the resize or the inner-wall stroke.
   if (action === 'paint' && handleGrabAllowed(event.pointerType, wasArmed)) {
     if (zone.kind === 'edgeRun' && rows.resize) {
-      const resize = beginRunResize(mapId, zone.roomId, zone.run, draw)
+      const resize = started(beginRunResize(mapId, zone.roomId, zone.run, draw))
       // Falls through to a stroke rather than returning null, so a gesture that
-      // could not start behaves like the press that opened it: the map being
-      // gone is the only way that happens, and then nothing else can start
-      // either.
+      // could not start behaves like the press that opened it: whatever refused
+      // this one refuses the stroke below as well.
       if (resize) return { gesture: resize, move: (point) => resize.moveTo(point) }
     }
 
@@ -1270,7 +1294,9 @@ function beginGestureFor(
     // without waiting for the drag to reach the next vertex.
     if ((zone.kind === 'vertex' || zone.kind === 'innerWall') && rows.innerWall) {
       const seed = zone.kind === 'innerWall' ? [zone.edge] : undefined
-      const wall = beginInnerWallStroke(mapId, zone.roomId, world, tools.wallStyle, draw, seed)
+      const wall = started(
+        beginInnerWallStroke(mapId, zone.roomId, world, tools.wallStyle, draw, seed),
+      )
       if (wall) return { gesture: wall, move: (point) => wall.extendTo(point) }
     }
   }
@@ -1285,8 +1311,11 @@ function beginGestureFor(
   // landed in, growing edge runs and leaving vertices inert.
   if (!rows.cells) return null
 
-  const stroke =
-    action === 'erase' ? beginEraseStroke(mapId, world, draw) : beginPaintStroke(mapId, world, draw)
+  const stroke = started(
+    action === 'erase'
+      ? beginEraseStroke(mapId, world, draw)
+      : beginPaintStroke(mapId, world, draw),
+  )
   return stroke && { gesture: stroke, move: (point) => stroke.extendTo(point) }
 }
 
@@ -1884,7 +1913,16 @@ watch(
   { flush: 'sync' },
 )
 
+// A live gesture does not outlive its holder. `startPointerDrag` binds its
+// listeners to the target element, so a component that unmounts mid-drag never
+// sees the release: the transaction would stay open for the rest of the session
+// and refuse every gesture after it. An unmount is not a new axis, it is the
+// release that never arrived, so each settles the way its own `pointercancel`
+// does. On the canvas that is a commit; the marquee holds no transaction but
+// does hold a handler on the gesture Esc tier, which leaks the same way.
 onUnmounted(() => {
+  gesture?.commit()
+  marquee?.cancel()
   popPendingTeleportEsc?.()
   popArmedIconEsc?.()
   popSelectionEsc?.()

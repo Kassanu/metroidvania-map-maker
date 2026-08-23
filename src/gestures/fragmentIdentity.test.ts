@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { createTestPinia } from '@/test-setup'
+import { createTestPinia, mustStart } from '@/test-setup'
 import { beginCellFragmentMove } from './cellFragmentMove'
 import { mapScope, PROJECT_SCOPE, useModelStore } from '@/stores/model'
 import { useSelectionStore } from '@/stores/selection'
@@ -71,7 +71,7 @@ function cellsOfRoom(roomId: RoomId): CellKey[] {
 // Starts the drag, failing loudly on the null a caller with nothing to move
 // gets back. Tests that are about that null call the gesture directly.
 function grab(from: CellKey) {
-  const move = beginCellFragmentMove(theMapId(), from, () => {})
+  const move = mustStart(beginCellFragmentMove(theMapId(), from, () => {}))
   if (!move) throw new Error(`expected a fragment move from ${from}`)
   return move
 }
@@ -347,16 +347,18 @@ describe('the cell fragment move gesture', () => {
     const room = paint(['0,0', '1,0'])
     const selection = useSelectionStore()
 
-    expect(beginCellFragmentMove(theMapId(), '0,0', () => {})).toBeNull()
+    expect(beginCellFragmentMove(theMapId(), '0,0', () => {})).toEqual({ refused: 'no-target' })
 
     selection.set([{ kind: 'room', id: room }], theMapId())
-    expect(beginCellFragmentMove(theMapId(), '0,0', () => {})).toBeNull()
+    expect(beginCellFragmentMove(theMapId(), '0,0', () => {})).toEqual({ refused: 'no-target' })
 
     selectCells(['5,5'])
-    expect(beginCellFragmentMove(theMapId(), '5,5', () => {})).toBeNull()
+    expect(beginCellFragmentMove(theMapId(), '5,5', () => {})).toEqual({ refused: 'no-target' })
 
     selectCells(['0,0'])
-    expect(beginCellFragmentMove('no-such-map' as MapId, '0,0', () => {})).toBeNull()
+    expect(beginCellFragmentMove('no-such-map' as MapId, '0,0', () => {})).toEqual({
+      refused: 'no-target',
+    })
   })
 
   it('replaces the destination on every move rather than accumulating', () => {

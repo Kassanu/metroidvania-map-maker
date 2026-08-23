@@ -18,6 +18,8 @@
 // derived from the cell rather than stored.
 
 import { beginGhostGesture, NO_CELLS, type GhostGesture } from './ghostGesture'
+import { wasRefused } from '@/core/outcome'
+import type { GestureStart } from './gestureStart'
 import type { CellKey } from '@/core/cell'
 import type { Transaction } from '@/core/journal'
 import type { MapId } from '@/core/ids'
@@ -40,7 +42,7 @@ export interface IconDragSpec {
   apply(transaction: Transaction, to: CellKey): void
 }
 
-export function beginIconDrag(spec: IconDragSpec): IconDrag {
+export function beginIconDrag(spec: IconDragSpec): GestureStart<IconDrag> {
   let to = spec.from
 
   const driver = beginGhostGesture({
@@ -52,6 +54,7 @@ export function beginIconDrag(spec: IconDragSpec): IconDrag {
     // cell removes that icon, which the speculative result already shows.
     absorbing: () => NO_CELLS,
   })
+  if (wasRefused(driver)) return driver
 
   return {
     get to() {
