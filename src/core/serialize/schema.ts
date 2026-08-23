@@ -10,10 +10,16 @@
 //   * Edge door segments carry `aSide` to name which boundary cell owns `locks.a`.
 
 export const FILE_FORMAT = 'metroidvania-map-maker'
-// Bumped to 2 when `oneWay: boolean` became `direction`. A replaced field, not
-// an added one: a v1 file's one-way transitions would otherwise load two-way,
-// which loses data silently rather than loudly.
-export const FILE_VERSION = 2
+// A field holding user data bumps this; a derivable or presentational one does
+// not. The version protects the forward direction only: it is what makes an
+// older build refuse a file outright rather than read it, drop the fields it
+// does not recognise, and write the loss back on the next save. Backwards needs
+// nothing, since an absent field is its documented default.
+//
+// 2: `oneWay: boolean` became `direction`. A replaced field owes a real
+// migration as well, or a v1 file's one-way transitions load two-way.
+// 3: a room gained `heated` and `liquidLevel`.
+export const FILE_VERSION = 3
 
 export type JsonCell = [number, number]
 export type JsonVertexSegment = [[number, number], [number, number]]
@@ -51,6 +57,11 @@ export interface JsonRoom {
   areaId: string
   name?: string
   notes?: string
+  // Optional so a file written before version 3 reads, and written on every
+  // room regardless, so a saved file states what it holds. A whole percent
+  // from 0 to 100; the loader is what guarantees that of a value off disk.
+  heated?: boolean
+  liquidLevel?: number
   cells: JsonCell[]
   innerWalls?: JsonInnerWall[]
 }

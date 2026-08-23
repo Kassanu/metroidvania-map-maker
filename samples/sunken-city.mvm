@@ -1,6 +1,6 @@
 {
   "format": "metroidvania-map-maker",
-  "version": 2,
+  "version": 3,
   "project": {
     "name": "Sunken City",
     "settings": {
@@ -69,6 +69,8 @@
             "areaId": "area_8zst1xym",
             "name": "",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 0,
@@ -126,6 +128,8 @@
             "areaId": "area_e97sxyc3",
             "name": "",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 6,
@@ -194,6 +198,8 @@
             "areaId": "area_8zst1xym",
             "name": "",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 0,
@@ -261,6 +267,8 @@
             "areaId": "area_e97sxyc3",
             "name": "",
             "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
             "cells": [
               [
                 2,

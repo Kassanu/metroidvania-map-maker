@@ -1,0 +1,57 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 3,
+  "project": {
+    "name": "Hostile room fields",
+    "settings": {
+      "tileSize": 32
+    },
+    "lockTypes": [],
+    "areas": [],
+    "maps": [
+      {
+        "id": "m1",
+        "name": "M1",
+        "rooms": [
+          { "id": "r_absent", "areaId": "world", "cells": [[0, 0]] },
+          { "id": "r_level_high", "areaId": "world", "liquidLevel": 150, "cells": [[2, 0]] },
+          { "id": "r_level_low", "areaId": "world", "liquidLevel": -3, "cells": [[4, 0]] },
+          { "id": "r_level_huge", "areaId": "world", "liquidLevel": 1e400, "cells": [[6, 0]] },
+          { "id": "r_level_tiny", "areaId": "world", "liquidLevel": -1e400, "cells": [[8, 0]] },
+          { "id": "r_level_fraction", "areaId": "world", "liquidLevel": 40.6, "cells": [[10, 0]] },
+          { "id": "r_level_epsilon", "areaId": "world", "liquidLevel": 5e-324, "cells": [[12, 0]] },
+          { "id": "r_level_string", "areaId": "world", "liquidLevel": "50", "cells": [[0, 2]] },
+          { "id": "r_level_null", "areaId": "world", "liquidLevel": null, "cells": [[2, 2]] },
+          { "id": "r_level_object", "areaId": "world", "liquidLevel": { "0": 50 }, "cells": [[4, 2]] },
+          { "id": "r_level_array", "areaId": "world", "liquidLevel": [50], "cells": [[6, 2]] },
+          { "id": "r_level_bool", "areaId": "world", "liquidLevel": true, "cells": [[8, 2]] },
+          { "id": "r_heat_one", "areaId": "world", "heated": 1, "cells": [[0, 4]] },
+          { "id": "r_heat_zero", "areaId": "world", "heated": 0, "cells": [[2, 4]] },
+          { "id": "r_heat_word", "areaId": "world", "heated": "false", "cells": [[4, 4]] },
+          { "id": "r_heat_empty", "areaId": "world", "heated": "", "cells": [[6, 4]] },
+          { "id": "r_heat_null", "areaId": "world", "heated": null, "cells": [[8, 4]] },
+          { "id": "r_heat_array", "areaId": "world", "heated": [], "cells": [[10, 4]] },
+          { "id": "r_heat_object", "areaId": "world", "heated": {}, "cells": [[12, 4]] },
+          {
+            "id": "r_both",
+            "areaId": "world",
+            "heated": "on",
+            "liquidLevel": 99.5,
+            "cells": [[0, 6]]
+          },
+          {
+            "id": "r_split",
+            "areaId": "world",
+            "name": "Two chambers",
+            "heated": 1,
+            "liquidLevel": 60.4,
+            "cells": [[0, 8], [8, 8]]
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      }
+    ]
+  }
+}

@@ -44,6 +44,8 @@ const REPAIR_LABELS: Record<LoadEventKind, MessageKey> = {
   'lock-remapped': 'load.lockRemapped',
   'setting-reset': 'load.settingReset',
   'color-reset': 'load.colorReset',
+  'level-repaired': 'load.levelRepaired',
+  'heat-reset': 'load.heatReset',
   'icon-type-reset': 'load.iconTypeReset',
   'assumed-default': 'load.assumedDefault',
   'id-remapped': 'load.idRemapped',

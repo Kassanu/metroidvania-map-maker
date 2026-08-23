@@ -4,7 +4,7 @@ import type { LoadEvent, LoadEventKind, LoadReport } from './index'
 import { LIMITS } from './limits'
 import { migrate } from './migrate'
 import { FILE_FORMAT, FILE_VERSION } from './schema'
-import type { JsonCell, JsonFile, JsonMap, JsonProject } from './schema'
+import type { JsonCell, JsonFile, JsonMap, JsonProject, JsonRoom } from './schema'
 
 function eventsOf<K extends LoadEventKind>(
   report: LoadReport,
@@ -93,6 +93,40 @@ describe('migrate leaves its input alone', () => {
   it('hands a current file straight back, uncopied', () => {
     const file = fileOf()
     expect(migrate(file)).toBe(file)
+  })
+})
+
+// The step that adds no field and changes no value, and is registered anyway.
+// Without it `migrate` finds no entry for version 2 and throws, which refuses
+// every file saved before the two room fields existed.
+describe('a v2 file reaches version 3', () => {
+  function v2(): JsonFile {
+    return { ...fileOf(), version: 2 }
+  }
+
+  it('loads rather than being refused', () => {
+    const { project, report } = fromJSON(v2())
+    const map = project.mapsById.get(project.maps[0])!
+    expect(map.rooms.size).toBe(1)
+    expect(report.events).toEqual([])
+  })
+
+  it('brings its rooms in at the defaults, silently', () => {
+    const { project, report } = fromJSON(v2())
+    const room = [...project.mapsById.get(project.maps[0])!.rooms.values()][0]
+    expect([room.heated, room.liquidLevel]).toEqual([false, 0])
+    // An absent field taking its documented default is not a repair, so the
+    // user is not asked about a file that was never wrong.
+    expect(report.events).toEqual([])
+  })
+
+  it('stamps the version and touches nothing else', () => {
+    const before = v2()
+    const after = migrate(before)
+
+    expect(after.version).toBe(3)
+    expect(before.version).toBe(2)
+    expect({ ...after, version: 2 }).toEqual(before)
   })
 })
 
@@ -235,6 +269,125 @@ describe('a lock type glyph is capped', () => {
     const { project, report } = fromJSON(fileOf({ lockTypes: [{ id: 'lk1', name: 'L' }] }))
     expect(project.lockTypes.get('lk1' as never)?.glyph).toBeNull()
     expect(report.events).toHaveLength(0)
+  })
+})
+
+// One room, and what the loader made of what the file said about it.
+function roomWith(fields: Record<string, unknown>) {
+  const file = fileOf({
+    maps: [
+      mapOf({
+        rooms: [
+          {
+            id: 'r1',
+            areaId: 'world',
+            name: 'Landing Site',
+            cells: [[0, 0] as JsonCell],
+            ...fields,
+          } as JsonRoom,
+        ],
+      }),
+    ],
+  })
+  const { project, report } = fromJSON(file)
+  const map = project.mapsById.get(project.maps[0])!
+  return { room: [...map.rooms.values()][0], report }
+}
+
+// Names a value in a test title. `JSON.stringify` tells `"50"` from `50`,
+// which is the whole distinction half these rows are about, and answers
+// `null` for the two numbers JSON cannot hold.
+function shown(value: unknown): string {
+  if (typeof value === 'number' && !Number.isFinite(value)) return String(value)
+  return JSON.stringify(value) ?? String(value)
+}
+
+describe('a liquid level is a whole percent from 0 to 100', () => {
+  const kept = [0, 100, 40]
+  // Each row is what the file said, and what the room ends up holding.
+  const repaired: [unknown, number][] = [
+    [150, 100],
+    [-3, 0],
+    [40.6, 41],
+    [40.4, 40],
+    [Number.POSITIVE_INFINITY, 0],
+    [Number.NEGATIVE_INFINITY, 0],
+    [Number.NaN, 0],
+    [Number.MIN_VALUE, 0],
+    ['50', 0],
+    [null, 0],
+    [true, 0],
+    [{}, 0],
+    [[50], 0],
+  ]
+
+  for (const level of kept) {
+    it(`keeps ${level}`, () => {
+      const { room, report } = roomWith({ liquidLevel: level })
+      expect(room.liquidLevel).toBe(level)
+      expect(report.events).toHaveLength(0)
+    })
+  }
+
+  for (const [level, stored] of repaired) {
+    it(`repairs ${shown(level)} to ${stored}, and says so`, () => {
+      const { room, report } = roomWith({ liquidLevel: level })
+      expect(room.liquidLevel).toBe(stored)
+      // A level is not a coordinate: it repairs rather than refusing the file,
+      // because the surface it derives is bounded by the room's own box
+      // whatever the number says.
+      expect(eventsOf(report, 'level-repaired')).toEqual([
+        { kind: 'level-repaired', map: 'Map 1', room: 'Landing Site' },
+      ])
+    })
+  }
+
+  it('treats an absent level as 0, silently', () => {
+    const { room, report } = roomWith({})
+    expect(room.liquidLevel).toBe(0)
+    expect(report.events).toHaveLength(0)
+  })
+})
+
+describe('heat is a flag, read for what the file meant by it', () => {
+  const kept = [true, false]
+  const coerced: [unknown, boolean][] = [
+    [1, true],
+    [0, false],
+    ['false', true],
+    ['', false],
+    [null, false],
+    [[], true],
+    [{}, true],
+  ]
+
+  for (const heated of kept) {
+    it(`keeps ${heated}`, () => {
+      const { room, report } = roomWith({ heated })
+      expect(room.heated).toBe(heated)
+      expect(report.events).toHaveLength(0)
+    })
+  }
+
+  for (const [heated, stored] of coerced) {
+    it(`reads ${shown(heated)} as ${stored}, and says so`, () => {
+      const { room, report } = roomWith({ heated })
+      expect(room.heated).toBe(stored)
+      expect(eventsOf(report, 'heat-reset')).toEqual([
+        { kind: 'heat-reset', map: 'Map 1', room: 'Landing Site' },
+      ])
+    })
+  }
+
+  it('treats an absent flag as off, silently', () => {
+    const { room, report } = roomWith({})
+    expect(room.heated).toBe(false)
+    expect(report.events).toHaveLength(0)
+  })
+
+  it('reports the two fields apart, so the dialog can name the repair', () => {
+    const { report } = roomWith({ heated: 1, liquidLevel: 150 })
+    expect(report.events.map((event) => event.kind)).toEqual(['heat-reset', 'level-repaired'])
   })
 })
 

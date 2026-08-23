@@ -120,6 +120,8 @@ describe('a repaired load', () => {
       'lock-remapped',
       'setting-reset',
       'color-reset',
+      'level-repaired',
+      'heat-reset',
       'icon-type-reset',
       'assumed-default',
       'id-remapped',
