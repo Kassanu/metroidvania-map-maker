@@ -13,6 +13,7 @@ import {
   refusal,
   rect,
   setup,
+  snapshot,
   sorted,
   tx,
   TEST_ICON_COLORS,
@@ -29,6 +30,8 @@ import {
   paintCells,
   renameRoom,
   resizeRun,
+  setRoomHeated,
+  setRoomLiquidLevel,
   setRoomNotes,
   transformRooms,
 } from './rooms'
@@ -128,6 +131,8 @@ describe('erase and split', () => {
     const room = makeRoom(project, map, rect(0, 0, 3, 1))
     room.name = 'Landing Site'
     room.notes = 'start'
+    room.heated = true
+    room.liquidLevel = 40
 
     const transaction = tx(map)
     eraseCells(transaction, project, map, ['1,0'])
@@ -135,6 +140,8 @@ describe('erase and split', () => {
     expect(other.name).toBe('Landing Site')
     expect(other.notes).toBe('start')
     expect(other.areaId).toBe(room.areaId)
+    expect(other.heated).toBe(true)
+    expect(other.liquidLevel).toBe(40)
   })
 
   it('deletes the icon on an erased cell', () => {
@@ -527,8 +534,194 @@ describe('room properties', () => {
     expect(() => renameRoom(edit, map, room.id, 'Nowhere')).toThrow(/no room with id/)
     expect(() => setRoomNotes(edit, map, room.id, 'x')).toThrow(/no room with id/)
     expect(() => assignRoomArea(edit, map, room.id, WORLD_AREA_ID)).toThrow(/no room with id/)
+    expect(() => setRoomHeated(edit, map, room.id, true)).toThrow(/no room with id/)
+    expect(() => setRoomLiquidLevel(edit, map, room.id, 50)).toThrow(/no room with id/)
     expect(() => eraseInnerWall(edit, map, room.id, edgeOfCell('9,9', 'E'))).toThrow(
       /no room with id/,
     )
+  })
+})
+
+describe('heat and the liquid level', () => {
+  it('sets and clears both, through the journal', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 2, 3))
+    expect(room.heated).toBe(false)
+    expect(room.liquidLevel).toBe(0)
+
+    const edit = tx(map)
+    setRoomHeated(edit, map, room.id, true)
+    setRoomLiquidLevel(edit, map, room.id, 60)
+    edit.commit()
+
+    expect(room.heated).toBe(true)
+    expect(room.liquidLevel).toBe(60)
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('rolls both back exactly', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 2, 3))
+    const seed = tx(map)
+    setRoomHeated(seed, map, room.id, true)
+    setRoomLiquidLevel(seed, map, room.id, 60)
+    seed.commit()
+    const before = snapshot(project)
+
+    const drag = tx(map)
+    setRoomLiquidLevel(drag, map, room.id, 5)
+    setRoomHeated(drag, map, room.id, false)
+    expect(room.liquidLevel).toBe(5)
+    drag.rollback()
+
+    expect(snapshot(project)).toEqual(before)
+  })
+
+  it('clamps out of range, rounds a fraction, and lands a non-finite value on 0', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 2, 3))
+
+    const apply = (level: number): number => {
+      const edit = tx(map)
+      setRoomLiquidLevel(edit, map, room.id, level)
+      edit.commit()
+      return room.liquidLevel
+    }
+
+    expect(apply(140)).toBe(100)
+    expect(apply(-20)).toBe(0)
+    expect(apply(33.4)).toBe(33)
+    expect(apply(33.5)).toBe(34)
+    // Math.max(0, Math.round(NaN)) is NaN, so a clamp alone would store it.
+    expect(apply(Number.NaN)).toBe(0)
+    expect(apply(Number.POSITIVE_INFINITY)).toBe(0)
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('records nothing when the value already equals what is stored', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 2, 3))
+    const seed = tx(map)
+    setRoomLiquidLevel(seed, map, room.id, 25)
+    seed.commit()
+
+    // What an abandoned slider drag leans on: the transaction is empty, so
+    // commit drops it rather than putting a no-op on the undo stack.
+    const drag = tx(map)
+    setRoomLiquidLevel(drag, map, room.id, 25.2)
+    setRoomHeated(drag, map, room.id, false)
+    expect(drag.isEmpty).toBe(true)
+    drag.rollback()
+    void project
+  })
+
+  it('bumps metaRev and never rev, so the geometry cache survives a slider drag', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 2, 3))
+    const rev = room.rev
+    const metaRev = room.metaRev
+
+    const edit = tx(map)
+    setRoomLiquidLevel(edit, map, room.id, 70)
+    setRoomHeated(edit, map, room.id, true)
+    edit.commit()
+
+    expect(room.rev).toBe(rev)
+    expect(room.metaRev).toBeGreaterThan(metaRev)
+    void project
+  })
+
+  it('a merge keeps the origin room’s values, not the absorbed room’s', () => {
+    const { project, map } = setup()
+    const origin = makeRoom(project, map, ['0,0'])
+    const absorbed = makeRoom(project, map, ['2,0', '3,0'])
+
+    const seed = tx(map)
+    setRoomHeated(seed, map, absorbed.id, true)
+    setRoomLiquidLevel(seed, map, absorbed.id, 80)
+    seed.commit()
+
+    makeRoom(project, map, ['1,0', '2,0'], origin.id)
+
+    expect(map.rooms.size).toBe(1)
+    expect(origin.heated).toBe(false)
+    expect(origin.liquidLevel).toBe(0)
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('a merge keeps the origin room’s values when the origin is the flooded one', () => {
+    const { project, map } = setup()
+    const origin = makeRoom(project, map, ['0,0'])
+    makeRoom(project, map, ['2,0', '3,0'])
+
+    const seed = tx(map)
+    setRoomHeated(seed, map, origin.id, true)
+    setRoomLiquidLevel(seed, map, origin.id, 80)
+    seed.commit()
+
+    makeRoom(project, map, ['1,0', '2,0'], origin.id)
+
+    expect(origin.heated).toBe(true)
+    expect(origin.liquidLevel).toBe(80)
+  })
+
+  it('a split gives every piece a copy, at the same percentage', () => {
+    const { project, map } = setup()
+    // Three columns of different heights, so the pieces carry the same
+    // percentage to three different heights once the surface is derived.
+    const room = makeRoom(
+      project,
+      map,
+      grid(`
+        #.#
+        #.#
+        ###
+        #..
+      `),
+    )
+    const seed = tx(map)
+    setRoomHeated(seed, map, room.id, true)
+    setRoomLiquidLevel(seed, map, room.id, 50)
+    seed.commit()
+
+    const cut = tx(map)
+    eraseCells(cut, project, map, ['0,2', '1,2', '2,2'])
+    cut.commit()
+
+    expect(map.rooms.size).toBe(3)
+    for (const piece of map.rooms.values()) {
+      expect(piece.heated).toBe(true)
+      expect(piece.liquidLevel).toBe(50)
+    }
+    expect(checkInvariants(project)).toEqual([])
+  })
+
+  it('carries both through move, rotate and flip, which keep the room’s identity', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 3, 1))
+    const seed = tx(map)
+    setRoomHeated(seed, map, room.id, true)
+    setRoomLiquidLevel(seed, map, room.id, 65)
+    seed.commit()
+
+    const move = tx(map)
+    moveRooms(move, project, map, [room.id], 4, 2)
+    move.commit()
+    expect(room.heated).toBe(true)
+    expect(room.liquidLevel).toBe(65)
+
+    const spin = tx(map)
+    transformRooms(spin, project, map, [room.id], 'rotateRight')
+    spin.commit()
+    expect(room.liquidLevel).toBe(65)
+
+    const mirror = tx(map)
+    transformRooms(mirror, project, map, [room.id], 'flipV')
+    mirror.commit()
+    // Nothing rewrites the number: what changed is what the same percentage
+    // now covers.
+    expect(room.liquidLevel).toBe(65)
+    expect(room.heated).toBe(true)
+    expect(checkInvariants(project)).toEqual([])
   })
 })

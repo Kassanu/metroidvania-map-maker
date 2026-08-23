@@ -48,8 +48,9 @@ function bumpRoom(room: Room, map: MapModel): void {
   map.rev++
 }
 
-// Identity changed. The map still repaints (a room's name and colour are on
-// screen) but nothing geometric needs re-deriving.
+// A non-geometric field changed. The map still repaints (a room's name, its
+// colour, its heat and its liquid level are all on screen) but nothing
+// geometric needs re-deriving.
 function bumpRoomMeta(room: Room, map: MapModel): void {
   room.metaRev++
   map.rev++
@@ -212,11 +213,16 @@ export function removeRoom(tx: Transaction, map: MapModel, room: Room): void {
   tx.touched.maps.add(map.id)
 }
 
-// Metadata only: name, notes, area. These bump metaRev, never rev, since
-// nothing derived from the room's geometry changes. Bumping rev here would
-// invalidate the memoised outer walls and edge runs on every keystroke of a
-// rename.
-export function setRoomField<K extends 'areaId' | 'name' | 'notes'>(
+// Every non-geometric field: area, name, notes, heat and the liquid level.
+// These bump metaRev, never rev, since nothing derived from the room's
+// geometry changes. Bumping rev here would invalidate the memoised outer walls
+// and edge runs on every keystroke of a rename and on every frame of a slider
+// drag.
+//
+// The key union is closed on purpose: a field that is not listed cannot be
+// written through the journal at all, which is what stops a new one being
+// added to the type and then mutated directly.
+export function setRoomField<K extends 'areaId' | 'name' | 'notes' | 'heated' | 'liquidLevel'>(
   tx: Transaction,
   map: MapModel,
   room: Room,

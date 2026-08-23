@@ -35,6 +35,10 @@ export function createRoom(areaId: AreaId, id: RoomId = newRoomId()): Room {
     // pastes, which get an enumerated "Room N".
     name: '',
     notes: '',
+    // Both off, so a file written before these existed loads with every room
+    // plain and nothing to migrate.
+    heated: false,
+    liquidLevel: 0,
     cells: new Set(),
     innerWalls: new Map(),
     rev: 0,

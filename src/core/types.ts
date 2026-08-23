@@ -138,6 +138,14 @@ export interface Room {
   name: string
   notes: string
 
+  // Neither is a colour. Both change how the room's cells are painted, from
+  // the colour its area already supplies.
+  heated: boolean
+  // Whole percent, 0-100, of the room's bounding box filled from the bottom.
+  // A proportion rather than a height: the surface is derived from whatever
+  // the box is now, so no operation has to adjust it when the shape changes.
+  liquidLevel: number
+
   // The room *is* its cells. Orthogonally connected, non-overlapping with
   // every other room; both invariants are enforced by the ops, not the type.
   cells: Set<CellKey>
@@ -148,12 +156,14 @@ export interface Room {
 
   // Bumped on any geometry change: cells and inner walls. Invalidates this
   // room's derived cache (outer walls, edge runs, bounding box). Not bumped by
-  // renames, notes edits, or area changes. Those alter nothing derive/walls
-  // memoises. Metadata changes bump metaRev instead.
+  // any of the fields above, which alter nothing derive/walls memoises.
+  // Those bump metaRev instead.
   rev: number
 
-  // Bumped on name, notes and area changes. A panel showing a room's identity
-  // watches this; nothing derived from geometry needs to.
+  // Bumped on every non-geometric field: area, name, notes, heat and the
+  // liquid level. A panel showing a room's identity watches this, and so does
+  // the canvas, since some of them are on screen; nothing derived from
+  // geometry needs to.
   metaRev: number
 }
 

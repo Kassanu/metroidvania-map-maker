@@ -160,6 +160,8 @@ function mapSnapshot(map: MapModel): unknown {
         areaId: room.areaId,
         name: room.name,
         notes: room.notes,
+        heated: room.heated,
+        liquidLevel: room.liquidLevel,
         cells: sorted(room.cells),
         innerWalls: [...room.innerWalls.entries()].sort(),
       }))
