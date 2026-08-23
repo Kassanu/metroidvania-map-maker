@@ -269,8 +269,14 @@ export const en = {
   'menu.help.about': 'About',
 
   'toolbar.label': 'Toolbar',
-  'toolbar.undo': 'Undo (Ctrl+Z)',
-  'toolbar.redo': 'Redo (Ctrl+Shift+Z)',
+  // {combo} comes from the keymap through formatCombo, so these carry no
+  // literal chord text and render Cmd on a Mac. The step forms name the
+  // transaction the button would move; the bare pair is for an empty stack,
+  // where there is nothing to name.
+  'toolbar.undo': 'Undo ({combo})',
+  'toolbar.redo': 'Redo ({combo})',
+  'toolbar.undoStep': 'Undo {label} ({combo})',
+  'toolbar.redoStep': 'Redo {label} ({combo})',
   'toolbar.zen': 'Zen',
   'toolbar.zenTitle': 'Zen mode - hide the menu, activity bar, and sidebars',
   // The erase toggle's word is shared by the three modes that can erase; its
