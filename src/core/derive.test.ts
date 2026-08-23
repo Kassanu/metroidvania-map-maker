@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { cellKey, edgeOfCell } from './cell'
+import type { CellKey } from './cell'
 import {
   connectedComponents,
   originalGroupIndex,
@@ -16,10 +17,13 @@ import {
   wallVertices,
 } from './derive/walls'
 import { areaBoundsOnMap, contentBounds, ownedCellsIn, roomsOverlapping } from './derive/bounds'
+import { liquidSurface } from './derive/liquid'
 import { createRoom } from './factory'
 import { WORLD_AREA_ID } from './ids'
 import type { RoomId } from './ids'
-import { grid, makeRoom, rect, setup, sorted } from './testUtils'
+import { setRoomLiquidLevel } from './ops/rooms'
+import type { Room } from './types'
+import { grid, makeRoom, rect, setup, sorted, tx } from './testUtils'
 
 describe('connectivity', () => {
   it('finds one group for an orthogonally connected shape', () => {
@@ -494,5 +498,81 @@ describe('rooms overlapping a box', () => {
     const second = makeRoom(project, map, rect(2, 0, 1, 1))
 
     expect(roomsOverlapping(map, box(0, 0, 2, 0))).toEqual([first.id, second.id])
+  })
+})
+
+describe('the liquid surface', () => {
+  // The surface is an edge coordinate and `bounds` holds cell indices, so a
+  // room spanning rows 0..2 has its bottom edge at y = 3. Every assertion here
+  // is about that one-apart distinction.
+
+  function fill(cells: CellKey[], level: number) {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, cells)
+    const raise = tx(map)
+    setRoomLiquidLevel(raise, map, room.id, level)
+    raise.commit()
+    return { project, map, room }
+  }
+
+  function flooded(cells: CellKey[], level: number): Room {
+    return fill(cells, level).room
+  }
+
+  it('sits on the bottom edge at level 0, whatever the room’s height', () => {
+    expect(liquidSurface(flooded(rect(0, 0, 2, 1), 0))).toBe(1)
+    expect(liquidSurface(flooded(rect(0, 0, 2, 3), 0))).toBe(3)
+    expect(liquidSurface(flooded(rect(0, 0, 2, 8), 0))).toBe(8)
+  })
+
+  it('sits on the top edge at level 100', () => {
+    expect(liquidSurface(flooded(rect(0, 0, 2, 1), 100))).toBe(0)
+    expect(liquidSurface(flooded(rect(0, 0, 2, 3), 100))).toBe(0)
+  })
+
+  it('is a world coordinate, not a room-local one', () => {
+    // Rows 10..12: bottom edge at 13, half of a 3-row box is 1.5.
+    const room = flooded(rect(4, 10, 2, 3), 50)
+    expect(liquidSurface(room)).toBe(11.5)
+  })
+
+  it('lands between rows when the level does not divide the height', () => {
+    // Rows 0..2, so height 3 and a bottom edge at 3.
+    expect(liquidSurface(flooded(rect(0, 0, 1, 3), 50))).toBe(1.5)
+    expect(liquidSurface(flooded(rect(0, 0, 1, 3), 33))).toBeCloseTo(2.01, 10)
+  })
+
+  it('measures the room’s own box, not the map’s', () => {
+    const { project, map } = setup()
+    const room = makeRoom(project, map, rect(0, 0, 1, 2))
+    // A second room far below stretches the map's extent and must not move
+    // this room's surface.
+    makeRoom(project, map, rect(0, 40, 1, 2))
+    const fill = tx(map)
+    setRoomLiquidLevel(fill, map, room.id, 50)
+    fill.commit()
+
+    expect(liquidSurface(room)).toBe(1)
+  })
+
+  it('answers null for a room with no cells, and only for that', () => {
+    expect(liquidSurface(createRoom(WORLD_AREA_ID))).toBeNull()
+    expect(liquidSurface(flooded(['0,0'], 0))).not.toBeNull()
+  })
+
+  it('follows a level change, which moves metaRev and not rev', () => {
+    // `roomBounds` memoises against `rev`. Caching the surface the same way
+    // would answer the old line for the rest of the session, and a slider drag
+    // moves nothing else.
+    const { map, room } = fill(rect(0, 0, 1, 4), 0)
+    expect(liquidSurface(room)).toBe(4)
+    const rev = room.rev
+
+    const raise = tx(map)
+    setRoomLiquidLevel(raise, map, room.id, 25)
+    raise.commit()
+
+    expect(room.rev).toBe(rev)
+    expect(liquidSurface(room)).toBe(3)
   })
 })
