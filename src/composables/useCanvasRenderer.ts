@@ -96,10 +96,13 @@ function sizeToDpr(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: numbe
 
 // Every draw starts from a clean transform scaled to the device ratio, so the
 // render functions can work in CSS pixels and stay resolution-agnostic.
-function context2d(canvas: HTMLCanvasElement | null): CanvasRenderingContext2D | null {
+//
+// The ratio is a parameter rather than a read: one draw sets up three contexts
+// and sizes the scene from the same number, and measuring it four times is four
+// chances for them to disagree if the window changes display mid-draw.
+function context2d(canvas: HTMLCanvasElement | null, ratio: number) {
   const ctx = canvas?.getContext('2d')
   if (!ctx) return null
-  const ratio = window.devicePixelRatio || 1
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
   return ctx
 }
@@ -132,13 +135,14 @@ export function useCanvasRenderer(
     const width = main.width / ratio
     const height = main.height / ratio
 
-    const mainCtx = context2d(main)
+    const mainCtx = context2d(main, ratio)
     if (!mainCtx) return
 
     const mapScene: MapScene = {
       camera: current.camera,
       bounds: current.bounds,
       tileSize: current.tileSize,
+      dpr: ratio,
       map: current.map,
       areas: current.areas,
       lockTypes: current.lockTypes,
@@ -168,7 +172,7 @@ export function useCanvasRenderer(
 
     if (!current.showRulers) return
 
-    const topCtx = context2d(targets.topRuler.value)
+    const topCtx = context2d(targets.topRuler.value, ratio)
     if (topCtx) {
       renderRuler(topCtx, {
         axis: 'x',
@@ -180,7 +184,7 @@ export function useCanvasRenderer(
       })
     }
 
-    const leftCtx = context2d(targets.leftRuler.value)
+    const leftCtx = context2d(targets.leftRuler.value, ratio)
     if (leftCtx) {
       renderRuler(leftCtx, {
         axis: 'y',
