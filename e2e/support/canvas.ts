@@ -33,6 +33,34 @@ export async function undoLabel(page: Page) {
   return label?.trim()
 }
 
+// The colour the map canvas has at a screen point, as [r, g, b, a].
+//
+// The only way to read a mark that lives nowhere but the bitmap, and the whole
+// browser half of the canvas harness: a clip, a pattern or a derived colour is
+// a claim about pixels, and this is what reads one.
+//
+// The scale comes from the canvas's own backing store rather than from
+// `window.devicePixelRatio`, so it stays right if the element is ever sized to
+// anything other than exactly its CSS box.
+//
+// Aim it through `gridMapping`, never at a fixed offset: which world cell a
+// screen point lands on depends on where the camera opened.
+export async function pixelAt(page: Page, point: { x: number; y: number }) {
+  return page.evaluate(({ x, y }) => {
+    const canvas = document.querySelector('.canvas-viewport canvas.canvas') as HTMLCanvasElement
+    const box = canvas.getBoundingClientRect()
+    const ratio = canvas.width / box.width
+    const ctx = canvas.getContext('2d')!
+    const { data } = ctx.getImageData(
+      Math.round((x - box.x) * ratio),
+      Math.round((y - box.y) * ratio),
+      1,
+      1,
+    )
+    return [data[0], data[1], data[2], data[3]]
+  }, point)
+}
+
 // The world cell under a screen point, read off the coords overlay.
 export async function cellAt(page: Page, x: number, y: number) {
   await page.mouse.move(x, y)
