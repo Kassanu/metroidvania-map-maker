@@ -31,6 +31,13 @@ export interface MapScene {
   bounds: Bounds
   // `settings.tileSize`: the on-screen size of one cell at zoom 1.
   tileSize: number
+  // The device pixel ratio the context was scaled by, and the one bridge
+  // between this file's units and the display's. Every length here is a CSS
+  // pixel; the dither's square, its origin and the liquid's fill line are
+  // device-pixel quantities, and `canvas/devicePixels.ts` converts between
+  // them. Handed over rather than read, so nothing here touches `window` and a
+  // test can render at any ratio.
+  dpr: number
   palette: CanvasPalette
   // Whether the page is painted. Presentation only: `bounds` is derived and
   // handed over either way, so nothing that reads the rectangle changes.

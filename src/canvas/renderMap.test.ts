@@ -34,6 +34,11 @@ const ALL_HANDLES = { runs: true, vertices: true }
 // renderMap ignored scene.tileSize and used a hardcoded value of its own.
 const TILE = 20
 
+// Deliberately not 1, for the same reason: everything measured here is a CSS
+// pixel, so a device-pixel calculation that forgot to divide by the ratio would
+// come out doubled rather than agreeing by accident.
+const DPR = 2
+
 // A recording stub rather than a real context: pulling these functions out of
 // the component means they need no canvas, no jsdom and no layout to verify.
 // The same double a canvas reached through `getContext` answers with, so a
@@ -90,6 +95,7 @@ function scene(overrides: Partial<MapScene> = {}): MapScene {
     // currently says.
     bounds: { minCol: 0, minRow: 0, maxCol: 19, maxRow: 14 },
     tileSize: TILE,
+    dpr: DPR,
     map: null,
     // Both layer toggles default on, so a scene that does not override them
     // is fully visible; the toggles' own tests are what turn them off.
