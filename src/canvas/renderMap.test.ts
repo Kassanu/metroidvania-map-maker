@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { renderMap, type HoveredHandle, type MapScene } from './renderMap'
+import { createRecordingContext, type RecordedFill } from './testContext'
 import { DOOR_JAMB } from './doorRuns'
 import { outerWalls, resizableRuns, wallVertices } from '@/core/derive/walls'
 import type { CanvasPalette } from './palette'
@@ -35,93 +36,9 @@ const TILE = 20
 
 // A recording stub rather than a real context: pulling these functions out of
 // the component means they need no canvas, no jsdom and no layout to verify.
-function fakeContext() {
-  const fills: { style: string; rect: number[] }[] = []
-  // Each stroke() call, with the segments queued since the last beginPath()
-  // and the state they were drawn under: enough to check how a wall was
-  // drawn, not merely that something was stroked.
-  const strokes: {
-    style: string
-    width: number
-    dash: number[]
-    join: string
-    segments: number[][]
-  }[] = []
-  let pending: number[][] = []
-  let cursor: number[] = [0, 0]
-  let dash: number[] = []
-  const labels: { text: string; style: string; at: number[] }[] = []
-  // The chip behind a label, recorded where it is drawn: the fill style is set
-  // immediately before the path is built, so it is the plate's colour.
-  const chips: { style: string; rect: number[] }[] = []
-  // Each fill(path) call with the path data and the transform it was drawn
-  // under, so a badge's colour, art and placed rect are all assertable. Only
-  // translate and uniform scale are tracked, which is all the badges use.
-  const badges: { style: string; data: string; x: number; y: number; scale: number }[] = []
-  let transform = { x: 0, y: 0, scale: 1 }
-  const saved: (typeof transform)[] = []
-  const ctx = {
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 0,
-    font: '',
-    textAlign: '',
-    textBaseline: '',
-    fillText: vi.fn((text: string, x: number, y: number) =>
-      labels.push({ text, style: ctx.fillStyle, at: [x, y] }),
-    ),
-    clearRect: vi.fn(),
-    fillRect: vi.fn((...rect: number[]) => fills.push({ style: ctx.fillStyle, rect })),
-    beginPath: vi.fn(() => {
-      pending = []
-    }),
-    moveTo: vi.fn((x: number, y: number) => {
-      cursor = [x, y]
-    }),
-    lineTo: vi.fn((x: number, y: number) => {
-      pending.push([...cursor, x, y])
-      cursor = [x, y]
-    }),
-    lineJoin: '',
-    lineCap: '',
-    stroke: vi.fn(() => {
-      strokes.push({
-        style: ctx.strokeStyle,
-        width: ctx.lineWidth,
-        dash,
-        join: ctx.lineJoin,
-        segments: pending,
-      })
-      pending = []
-    }),
-    setLineDash: vi.fn((segments: number[]) => {
-      dash = segments
-    }),
-    save: vi.fn(() => {
-      saved.push({ ...transform })
-    }),
-    restore: vi.fn(() => {
-      transform = saved.pop() ?? transform
-    }),
-    translate: vi.fn((x: number, y: number) => {
-      transform.x += x * transform.scale
-      transform.y += y * transform.scale
-    }),
-    scale: vi.fn((k: number) => {
-      transform.scale *= k
-    }),
-    // Two callers, told apart by the argument: a badge fills a Path2D, and a
-    // label chip fills the current path built by `roundRect` above.
-    fill: vi.fn((path?: { data: string }) => {
-      if (path) badges.push({ style: ctx.fillStyle, data: path.data, ...transform })
-    }),
-    measureText: vi.fn((text: string) => ({ width: text.length * 6 })),
-    roundRect: vi.fn((x: number, y: number, width: number, height: number) =>
-      chips.push({ style: ctx.fillStyle, rect: [x, y, width, height] }),
-    ),
-  }
-  return { ctx, fills, strokes, labels, chips, badges }
-}
+// The same double a canvas reached through `getContext` answers with, so a
+// pattern tile and the map it is filled into record into one object.
+const fakeContext = createRecordingContext
 
 // A project with one map, built through the real ops so the model under test
 // is the one the app would hand the renderer.
@@ -777,8 +694,7 @@ describe('renderMap drawing elevators', () => {
     })
   }
 
-  const shaftRects = (fills: { style: string; rect: number[] }[]) =>
-    fills.filter((fill) => fill.style === '#transition')
+  const shaftRects = (fills: RecordedFill[]) => fills.filter((fill) => fill.style === '#transition')
 
   it('draws one band per gap cell, narrower than the cell across its axis', () => {
     const { ctx, fills } = fakeContext()
@@ -1608,8 +1524,7 @@ describe('renderMap drawing a cell selection', () => {
   const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
     renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
 
-  const tints = <T extends { style: string }>(fills: T[]) =>
-    fills.filter((fill) => fill.style === '#selectionfill')
+  const tints = (fills: RecordedFill[]) => fills.filter((fill) => fill.style === '#selectionfill')
   const outlines = <T extends { style: string }>(strokes: T[]) =>
     strokes.filter((stroke) => stroke.style === '#selection')
 
@@ -1735,8 +1650,7 @@ describe('renderMap drawing the marquee', () => {
   const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
     renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
 
-  const sheets = <T extends { style: string }>(fills: T[]) =>
-    fills.filter((fill) => fill.style === '#marqueefill')
+  const sheets = (fills: RecordedFill[]) => fills.filter((fill) => fill.style === '#marqueefill')
 
   // Every scene below is on a map: with none there is no page to sweep, and the
   // renderer stops before any of the overlays.

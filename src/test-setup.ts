@@ -1,8 +1,10 @@
-import { vi, type Mock } from 'vitest'
 import { createApp } from 'vue'
 import { createAppPinia } from '@/stores/pinia'
+import { createRecordingContext, type CanvasRecords } from '@/canvas/testContext'
 import { wasRefused } from '@/core/outcome'
 import type { GestureStart } from '@/gestures/gestureStart'
+
+export type { FakeContext2D } from '@/canvas/testContext'
 
 // Pinia only applies plugins registered with pinia.use() once the instance
 // has been installed into a Vue app, so a store test doing nothing but
@@ -77,67 +79,33 @@ if (typeof Element.prototype.setPointerCapture === 'undefined') {
 // jsdom doesn't implement the Canvas 2D API at all (getContext('2d') returns
 // null unless the optional `canvas` npm package is installed, which this
 // project doesn't use). CanvasRegion's draw() needs a real-ish context to
-// call methods on. This fakes just enough of it to run without crashing.
+// call methods on, and so does anything that builds an offscreen canvas.
+//
 // Memoized per canvas element (a WeakMap, matching the real getContext's
 // idempotency) so a test can call `canvasEl.getContext('2d')` itself and get
 // back the exact same spy-able object the component drew with.
-export interface FakeContext2D {
-  fillStyle: string
-  strokeStyle: string
-  lineWidth: number
-  font: string
-  textAlign: string
-  textBaseline: string
-  fillRect: Mock<(...args: number[]) => void>
-  clearRect: Mock<(...args: number[]) => void>
-  beginPath: Mock<() => void>
-  moveTo: Mock<(...args: number[]) => void>
-  lineTo: Mock<(...args: number[]) => void>
-  stroke: Mock<() => void>
-  fill: Mock<(path?: unknown) => void>
-  save: Mock<() => void>
-  restore: Mock<() => void>
-  scale: Mock<(...args: number[]) => void>
-  setTransform: Mock<(...args: number[]) => void>
-  translate: Mock<(...args: number[]) => void>
-  rotate: Mock<(...args: number[]) => void>
-  fillText: Mock<(...args: [string, number, number]) => void>
-  // Width is proportional to the string so a chip sized from it is deterministic
-  // here, without pretending to know anything about a real font.
-  measureText: Mock<(text: string) => { width: number }>
-  roundRect: Mock<(...args: number[]) => void>
-  setLineDash: Mock<(segments: number[]) => void>
-}
+//
+// The context is the recorder from `canvas/testContext.ts`, which is what
+// makes a tile drawn into an offscreen canvas readable from the test that
+// asserts on the map it was filled into: both record through the same double.
+const recordings = new WeakMap<HTMLCanvasElement, ReturnType<typeof createRecordingContext>>()
 
-function createFakeContext2D(): FakeContext2D {
-  return {
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 1,
-    font: '',
-    textAlign: '',
-    textBaseline: '',
-    fillRect: vi.fn(),
-    clearRect: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-    fill: vi.fn(),
-    save: vi.fn(),
-    restore: vi.fn(),
-    scale: vi.fn(),
-    setTransform: vi.fn(),
-    translate: vi.fn(),
-    rotate: vi.fn(),
-    fillText: vi.fn(),
-    measureText: vi.fn((text: string) => ({ width: text.length * 6 })),
-    roundRect: vi.fn(),
-    setLineDash: vi.fn(),
+function recordingFor(canvas: HTMLCanvasElement) {
+  let recording = recordings.get(canvas)
+  if (!recording) {
+    recording = createRecordingContext()
+    recordings.set(canvas, recording)
   }
+  return recording
 }
 
-const fakeContexts = new WeakMap<HTMLCanvasElement, FakeContext2D>()
+// What was drawn into a canvas the test did not build itself. Keyed on the
+// element rather than hung off the context, because the canvas is what a
+// caller has: a pattern token carries the canvas its tile was drawn into, so
+// `recordsOf(token.source)` is how the tile's own colours are read back.
+export function recordsOf(canvas: HTMLCanvasElement): CanvasRecords {
+  return recordingFor(canvas)
+}
 
 if (typeof HTMLCanvasElement !== 'undefined') {
   HTMLCanvasElement.prototype.getContext = function (
@@ -149,8 +117,7 @@ if (typeof HTMLCanvasElement !== 'undefined') {
     // `canvas` package isn't installed, so there's nothing to gain by calling
     // through to it first.
     if (type !== '2d') return null
-    if (!fakeContexts.has(this)) fakeContexts.set(this, createFakeContext2D())
-    return fakeContexts.get(this)
+    return recordingFor(this).ctx
   } as typeof HTMLCanvasElement.prototype.getContext
 }
 
