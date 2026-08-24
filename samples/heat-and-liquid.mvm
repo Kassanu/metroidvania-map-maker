@@ -1,0 +1,345 @@
+{
+  "format": "metroidvania-map-maker",
+  "version": 3,
+  "project": {
+    "name": "Heat And Liquid",
+    "settings": {
+      "tileSize": 32,
+      "backgroundColor": null,
+      "gridColor": null,
+      "gridInExports": true
+    },
+    "lockTypes": [
+      {
+        "id": "open",
+        "name": "Open",
+        "color": null,
+        "glyph": null
+      },
+      {
+        "id": "locked",
+        "name": "Locked",
+        "color": "#e23b3b",
+        "glyph": null
+      }
+    ],
+    "areas": [
+      {
+        "id": "world",
+        "name": "World",
+        "cellColor": null,
+        "wallColor": null,
+        "notes": ""
+      },
+      {
+        "id": "area_cnn6y0w8",
+        "name": "Magma",
+        "cellColor": "#BD0000",
+        "wallColor": "#7A0000",
+        "notes": ""
+      }
+    ],
+    "maps": [
+      {
+        "id": "map_wjpyd3mq",
+        "name": "Caldera",
+        "notes": "",
+        "rooms": [
+          {
+            "id": "room_70han3j1",
+            "areaId": "area_cnn6y0w8",
+            "name": "Cavern",
+            "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
+            "cells": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                2,
+                0
+              ],
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                0,
+                2
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                2
+              ]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_cw1hw2g1",
+            "areaId": "area_cnn6y0w8",
+            "name": "Furnace",
+            "notes": "",
+            "heated": true,
+            "liquidLevel": 0,
+            "cells": [
+              [
+                4,
+                0
+              ],
+              [
+                5,
+                0
+              ],
+              [
+                6,
+                0
+              ],
+              [
+                4,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                6,
+                1
+              ],
+              [
+                4,
+                2
+              ],
+              [
+                5,
+                2
+              ],
+              [
+                6,
+                2
+              ]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_0rmzpqx9",
+            "areaId": "area_cnn6y0w8",
+            "name": "Cistern",
+            "notes": "",
+            "heated": false,
+            "liquidLevel": 50,
+            "cells": [
+              [
+                8,
+                0
+              ],
+              [
+                9,
+                0
+              ],
+              [
+                10,
+                0
+              ],
+              [
+                8,
+                1
+              ],
+              [
+                9,
+                1
+              ],
+              [
+                10,
+                1
+              ],
+              [
+                8,
+                2
+              ],
+              [
+                9,
+                2
+              ],
+              [
+                10,
+                2
+              ]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_j2an1yy8",
+            "areaId": "area_cnn6y0w8",
+            "name": "Magma Chamber",
+            "notes": "",
+            "heated": true,
+            "liquidLevel": 100,
+            "cells": [
+              [
+                12,
+                0
+              ],
+              [
+                13,
+                0
+              ],
+              [
+                14,
+                0
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                13,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                12,
+                2
+              ],
+              [
+                13,
+                2
+              ],
+              [
+                14,
+                2
+              ]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_vamdetcq",
+            "areaId": "area_cnn6y0w8",
+            "name": "Sump",
+            "notes": "",
+            "heated": false,
+            "liquidLevel": 60,
+            "cells": [
+              [
+                0,
+                4
+              ],
+              [
+                1,
+                4
+              ],
+              [
+                2,
+                4
+              ],
+              [
+                0,
+                5
+              ],
+              [
+                1,
+                5
+              ],
+              [
+                2,
+                5
+              ],
+              [
+                0,
+                6
+              ],
+              [
+                1,
+                6
+              ],
+              [
+                2,
+                6
+              ],
+              [
+                0,
+                7
+              ],
+              [
+                0,
+                8
+              ]
+            ],
+            "innerWalls": []
+          },
+          {
+            "id": "room_0mj1reg6",
+            "areaId": "world",
+            "name": "Overlook",
+            "notes": "",
+            "heated": false,
+            "liquidLevel": 0,
+            "cells": [
+              [
+                4,
+                4
+              ],
+              [
+                5,
+                4
+              ],
+              [
+                6,
+                4
+              ],
+              [
+                4,
+                5
+              ],
+              [
+                5,
+                5
+              ],
+              [
+                6,
+                5
+              ],
+              [
+                4,
+                6
+              ],
+              [
+                5,
+                6
+              ],
+              [
+                6,
+                6
+              ]
+            ],
+            "innerWalls": []
+          }
+        ],
+        "transitions": [],
+        "icons": [],
+        "lines": []
+      }
+    ]
+  }
+}

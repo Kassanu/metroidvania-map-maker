@@ -1,23 +1,6 @@
 import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { openApp, gridMapping, undoLabel, type GridMapping } from './support/canvas'
-
-// The colour the map canvas has at a screen point, in backing-store pixels.
-async function pixelAt(page: Page, point: { x: number; y: number }) {
-  return page.evaluate(({ x, y }) => {
-    const canvas = document.querySelector('.canvas-viewport canvas.canvas') as HTMLCanvasElement
-    const box = canvas.getBoundingClientRect()
-    const ratio = window.devicePixelRatio || 1
-    const ctx = canvas.getContext('2d')!
-    const { data } = ctx.getImageData(
-      Math.round((x - box.x) * ratio),
-      Math.round((y - box.y) * ratio),
-      1,
-      1,
-    )
-    return [data[0], data[1], data[2], data[3]]
-  }, point)
-}
+import { openApp, gridMapping, pixelAt, undoLabel, type GridMapping } from './support/canvas'
 
 // The Inspector in a real browser: that it is mounted in the right sidebar,
 // that a canvas selection reaches it, and that a field commits back through
