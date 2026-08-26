@@ -458,8 +458,98 @@ describe('InspectorPanel', () => {
         'inspector-room-name',
         'inspector-room-area',
         'inspector-room-heated',
+        'inspector-room-liquid',
         'inspector-room-notes',
       ])
+    })
+
+    // The drag: pointerdown opens the transaction, every `input` re-applies it,
+    // and pointerup is what commits. `change` is never listened to.
+    async function dragLiquid(panel: VueWrapper, through: number[]) {
+      const slider = panel.get('#inspector-room-liquid')
+      await slider.trigger('pointerdown')
+      for (const value of through) {
+        ;(slider.element as HTMLInputElement).value = String(value)
+        await slider.trigger('input')
+      }
+      return slider
+    }
+
+    it('previews the drag in the readout before anything is committed', async () => {
+      const { panel, mapId, roomA } = await mountWithRoom()
+      const model = useModelStore()
+
+      await dragLiquid(panel, [20, 45])
+
+      // The model is holding the speculative value, and the journal is not.
+      expect(room(mapId, roomA).liquidLevel).toBe(45)
+      expect(model.gestureActive).toBe(true)
+      expect(model.status.undoLabel).not.toBe('Change Liquid Level')
+      expect(panel.get('.field-readout').text()).toBe('45%')
+    })
+
+    it('commits the whole drag as one undo step on release', async () => {
+      const { panel, mapId, roomA } = await mountWithRoom()
+      const model = useModelStore()
+
+      const slider = await dragLiquid(panel, [20, 45, 70])
+      await slider.trigger('pointerup')
+
+      expect(room(mapId, roomA).liquidLevel).toBe(70)
+      expect(model.gestureActive).toBe(false)
+      expect(model.status.undoLabel).toBe('Change Liquid Level')
+
+      model.undo()
+      expect(room(mapId, roomA).liquidLevel).toBe(0)
+    })
+
+    // Nothing publishes mid-drag, so the panel cannot re-render its way back:
+    // what the thumb and the readout show is the field's own draft, and Esc is
+    // what drops it.
+    it('restores the thumb and the readout on Escape, and commits nothing after', async () => {
+      const { panel, mapId, roomA } = await mountWithRoom()
+      const model = useModelStore()
+
+      const slider = await dragLiquid(panel, [60])
+      await slider.trigger('keydown.esc')
+      await nextTick()
+
+      expect(room(mapId, roomA).liquidLevel).toBe(0)
+      expect((slider.element as HTMLInputElement).value).toBe('0')
+      expect(panel.get('.field-readout').text()).toBe('0%')
+
+      // The press that was always coming cannot re-commit what Esc rolled back.
+      await slider.trigger('pointerup')
+      expect(room(mapId, roomA).liquidLevel).toBe(0)
+      expect(model.status.undoLabel).not.toBe('Change Liquid Level')
+    })
+
+    it('commits an arrow press on its own, with no transaction left open', async () => {
+      const { panel, mapId, roomA } = await mountWithRoom()
+      const model = useModelStore()
+      const slider = panel.get('#inspector-room-liquid')
+
+      // What an arrow key raises: an `input` with no pointer under it.
+      ;(slider.element as HTMLInputElement).value = '1'
+      await slider.trigger('input')
+
+      expect(room(mapId, roomA).liquidLevel).toBe(1)
+      expect(model.gestureActive).toBe(false)
+      expect(model.status.undoLabel).toBe('Change Liquid Level')
+    })
+
+    // A gesture that outlived its holder would refuse every gesture after it
+    // for the rest of the session, and suspend autosave with it.
+    it('aborts a live drag when the panel goes away', async () => {
+      const { panel, mapId, roomA } = await mountWithRoom()
+      const model = useModelStore()
+
+      await dragLiquid(panel, [80])
+      panel.unmount()
+
+      expect(model.gestureActive).toBe(false)
+      expect(room(mapId, roomA).liquidLevel).toBe(0)
+      expect(model.status.undoLabel).not.toBe('Change Liquid Level')
     })
 
     it('re-seeds its fields when the selection moves to another room', async () => {

@@ -4,9 +4,17 @@ import TextField from '../fields/TextField.vue'
 import NotesField from '../fields/NotesField.vue'
 import SelectField from '../fields/SelectField.vue'
 import ToggleField from '../fields/ToggleField.vue'
+import RangeField from '../fields/RangeField.vue'
 import ColorSwatch from '../fields/ColorSwatch.vue'
 import { dependOn, mapScope, useModelStore } from '@/stores/model'
-import { assignRoomArea, renameRoom, setRoomHeated, setRoomNotes } from '@/core/ops/rooms'
+import { createRangeDrag } from '@/gestures/rangeDrag'
+import {
+  assignRoomArea,
+  renameRoom,
+  setRoomHeated,
+  setRoomLiquidLevel,
+  setRoomNotes,
+} from '@/core/ops/rooms'
 import { WORLD_AREA_ID } from '@/core/ids'
 import { t } from '@/i18n'
 import type { AreaId, MapId, RoomId } from '@/core/ids'
@@ -55,6 +63,11 @@ const heated = computed(() => {
   return currentRoom()?.heated ?? false
 })
 
+const liquidLevel = computed(() => {
+  dependOn(model.rev)
+  return currentRoom()?.liquidLevel ?? 0
+})
+
 const areaId = computed<string>(() => {
   dependOn(model.rev)
   return currentRoom()?.areaId ?? WORLD_AREA_ID
@@ -98,6 +111,21 @@ function commitHeated(next: boolean) {
   edit(t('history.setHeated'), (tx, map) => setRoomHeated(tx, map, props.roomId, next))
 }
 
+function percent(value: number) {
+  return t('inspector.percent', { n: value })
+}
+
+// The one control here that writes while the pointer is down. The driver owns
+// the transaction; this owns the op it re-applies and the room it names.
+const liquid = createRangeDrag({
+  mapId: props.mapId,
+  label: t('history.setLiquidLevel'),
+  apply: (tx, value) => {
+    const map = currentMap()
+    if (map) setRoomLiquidLevel(tx, map, props.roomId, value)
+  },
+})
+
 function commitArea(next: string) {
   edit(t('history.assignArea'), (tx, map) => assignRoomArea(tx, map, props.roomId, next as AreaId))
 }
@@ -128,6 +156,17 @@ function commitArea(next: string) {
       :label="t('inspector.heated')"
       :value="heated"
       @commit="commitHeated"
+    />
+    <RangeField
+      id="inspector-room-liquid"
+      :label="t('inspector.liquidLevel')"
+      :value="liquidLevel"
+      :format="percent"
+      @begin="liquid.begin()"
+      @input="liquid.input($event)"
+      @end="liquid.end()"
+      @abort="liquid.abort()"
+      @cancel="liquid.cancel()"
     />
     <NotesField
       id="inspector-room-notes"

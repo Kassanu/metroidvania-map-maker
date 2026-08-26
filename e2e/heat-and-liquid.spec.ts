@@ -267,6 +267,53 @@ test.describe('the paint rule for liquid', () => {
   })
 })
 
+// Cavern's floor row. It is the room the paint rule reads as one flat colour,
+// which is what makes "two colours are in it now" a statement about the drag.
+const CAVERN_FLOOR = { y: 2.5, from: 0.3, to: 2.7 }
+
+// The live half of the control: the canvas has to show the level before the
+// button comes up, because nothing publishes mid-drag and the panel owns no
+// `draw()`. Only a real pointer proves it: the repaint is asked for on the
+// samples between pointerdown and pointerup, and there is no other moment.
+test.describe('the liquid slider while it is being dragged', () => {
+  test('dithers the room before the button is released, and undithers it on Escape', async ({
+    page,
+  }) => {
+    const { errors } = await openApp(page, 'heat-and-liquid')
+    const grid = await gridMapping(page)
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await page.keyboard.press('2')
+    const centre = grid.at(IN_CAVERN.x, IN_CAVERN.y)
+    await page.mouse.click(centre.x, centre.y)
+
+    const slider = inspector.getByLabel('Liquid level', { exact: true })
+    await expect(slider).toHaveValue('0')
+    expect(
+      (await colorsAcross(page, grid, CAVERN_FLOOR)).map((seen) => seen.color),
+    ).not.toContainEqual(DARK_MAGMA)
+
+    // Pressing the middle of the track is a drag whose first sample is half.
+    const track = (await slider.boundingBox())!
+    await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2)
+    await page.mouse.down()
+
+    // Still down: the dither is on the canvas with nothing committed.
+    await expect
+      .poll(async () => (await colorsAcross(page, grid, CAVERN_FLOOR)).map((seen) => seen.color))
+      .toContainEqual(DARK_MAGMA)
+
+    await page.keyboard.press('Escape')
+    await expect
+      .poll(async () => (await colorsAcross(page, grid, CAVERN_FLOOR)).map((seen) => seen.color))
+      .not.toContainEqual(DARK_MAGMA)
+
+    await page.mouse.up()
+    await expect(slider).toHaveValue('0')
+    expect(errors).toEqual([])
+  })
+})
+
 // The suite's default ratio, where the file above runs at twice it. The square
 // is a device-pixel size and the pattern is anchored in device pixels, so a
 // renderer that dropped the ratio would still look right at one of the two.

@@ -95,6 +95,80 @@ test.describe('Inspector', () => {
     expect(errors).toEqual([])
   })
 
+  // The slider, driven by a real pointer rather than by dispatched events:
+  // whether a sample is a drag or a keypress is decided by whether a gesture is
+  // live, and only a real drag proves the browser raises what that relies on.
+  test('drags the liquid level, leaving one undo step', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const grid = await gridMapping(page)
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await page.keyboard.press('2')
+    await clickAt(page, grid, IN_A_ROOM)
+
+    const slider = inspector.getByLabel('Liquid level', { exact: true })
+    await expect(slider).toHaveValue('0')
+    const track = (await slider.boundingBox())!
+
+    await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(track.x + track.width * 0.75, track.y + track.height / 2)
+    await page.mouse.up()
+
+    const level = Number(await slider.inputValue())
+    expect(level).toBeGreaterThan(0)
+    expect(await undoLabel(page)).toBe('Undo Change Liquid Level')
+
+    // One entry for the whole drag, not one per sample the pointer crossed.
+    await page.keyboard.press('Control+z')
+    await expect(slider).toHaveValue('0')
+    expect(errors).toEqual([])
+  })
+
+  test('abandons a liquid drag on Escape, leaving the stack alone', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const grid = await gridMapping(page)
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await page.keyboard.press('2')
+    await clickAt(page, grid, IN_A_ROOM)
+    const before = await undoLabel(page)
+
+    const slider = inspector.getByLabel('Liquid level', { exact: true })
+    const track = (await slider.boundingBox())!
+    await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(track.x + track.width * 0.8, track.y + track.height / 2)
+    await page.keyboard.press('Escape')
+    await page.mouse.up()
+
+    await expect(slider).toHaveValue('0')
+    expect(await undoLabel(page)).toBe(before)
+    expect(errors).toEqual([])
+  })
+
+  test('commits an arrow press on the slider as its own step', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const grid = await gridMapping(page)
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await page.keyboard.press('2')
+    await clickAt(page, grid, IN_A_ROOM)
+
+    const slider = inspector.getByLabel('Liquid level', { exact: true })
+    await slider.focus()
+    await slider.press('ArrowRight')
+    await slider.press('ArrowRight')
+
+    await expect(slider).toHaveValue('2')
+    expect(await undoLabel(page)).toBe('Undo Change Liquid Level')
+
+    // One entry per press: the first undo goes back one step, not to zero.
+    await page.keyboard.press('Control+z')
+    await expect(slider).toHaveValue('1')
+    expect(errors).toEqual([])
+  })
+
   test('counts a multi-selection instead of showing fields', async ({ page }) => {
     const { errors } = await openApp(page)
     const inspector = page.locator('[data-panel-id="inspector"]')
