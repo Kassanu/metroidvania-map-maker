@@ -1,4 +1,4 @@
-// Getting an export out of the app.
+// Getting a game-ready JSON export out of the app.
 //
 // Deliberately not part of the file store. That store holds three rules an
 // export must not touch: `markSaved` follows the bytes, unsaved work is asked
@@ -7,16 +7,15 @@
 // asks nothing, and dirties nothing. Keeping it here is what stops a later
 // edit wiring it into any of them.
 //
-// The only thing that leaves is bytes, through `StorageProvider.saveBytes`.
-// Nothing here knows which provider is running.
+// Nothing here reaches a storage provider. Bytes leave through `deliver`.
 
 import { toCombinedExport, toRoomExports } from '@/core/export'
 import type { ExportScope } from '@/core/export'
 import type { ProjectModel } from '@/core/types'
-import { StorageError, getStorageProvider } from '@/storage'
+import { deliverArchive, deliverFile } from './deliver'
+import type { ArtefactSource, ExportResult } from './deliver'
 import { roomFileName } from './names'
-import { buildZip } from './zip'
-import type { ZipEntry } from './zip'
+import type { EmptyPredicate } from './scopeTree'
 
 // One combined JSON, or one file per room. Per-room always ships as a single
 // zip, on every engine, so exactly one artefact leaves the app regardless of
@@ -29,65 +28,36 @@ export interface ExportRequest {
   scope?: ExportScope
 }
 
-// What the caller can do about it: report success with a count, say nothing
-// happened, or show why it did not. No translated strings, because the layer
-// that has a toast to put them in owns the wording.
-export type ExportResult =
-  { kind: 'written'; files: number } | { kind: 'cancelled' } | { kind: 'failed'; message: string }
+// Any subset of the project is legal JSON, so a tab with no rooms is the only
+// one that can contribute nothing. Read by the menu entry that enables itself
+// and by the dialog that draws its rows, so the two cannot come to disagree.
+export const jsonScopeEmpty: EmptyPredicate = (map) => map.rooms.size === 0
 
 const JSON_MEDIA_TYPE = 'application/json'
+const JSON_EXTENSION = '.json'
 
-export async function exportProject(
+export async function exportProjectJson(
   project: ProjectModel,
   request: ExportRequest,
 ): Promise<ExportResult> {
-  try {
-    return request.packaging === 'combined'
-      ? await writeCombined(project, request.scope)
-      : await writePerRoom(project, request.scope)
-  } catch (error) {
-    return { kind: 'failed', message: messageOf(error) }
-  }
+  return request.packaging === 'combined'
+    ? deliverFile(async () => encode(toCombinedExport(project, request.scope)), {
+        stem: project.name,
+        extension: JSON_EXTENSION,
+        mediaType: JSON_MEDIA_TYPE,
+      })
+    : deliverArchive(perRoomSources(project, request.scope), { stem: project.name })
 }
 
-async function writeCombined(
-  project: ProjectModel,
-  scope: ExportScope | undefined,
-): Promise<ExportResult> {
-  const contents = new Blob([serialize(toCombinedExport(project, scope))], {
-    type: JSON_MEDIA_TYPE,
-  })
-  const outcome = await getStorageProvider().saveBytes(contents, {
-    stem: project.name,
-    extension: '.json',
-  })
-  return outcome === 'written' ? { kind: 'written', files: 1 } : { kind: 'cancelled' }
-}
-
-async function writePerRoom(
-  project: ProjectModel,
-  scope: ExportScope | undefined,
-): Promise<ExportResult> {
-  const entries: ZipEntry[] = toRoomExports(project, scope).map((file) => ({
+function perRoomSources(project: ProjectModel, scope: ExportScope | undefined): ArtefactSource[] {
+  return toRoomExports(project, scope).map((file) => ({
     name: roomFileName(file.room.name, file.room.id),
-    bytes: new TextEncoder().encode(serialize(file)),
+    produce: async () => encode(file),
   }))
-
-  const contents = await buildZip(entries)
-  const outcome = await getStorageProvider().saveBytes(contents, {
-    stem: project.name,
-    extension: '.zip',
-  })
-  return outcome === 'written' ? { kind: 'written', files: entries.length } : { kind: 'cancelled' }
 }
 
 // Two-space indentation, matching what the save format writes: an export is
 // meant to be opened and read, not only parsed.
-function serialize(value: unknown): string {
-  return JSON.stringify(value, null, 2)
-}
-
-function messageOf(error: unknown): string {
-  if (error instanceof StorageError) return error.message
-  return error instanceof Error ? error.message : 'the export could not be written'
+function encode(value: unknown): Uint8Array<ArrayBuffer> {
+  return new TextEncoder().encode(JSON.stringify(value, null, 2))
 }

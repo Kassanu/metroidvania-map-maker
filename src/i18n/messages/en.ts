@@ -119,10 +119,14 @@ export const en = {
   // Absent rather than empty where the provider cannot reopen a file, which is
   // every engine without File System Access.
   'menu.file.recent': 'Recent',
-  // A submenu from the start: image export joins it, and one item today is
-  // cheaper than renaming a top-level item into a submenu later.
   'menu.file.export': 'Export',
   'menu.file.export.json': 'JSON\u2026',
+  // Why a disabled export item is disabled, shown on the item itself. The
+  // emptiness reason is per exporter, since what counts as nothing to export is
+  // the exporter's own question; being busy is not, since it refuses every
+  // entry for the same reason.
+  'menu.file.export.json.empty': 'Nothing to export: this project has no rooms.',
+  'menu.file.export.busy': 'Another file operation is still running.',
 
   // The file the project came from, beside the project name. Absent until a
   // project has been saved or opened, since there is nothing true to say.

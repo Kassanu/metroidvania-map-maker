@@ -21,7 +21,7 @@ const mounted: VueWrapper[] = []
 
 // What the export was asked to write, which is the whole of what this dialog
 // decides. Resolves `written` unless a test says otherwise.
-const exportProject = vi.spyOn(exporter, 'exportProject')
+const exportProjectJson = vi.spyOn(exporter, 'exportProjectJson')
 
 interface Fixture {
   surface: MapId
@@ -80,7 +80,7 @@ function rows() {
     kind: row.getAttribute('data-row-kind'),
     id: row.getAttribute('data-row-id'),
     level: row.getAttribute('aria-level'),
-    label: row.querySelector('.export-label')?.textContent?.trim() ?? '',
+    label: row.querySelector('.scope-label')?.textContent?.trim() ?? '',
     state: row.querySelector('[role="checkbox"]')?.getAttribute('aria-checked') ?? '',
     disabled: row.querySelector('[role="checkbox"]')?.hasAttribute('data-disabled') ?? false,
   }))
@@ -109,13 +109,13 @@ function text(): string {
 beforeEach(() => {
   localStorage.clear()
   setActivePinia(createTestPinia())
-  exportProject.mockResolvedValue({ kind: 'written', files: 1 })
+  exportProjectJson.mockResolvedValue({ kind: 'written', files: 1 })
 })
 
 afterEach(() => {
   for (const wrapper of mounted.splice(0)) wrapper.unmount()
   document.body.innerHTML = ''
-  exportProject.mockReset()
+  exportProjectJson.mockReset()
   clearToasts()
 })
 
@@ -226,7 +226,7 @@ describe('exporting', () => {
     await click(boxFor(fixture.landing))
     await click(button('Export'))
 
-    const request = exportProject.mock.calls[0][1]
+    const request = exportProjectJson.mock.calls[0][1]
     expect(request.packaging).toBe('combined')
     expect(request.scope).toEqual(
       new Map([
@@ -243,7 +243,7 @@ describe('exporting', () => {
     await click(document.body.querySelectorAll('[role="radio"]')[1] as HTMLElement)
     await click(button('Export'))
 
-    expect(exportProject.mock.calls[0][1].packaging).toBe('per-room')
+    expect(exportProjectJson.mock.calls[0][1].packaging).toBe('per-room')
   })
 
   it('closes once the bytes have landed', async () => {
@@ -257,7 +257,7 @@ describe('exporting', () => {
 
   it('stays open with its selection when the destination is dismissed', async () => {
     const fixture = seed()
-    exportProject.mockResolvedValue({ kind: 'cancelled' })
+    exportProjectJson.mockResolvedValue({ kind: 'cancelled' })
     await open()
 
     await click(boxFor(fixture.landing))
@@ -270,7 +270,7 @@ describe('exporting', () => {
 
   it('stays open and says why when the write fails', async () => {
     seed()
-    exportProject.mockResolvedValue({ kind: 'failed', message: 'the disk went away' })
+    exportProjectJson.mockResolvedValue({ kind: 'failed', message: 'the disk went away' })
     await open()
 
     await click(button('Export'))
@@ -300,7 +300,7 @@ describe('exporting', () => {
   // report and nothing to read.
   it('says nothing when the destination is dismissed', async () => {
     seed()
-    exportProject.mockResolvedValue({ kind: 'cancelled' })
+    exportProjectJson.mockResolvedValue({ kind: 'cancelled' })
     await open()
 
     await click(button('Export'))
@@ -313,7 +313,7 @@ describe('exporting', () => {
   // render it: two copies of one failure is worse than either alone.
   it('does not report the failure inside itself', async () => {
     seed()
-    exportProject.mockResolvedValue({ kind: 'failed', message: 'the disk went away' })
+    exportProjectJson.mockResolvedValue({ kind: 'failed', message: 'the disk went away' })
     await open()
 
     await click(button('Export'))
@@ -345,7 +345,7 @@ describe('reopening', () => {
   it('neither clears nor repeats the message from the last attempt', async () => {
     seed()
     const ui = useUiStore()
-    exportProject.mockResolvedValue({ kind: 'failed', message: 'the disk went away' })
+    exportProjectJson.mockResolvedValue({ kind: 'failed', message: 'the disk went away' })
     await open()
     await click(button('Export'))
     await nextTick()

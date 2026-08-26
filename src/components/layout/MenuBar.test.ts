@@ -673,13 +673,33 @@ describe('MenuBar', () => {
     })
   })
 
-  // A submenu from the start, with one item today: image export joins it, and
-  // the JSON exporter is reached from nowhere else.
+  // One item per exporter, from the entry list rather than written out per
+  // exporter, and each entrance carrying its own dead-dialog guard.
   describe('Export', () => {
     async function openFileMenu() {
       const trigger = wrapper.findAll('.menu-item').find((el) => el.text() === 'File')!
       await trigger.trigger('click')
       await nextTick()
+    }
+
+    // The test project opens blank, which is exactly the state the guard is
+    // about, so anything testing the live path paints first.
+    function paintARoom() {
+      const model = useModelStore()
+      const mapId = useTabsStore().activeTabId
+      model.run('Paint', mapScope(mapId), (tx) => {
+        paintCells(tx, model.project, model.project.mapsById.get(mapId)!, ['0,0'], {
+          areaId: WORLD_AREA_ID,
+        })
+      })
+    }
+
+    async function exportItem(label: string) {
+      await openFileMenu()
+      await openSubmenu('Export')
+      return Array.from(document.querySelectorAll('.popover-item')).find(
+        (el) => el.textContent?.trim() === label,
+      ) as HTMLElement
     }
 
     it('offers JSON under an Export submenu', async () => {
@@ -692,19 +712,108 @@ describe('MenuBar', () => {
       expect(labels).toContain('JSON\u2026')
     })
 
+    // The submenu is a v-for over the entry list, so it holds exactly as many
+    // items as there are exporters and no more. An item hand-written beside
+    // them is what this refuses, and it is the count rather than the labels
+    // that catches one.
+    it('renders one item per entry and nothing hand-written beside them', async () => {
+      paintARoom()
+      await openFileMenu()
+      await openSubmenu('Export')
+
+      const submenu = Array.from(document.querySelectorAll('[role="menu"]')).find((menu) =>
+        Array.from(menu.querySelectorAll('[role="menuitem"]')).some(
+          (item) => item.textContent?.trim() === 'JSON\u2026',
+        ),
+      )!
+      const labels = Array.from(submenu.querySelectorAll('[role="menuitem"]')).map((el) =>
+        el.textContent?.trim(),
+      )
+      expect(labels).toEqual(['JSON\u2026'])
+    })
+
     it('opens the export dialog', async () => {
+      paintARoom()
       const ui = useUiStore()
       expect(ui.exportOpen).toBe(false)
 
-      await openFileMenu()
-      await openSubmenu('Export')
-      const item = Array.from(document.querySelectorAll('.popover-item')).find(
-        (el) => el.textContent?.trim() === 'JSON\u2026',
-      ) as HTMLElement
+      const item = await exportItem('JSON\u2026')
       item.click()
       await nextTick()
 
       expect(ui.exportOpen).toBe(true)
+    })
+
+    // A project with nothing to export is told so from the menu, per item.
+    // Neither dialog opens onto a tree of disabled rows and a disabled button
+    // with no text.
+    it('disables the item and says why when the project has no rooms', async () => {
+      const item = await exportItem('JSON\u2026')
+
+      expect(item.hasAttribute('data-disabled')).toBe(true)
+      expect(item.getAttribute('title')).toBe('Nothing to export: this project has no rooms.')
+    })
+
+    it('does not open the dialog from the disabled item', async () => {
+      const ui = useUiStore()
+      const item = await exportItem('JSON\u2026')
+      item.click()
+      await nextTick()
+
+      expect(ui.exportOpen).toBe(false)
+    })
+
+    // The reason is on the item only while it is the reason: a live item with
+    // a tooltip explaining why it is unavailable is worse than no tooltip.
+    it('carries no reason once the project has something to export', async () => {
+      paintARoom()
+      const item = await exportItem('JSON\u2026')
+
+      expect(item.hasAttribute('data-disabled')).toBe(false)
+      expect(item.getAttribute('title')).toBeNull()
+    })
+
+    // Two refusals, two reasons. A project full of rooms told it has none
+    // because a save happens to be running is a false statement, and it is the
+    // one the user is most likely to read: they just started that save.
+    //
+    // The write is held open rather than the flag being set, since `busy` is a
+    // read-only projection of a real operation.
+    it('gives the busy refusal its own reason rather than the emptiness one', async () => {
+      paintARoom()
+
+      let release!: () => void
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      setStorageProvider({
+        id: 'fake',
+        label: 'Fake',
+        canSaveInPlace: true,
+        list: async () => [],
+        remember: async () => {},
+        forget: async () => {},
+        adoptFileHandle: () => null,
+        open: async () => null,
+        save: async (handle: StorageHandle) => handle,
+        saveAs: async () => {
+          await held
+          return null
+        },
+        saveBytes: async () => 'written' as const,
+      } as unknown as StorageProvider)
+
+      const file = useFileStore()
+      const writing = file.saveAs()
+      await nextTick()
+      expect(file.busy).toBe(true)
+
+      const item = await exportItem('JSON\u2026')
+      expect(item.hasAttribute('data-disabled')).toBe(true)
+      expect(item.getAttribute('title')).toBe('Another file operation is still running.')
+
+      release()
+      await writing
     })
   })
 })

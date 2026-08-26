@@ -1,7 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { setStorageProvider } from '@/storage'
-import type { StorageProvider, SuggestedName, WriteOutcome } from '@/storage'
-import { StorageError } from '@/storage'
+import { afterEach, describe, expect, it } from 'vitest'
+import { StorageError, setStorageProvider } from '@/storage'
 import { renameProject } from '@/core/ops/project'
 import { makeRoom, rect, setup, snapshot, tx } from '@/core/testUtils'
 import { addMap } from '@/core/ops/maps'
@@ -9,43 +7,8 @@ import { paintCells } from '@/core/ops/rooms'
 import { WORLD_AREA_ID } from '@/core/ids'
 import { setRoomField } from '@/core/primitives'
 import type { ProjectModel } from '@/core/types'
-import { exportProject } from './index'
-
-// What was handed to the provider, which is the whole of what leaves the app.
-interface Written {
-  contents: Blob
-  name: SuggestedName
-}
-
-function spyProvider(outcome: WriteOutcome | Error = 'written') {
-  const written: Written[] = []
-  const save = vi.fn()
-  const saveAs = vi.fn()
-  const remember = vi.fn()
-
-  const provider = {
-    id: 'spy',
-    label: 'Spy',
-    canSaveInPlace: true,
-    list: async () => [],
-    remember,
-    forget: async () => {},
-    adoptFileHandle: () => null,
-    open: async () => null,
-    save,
-    saveAs,
-    // Records only what actually landed, so `written` means bytes on disk
-    // rather than calls made.
-    async saveBytes(contents: Blob, name: SuggestedName): Promise<WriteOutcome> {
-      if (outcome instanceof Error) throw outcome
-      if (outcome === 'written') written.push({ contents, name })
-      return outcome
-    },
-  } as unknown as StorageProvider
-
-  setStorageProvider(provider)
-  return { written, save, saveAs, remember }
-}
+import { exportProjectJson } from './index'
+import { spyProvider, zipEntries } from './testUtils'
 
 afterEach(() => setStorageProvider(null))
 
@@ -73,41 +36,6 @@ async function textOf(blob: Blob): Promise<string> {
   return new TextDecoder().decode(await blob.arrayBuffer())
 }
 
-// The archive, read back as name -> contents.
-async function entriesOf(blob: Blob): Promise<Map<string, string>> {
-  const bytes = new Uint8Array(await blob.arrayBuffer())
-  const view = new DataView(bytes.buffer)
-
-  let end = bytes.length - 22
-  while (end >= 0 && view.getUint32(end, true) !== 0x06054b50) end--
-  const count = view.getUint16(end + 10, true)
-  let at = view.getUint32(end + 16, true)
-
-  const entries = new Map<string, string>()
-  for (let i = 0; i < count; i++) {
-    const compressedSize = view.getUint32(at + 20, true)
-    const nameLength = view.getUint16(at + 28, true)
-    const extraLength = view.getUint16(at + 30, true)
-    const commentLength = view.getUint16(at + 32, true)
-    const localOffset = view.getUint32(at + 42, true)
-    const name = new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLength))
-
-    const dataAt =
-      localOffset +
-      30 +
-      view.getUint16(localOffset + 26, true) +
-      view.getUint16(localOffset + 28, true)
-    const stream = new DecompressionStream('deflate-raw')
-    const writer = stream.writable.getWriter()
-    void writer.write(new Uint8Array(bytes.subarray(dataAt, dataAt + compressedSize)))
-    void writer.close()
-    entries.set(name, await new Response(stream.readable).text())
-
-    at += 46 + nameLength + extraLength + commentLength
-  }
-  return entries
-}
-
 describe('the combined packaging', () => {
   it('writes one JSON file named for the project', async () => {
     const { written } = spyProvider()
@@ -116,7 +44,7 @@ describe('the combined packaging', () => {
     renameProject(naming, model, 'Super Metroid')
     naming.commit()
 
-    const result = await exportProject(model, { packaging: 'combined' })
+    const result = await exportProjectJson(model, { packaging: 'combined' })
 
     expect(result).toEqual({ kind: 'written', files: 1 })
     expect(written).toHaveLength(1)
@@ -128,7 +56,7 @@ describe('the combined packaging', () => {
     const { written } = spyProvider()
     const { project: model, first } = project()
 
-    await exportProject(model, { packaging: 'combined' })
+    await exportProjectJson(model, { packaging: 'combined' })
     const text = await textOf(written[0].contents)
 
     expect(text).toContain('\n  "formatVersion": 1')
@@ -141,7 +69,7 @@ describe('the per-room packaging', () => {
     const { written } = spyProvider()
     const { project: model } = project()
 
-    const result = await exportProject(model, { packaging: 'per-room' })
+    const result = await exportProjectJson(model, { packaging: 'per-room' })
 
     expect(result).toEqual({ kind: 'written', files: 3 })
     expect(written).toHaveLength(1)
@@ -153,8 +81,8 @@ describe('the per-room packaging', () => {
     const { written } = spyProvider()
     const { project: model, first, second, third } = project()
 
-    await exportProject(model, { packaging: 'per-room' })
-    const entries = await entriesOf(written[0].contents)
+    await exportProjectJson(model, { packaging: 'per-room' })
+    const entries = await zipEntries(written[0].contents)
 
     expect([...entries.keys()].sort()).toEqual(
       [`landing-site--${first.id}.json`, `${second.id}.json`, `${third.id}.json`].sort(),
@@ -165,8 +93,8 @@ describe('the per-room packaging', () => {
     const { written } = spyProvider()
     const { project: model, other, third } = project()
 
-    await exportProject(model, { packaging: 'per-room' })
-    const entries = await entriesOf(written[0].contents)
+    await exportProjectJson(model, { packaging: 'per-room' })
+    const entries = await zipEntries(written[0].contents)
     const file = JSON.parse(entries.get(`${third.id}.json`)!)
 
     expect(file.room.id).toBe(third.id)
@@ -180,15 +108,15 @@ describe('scope', () => {
     const { project: model, map, first } = project()
     const scope = new Map([[map.id, new Set([first.id])]])
 
-    const combined = await exportProject(model, { packaging: 'combined', scope })
+    const combined = await exportProjectJson(model, { packaging: 'combined', scope })
     expect(combined).toEqual({ kind: 'written', files: 1 })
     const tabs = JSON.parse(await textOf(written[0].contents)).tabs
     expect(tabs).toHaveLength(1)
     expect(tabs[0].rooms.map((room: { id: string }) => room.id)).toEqual([first.id])
 
-    const perRoom = await exportProject(model, { packaging: 'per-room', scope })
+    const perRoom = await exportProjectJson(model, { packaging: 'per-room', scope })
     expect(perRoom).toEqual({ kind: 'written', files: 1 })
-    expect([...(await entriesOf(written[1].contents)).keys()]).toEqual([
+    expect([...(await zipEntries(written[1].contents)).keys()]).toEqual([
       `landing-site--${first.id}.json`,
     ])
   })
@@ -199,7 +127,7 @@ describe('when the bytes do not land', () => {
     const { written } = spyProvider('cancelled')
     const { project: model } = project()
 
-    expect(await exportProject(model, { packaging: 'combined' })).toEqual({ kind: 'cancelled' })
+    expect(await exportProjectJson(model, { packaging: 'combined' })).toEqual({ kind: 'cancelled' })
     expect(written).toEqual([])
   })
 
@@ -207,7 +135,7 @@ describe('when the bytes do not land', () => {
     spyProvider(new StorageError('the disk went away'))
     const { project: model } = project()
 
-    expect(await exportProject(model, { packaging: 'per-room' })).toEqual({
+    expect(await exportProjectJson(model, { packaging: 'per-room' })).toEqual({
       kind: 'failed',
       message: 'the disk went away',
     })
@@ -229,7 +157,7 @@ describe('export is write-only', () => {
   it('leaves the project exactly as it found it', async () => {
     spyProvider()
     const { before, after } = await unchangedBy((model) =>
-      exportProject(model, { packaging: 'per-room' }),
+      exportProjectJson(model, { packaging: 'per-room' }),
     )
     expect(after).toEqual(before)
   })
@@ -240,7 +168,7 @@ describe('export is write-only', () => {
     const rev = model.rev
     const structureRev = model.structureRev
 
-    await exportProject(model, { packaging: 'combined' })
+    await exportProjectJson(model, { packaging: 'combined' })
 
     expect(model.rev).toBe(rev)
     expect(model.structureRev).toBe(structureRev)
@@ -255,7 +183,7 @@ describe('export is write-only', () => {
     history.markSaved()
     expect(history.isDirty).toBe(false)
 
-    await exportProject(model, { packaging: 'combined' })
+    await exportProjectJson(model, { packaging: 'combined' })
 
     expect(history.isDirty).toBe(false)
     expect(history.undoLabel).toBe('Paint room')
@@ -269,11 +197,41 @@ describe('export is write-only', () => {
       const { save, saveAs, remember } = spyProvider()
       const { project: model } = project()
 
-      await exportProject(model, { packaging })
+      await exportProjectJson(model, { packaging })
 
       expect(save).not.toHaveBeenCalled()
       expect(saveAs).not.toHaveBeenCalled()
       expect(remember).not.toHaveBeenCalled()
     },
   )
+})
+
+// Nothing above `deliver` reaches a storage provider. Asserted over every
+// module in the folder rather than over this one, so it still holds for
+// exporters written later: a rule that names one file stops guarding the
+// moment a second producer lands beside it.
+describe('an exporter delivers rather than writes', () => {
+  const sources = import.meta.glob('/src/export/*.ts', {
+    eager: true,
+    query: '?raw',
+    import: 'default',
+  }) as Record<string, string>
+
+  // `deliver` is the one that may, and `testUtils` builds the double that
+  // stands in for one.
+  const ALLOWED = ['/src/export/deliver.ts', '/src/export/testUtils.ts']
+
+  const guarded = Object.entries(sources).filter(
+    ([path]) => !path.endsWith('.test.ts') && !ALLOWED.includes(path),
+  )
+
+  it('is looking at the folder, not an empty glob', () => {
+    expect(guarded.map(([path]) => path)).toContain('/src/export/index.ts')
+    expect(guarded.length).toBeGreaterThan(1)
+  })
+
+  it.each(guarded)('%s names no provider and no write call', (_path, text) => {
+    expect(text).not.toMatch(/from '[^']*\/storage'/)
+    expect(text).not.toContain('saveBytes')
+  })
 })

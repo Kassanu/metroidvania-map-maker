@@ -1,21 +1,30 @@
-// What the export dialog shows, and what ticking a box in it means.
+// What an export dialog shows, and what ticking a box in it means.
 //
 // Plain functions rather than logic inside the dialog, because tri-state over
 // three levels is the part of this feature a bug would hide in, and it is far
 // easier to state as a table of cases than to click through.
 //
-// The tree is one level deeper than the Hierarchy panel it resembles: rooms are
-// per-tab and areas are project-wide, so an area appears under every tab that
-// has rooms in it, holding different rooms each time. Ticking one of those
-// nodes takes exactly the rooms shown beneath it, never the same area's rooms
-// on another tab.
+// This module names no exporter. Leaf depth, what counts as an empty tab, and
+// which nodes a dialog opens ticked all arrive from the caller, because those
+// are the three things the exporters genuinely disagree about and everything
+// else about picking a scope is the same control.
 //
-// Selection is one flat set of room ids. Ids are unique across the project, so
-// nothing has to be keyed by tab until the very end, where `scopeOf` regroups.
+// At room depth the tree is one level deeper than the Hierarchy panel it
+// resembles: rooms are per-tab and areas are project-wide, so an area appears
+// under every tab that has rooms in it, holding different rooms each time.
+// Ticking one of those nodes takes exactly the rooms shown beneath it, never
+// the same area's rooms on another tab. At tab depth the leaf is the tab, and
+// `areas` is null rather than empty: an empty list would mean "a tab with
+// nothing on it", which is a different thing and the one `stateOf` has to be
+// able to tell apart.
+//
+// Selection is one flat set of leaf ids. Room ids and map ids are both unique
+// across the project, so nothing has to be keyed by tab until the very end,
+// where `scopeOf` regroups.
 
 import type { AreaId, MapId, RoomId } from '@/core/ids'
 import type { ExportScope } from '@/core/export'
-import type { ProjectModel } from '@/core/types'
+import type { MapModel, ProjectModel } from '@/core/types'
 import { roomLabel } from '@/i18n/naming'
 
 export interface ScopeRoom {
@@ -37,23 +46,59 @@ export interface ScopeTab {
   kind: 'tab'
   id: MapId
   label: string
-  areas: ScopeArea[]
+  // Null at tab depth, where this node is itself the leaf. An empty array means
+  // a room-depth tab holding nothing, which is a different state.
+  areas: ScopeArea[] | null
+  // Whether this tab can contribute anything, by the caller's own predicate.
+  // Carried on the node rather than derived by each dialog, so the row that
+  // draws disabled and the tick policy that skips it cannot disagree.
+  empty: boolean
 }
 
 export type ScopeNode = ScopeTab | ScopeArea | ScopeRoom
 
+// What a selection holds: a room at room depth, a tab at tab depth.
+export type LeafId = RoomId | MapId
+
 // Reka's own three-state value, so a checkbox can bind to this directly.
 export type CheckedState = boolean | 'indeterminate'
+
+// Where a tree bottoms out, and so what one tick means.
+export type ScopeLeaf = 'room' | 'tab'
+
+// Whether a tab has nothing to contribute. Callers disagree on this: a tab with
+// no rooms contributes nothing to a room-scoped export, while a tab carrying
+// only lines still has something to draw. Each exporter owns its own, so the
+// entrance that enables itself and the tree that draws rows disabled read one
+// answer.
+export type EmptyPredicate = (map: MapModel) => boolean
+
+export interface ScopeTreeOptions {
+  leaf: ScopeLeaf
+  isEmpty: EmptyPredicate
+}
+
+// Whether a tree built with this predicate would hold anything tickable, which
+// is what decides an entrance is live. A picker where every node is disabled is
+// a dead dialog, so the question is asked before one opens rather than inside.
+export function hasScopableTab(project: ProjectModel, isEmpty: EmptyPredicate): boolean {
+  return project.maps.some((mapId) => !isEmpty(project.mapsById.get(mapId)!))
+}
 
 // Tabs in tab order, areas in the order the project lists them, rooms in
 // Hierarchy order. An area with no rooms on a tab is left out: it is not part
 // of that tab, and the Hierarchy only shows one because an empty area still has
-// properties and would otherwise be unreachable. A tab with no rooms stays,
-// with nothing under it, because a tab that vanished from the list would read
-// as a bug rather than as an empty tab.
-export function buildScopeTree(project: ProjectModel): ScopeTab[] {
+// properties and would otherwise be unreachable. An empty tab stays, at either
+// depth, because a tab that vanished from the list would read as a bug rather
+// than as an empty tab.
+export function buildScopeTree(project: ProjectModel, options: ScopeTreeOptions): ScopeTab[] {
   return project.maps.map((mapId) => {
     const map = project.mapsById.get(mapId)!
+    const empty = options.isEmpty(map)
+    if (options.leaf === 'tab') {
+      return { kind: 'tab', id: map.id, label: map.name, areas: null, empty }
+    }
+
     const byArea = new Map<AreaId, ScopeRoom[]>()
 
     for (const roomId of map.roomOrder) {
@@ -70,74 +115,94 @@ export function buildScopeTree(project: ProjectModel): ScopeTab[] {
       if (rooms) areas.push({ kind: 'area', id: area.id, label: area.name, rooms })
     }
 
-    return { kind: 'tab', id: map.id, label: map.name, areas }
+    return { kind: 'tab', id: map.id, label: map.name, areas, empty }
   })
 }
 
-// Every room under a node, which is what ticking it acts on and what its own
-// state is read from.
-export function roomsUnder(node: ScopeNode): RoomId[] {
+// Every leaf under a node, which is what ticking it acts on and what its own
+// state is read from. A tab-depth tab is its own leaf; a room-depth one is the
+// rooms beneath it.
+export function leavesUnder(node: ScopeNode): LeafId[] {
   switch (node.kind) {
     case 'room':
       return [node.id]
     case 'area':
       return node.rooms.map((room) => room.id)
     case 'tab':
-      return node.areas.flatMap((area) => area.rooms.map((room) => room.id))
+      return node.areas === null
+        ? [node.id]
+        : node.areas.flatMap((area) => area.rooms.map((room) => room.id))
   }
 }
 
 // A node with nothing under it is unchecked rather than checked, which is the
-// answer that matters for an empty tab: "all zero of its rooms are selected" is
-// true and useless, and it would draw a tick on a tab contributing nothing.
-export function stateOf(node: ScopeNode, selected: ReadonlySet<RoomId>): CheckedState {
-  const rooms = roomsUnder(node)
-  if (rooms.length === 0) return false
+// answer that matters for an empty room-depth tab: "all zero of its rooms are
+// selected" is true and useless, and it would draw a tick on a tab contributing
+// nothing. An empty tab-depth tab has itself as a leaf, so the same answer
+// comes from the empty predicate keeping it out of every selection instead.
+export function stateOf(node: ScopeNode, selected: ReadonlySet<LeafId>): CheckedState {
+  const leaves = leavesUnder(node)
+  if (leaves.length === 0) return false
 
   let ticked = 0
-  for (const room of rooms) if (selected.has(room)) ticked++
+  for (const leaf of leaves) if (selected.has(leaf)) ticked++
   if (ticked === 0) return false
-  return ticked === rooms.length ? true : 'indeterminate'
+  return ticked === leaves.length ? true : 'indeterminate'
 }
 
 // A new set rather than a mutation, so a Vue ref holding it sees a change.
-export function toggle(node: ScopeNode, selected: ReadonlySet<RoomId>, next: boolean): Set<RoomId> {
+export function toggle(node: ScopeNode, selected: ReadonlySet<LeafId>, next: boolean): Set<LeafId> {
   const updated = new Set(selected)
-  for (const room of roomsUnder(node)) {
-    if (next) updated.add(room)
-    else updated.delete(room)
+  for (const leaf of leavesUnder(node)) {
+    if (next) updated.add(leaf)
+    else updated.delete(leaf)
   }
   return updated
 }
 
-export function allRooms(tree: ScopeTab[]): Set<RoomId> {
-  return new Set(tree.flatMap(roomsUnder))
+// Every leaf a dialog may open ticked. Empty tabs are skipped: at room depth
+// they carry no leaves anyway, and at tab depth they are the leaf and must not
+// be selected, since a disabled node is unticked and cannot be ticked.
+export function allLeaves(tree: ScopeTab[]): Set<LeafId> {
+  return new Set(tree.filter((tab) => !tab.empty).flatMap(leavesUnder))
 }
 
 // Regrouped by tab, which is the shape the serializer takes. A tab with none of
 // its rooms selected is left out entirely rather than mapped to an empty set,
 // so the two ways of saying "nothing from this tab" do not both exist.
-export function scopeOf(tree: ScopeTab[], selected: ReadonlySet<RoomId>): ExportScope {
+//
+// Room depth only: a scope names rooms, and a tab-depth tree has none to name.
+export function scopeOf(tree: ScopeTab[], selected: ReadonlySet<LeafId>): ExportScope {
   const scope = new Map<MapId, Set<RoomId>>()
   for (const tab of tree) {
-    const rooms = roomsUnder(tab).filter((room) => selected.has(room))
+    const rooms = roomsOf(tab).filter((room) => selected.has(room))
     if (rooms.length > 0) scope.set(tab.id, new Set(rooms))
   }
   return scope
 }
 
-// What the dialog says is about to be exported. Tabs are counted by whether
-// they contribute anything, matching what the export will actually contain.
+// What the dialog says is about to be exported, counted in leaves so it means
+// something at both depths: a room-depth tree counts ticked rooms, a tab-depth
+// one counts ticked tabs. A count fixed on rooms answers zero for every
+// tab-depth selection, and a dialog reading "nothing selected" off it refuses
+// to export however much is ticked.
 export function countOf(
   tree: ScopeTab[],
-  selected: ReadonlySet<RoomId>,
-): { tabs: number; rooms: number } {
+  selected: ReadonlySet<LeafId>,
+): { tabs: number; leaves: number } {
   let tabs = 0
-  let rooms = 0
+  let leaves = 0
   for (const tab of tree) {
-    const ticked = roomsUnder(tab).filter((room) => selected.has(room)).length
+    const ticked = leavesUnder(tab).filter((leaf) => selected.has(leaf)).length
     if (ticked > 0) tabs++
-    rooms += ticked
+    leaves += ticked
   }
-  return { tabs, rooms }
+  return { tabs, leaves }
+}
+
+// The rooms a tab holds. A tab-depth tab holds none, which is why only
+// `scopeOf` uses this: it names rooms, so a tab-depth tree contributes nothing
+// to one.
+function roomsOf(tab: ScopeTab): RoomId[] {
+  return (tab.areas ?? []).flatMap((area) => area.rooms.map((room) => room.id))
 }
