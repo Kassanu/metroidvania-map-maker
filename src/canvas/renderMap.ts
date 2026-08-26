@@ -1,5 +1,6 @@
 import { screenToWorld, worldToScreen, type Bounds } from './viewport'
 import type { Camera } from './camera'
+import { lighten } from './color'
 import type { CanvasPalette } from './palette'
 import { doorOpening, doorRuns, wallGaps, type DoorRun, type OpenSpan } from './doorRuns'
 import { elevatorShafts, type ElevatorShaft } from './elevators'
@@ -1162,6 +1163,11 @@ function drawLabelChip(
 
 // Rooms grouped by fill colour, so a project with a handful of areas costs a
 // handful of `fillStyle` changes rather than one per room.
+//
+// The grouping is on the resolved colour, so a heated room is an ordinary
+// member of it: every heated room in one area shares a bucket the same way
+// every plain one does, and heat costs a second bucket per area rather than a
+// bucket per room.
 function drawRoomFills(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
   const byColor = new Map<string, CellKey[]>()
 
@@ -1500,8 +1506,21 @@ function lockColor(id: LockTypeId, scene: MapScene): string | null {
   return scene.lockTypes.get(id)?.color ?? null
 }
 
-function fillOf(room: Room, scene: MapScene): string {
+// The room's resolved cell colour, before heat. `null` on an area is not a
+// missing value: it means resolve from the active theme, which is what World
+// always does and so what every room does before anyone makes an area. Reading
+// the stored value instead leaves the heat transform undefined for the
+// commonest case in the app.
+function cellColorOf(room: Room, scene: MapScene): string {
   return scene.areas.get(room.areaId)?.cellColor ?? scene.palette.roomFill
+}
+
+// What a cell is painted. Heat is a lightness move on the resolved colour, so
+// recolouring an area moves every heated room in it and no room can be made to
+// disagree with its area. The wall stroke is not part of it.
+function fillOf(room: Room, scene: MapScene): string {
+  const color = cellColorOf(room, scene)
+  return room.heated ? lighten(color) : color
 }
 
 function wallOf(room: Room, scene: MapScene): string {
