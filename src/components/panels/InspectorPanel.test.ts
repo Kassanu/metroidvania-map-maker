@@ -7,7 +7,13 @@ import InspectorPanel from './InspectorPanel.vue'
 import { useTabsStore } from '@/stores/tabs'
 import { useSelectionStore } from '@/stores/selection'
 import { mapScope, useModelStore } from '@/stores/model'
-import { assignRoomArea, paintCells, renameRoom, setRoomNotes } from '@/core/ops/rooms'
+import {
+  assignRoomArea,
+  paintCells,
+  renameRoom,
+  setRoomHeated,
+  setRoomNotes,
+} from '@/core/ops/rooms'
 import { createNewArea, renameArea } from '@/core/ops/project'
 import { createLine, placeIcon, setIconColors, setIconLabel, setLineStyle } from '@/core/ops/markup'
 import { createFromBox, createTeleport, setLock } from '@/core/ops/doors'
@@ -21,7 +27,7 @@ const LOCKED_LOCK_ID = 'locked' as LockTypeId
 import type { CellKey } from '@/core/cell'
 import type { ObjectRef } from '@/core/types'
 
-// The Inspector's four states and the Room panel's three fields.
+// The Inspector's four states and the Room panel's four fields.
 //
 // The states are tested through the selection store rather than through a
 // pointer, because the panel reads the store and nothing else: what put a ref
@@ -411,6 +417,49 @@ describe('InspectorPanel', () => {
 
       expect((panel.get('#inspector-room-area').element as HTMLSelectElement).value).toBe(brinstar)
       expect(panel.get('.color-swatch').attributes('style')).toContain('rgb(51, 85, 170)')
+    })
+
+    it('commits heat immediately, as one undo step', async () => {
+      const { panel, mapId, roomA } = await mountWithRoom()
+      const model = useModelStore()
+
+      await panel.get('#inspector-room-heated').setValue(true)
+
+      expect(room(mapId, roomA).heated).toBe(true)
+      expect(model.status.undoLabel).toBe('Change Heat')
+
+      model.undo()
+      expect(room(mapId, roomA).heated).toBe(false)
+    })
+
+    it('shows heat set anywhere else', async () => {
+      const { panel, mapId, roomA } = await mountWithRoom()
+      const model = useModelStore()
+
+      model.run('Elsewhere', mapScope(mapId), (tx) =>
+        setRoomHeated(tx, model.project.mapsById.get(mapId)!, roomA, true),
+      )
+      await nextTick()
+
+      expect((panel.get('#inspector-room-heated').element as HTMLInputElement).checked).toBe(true)
+    })
+
+    // Notes is last on every kind's panel, so a property that changes how the
+    // room is painted goes above it and below Area.
+    it('puts the heat control between Area and Notes', async () => {
+      const { panel } = await mountWithRoom()
+
+      const ids = panel
+        .get('.inspector-fields')
+        .findAll('input, select, textarea')
+        .map((control) => control.attributes('id'))
+
+      expect(ids).toEqual([
+        'inspector-room-name',
+        'inspector-room-area',
+        'inspector-room-heated',
+        'inspector-room-notes',
+      ])
     })
 
     it('re-seeds its fields when the selection moves to another room', async () => {
