@@ -168,11 +168,23 @@ describe('panel sweep', () => {
   // Each control type commits on its own event, which is the locked rule this
   // drives rather than restates: text on Enter, notes on blur, everything
   // discrete the moment it changes.
-  type Control = 'text' | 'notes' | 'select' | 'color' | 'toggle'
+  type Control = 'text' | 'notes' | 'select' | 'color' | 'toggle' | 'range'
 
   async function edit(id: string, control: Control, value: string): Promise<void> {
     const el = field(id)
-    if (control === 'toggle') {
+    if (control === 'range') {
+      // A drag: the pointer opens the transaction, the samples re-apply it, and
+      // the release commits. Driven through intermediate values for the same
+      // reason a colour is, since a handler that committed per sample would
+      // leave an entry for each.
+      const slider = el as HTMLInputElement
+      slider.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      for (const sample of ['7', value]) {
+        slider.value = sample
+        slider.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      slider.dispatchEvent(new Event('pointerup', { bubbles: true }))
+    } else if (control === 'toggle') {
       const box = el as HTMLInputElement
       box.checked = value === 'true'
       box.dispatchEvent(new Event('change', { bubbles: true }))
@@ -240,6 +252,15 @@ describe('panel sweep', () => {
       label: 'Change Heat',
       reads: (f) => map(f.mapId).rooms.get(f.landing)!.heated,
       expected: true,
+    },
+    {
+      row: 'Room · Liquid level',
+      id: 'inspector-room-liquid',
+      control: 'range',
+      value: '45',
+      label: 'Change Liquid Level',
+      reads: (f) => map(f.mapId).rooms.get(f.landing)!.liquidLevel,
+      expected: 45,
     },
     {
       row: 'Room · Area',
