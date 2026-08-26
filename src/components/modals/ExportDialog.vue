@@ -4,34 +4,28 @@
 // The tree is tab -> area -> room, one level deeper than the Hierarchy panel it
 // resembles: rooms are per-tab and areas are project-wide, so the same area
 // appears under several tabs holding different rooms, and ticking one takes
-// exactly the rooms shown beneath it.
+// exactly the rooms shown beneath it. `ScopeTree.vue` draws it and
+// `scopeTree.ts` does the tri-state arithmetic; this file owns the packaging
+// choice, the count and the run.
 //
-// Rendered as flat rows carrying `aria-level`, the way the Hierarchy is, since
-// a tree is a list of visible rows to everything that reads it. The tri-state
-// arithmetic lives in `scopeTree.ts` rather than here.
+// A tab is empty here when it holds no rooms, which is this exporter's own
+// predicate: any subset of the project is legal JSON, so a tab with nothing in
+// it is the only thing that cannot contribute.
 //
-// The outcome is reported as a toast, so the dialog is only ever open for a
-// decision. It closes once the bytes have landed, and stays open on a failure
-// so a retry costs no re-ticking. A cancelled destination raises nothing at
-// all: the user dismissed a picker, not an export.
+// Reporting the outcome belongs to `useExportRun`, which every export dialog
+// shares.
 
 import { computed, ref, watch } from 'vue'
-import {
-  CheckboxIndicator,
-  CheckboxRoot,
-  RadioGroupIndicator,
-  RadioGroupItem,
-  RadioGroupRoot,
-} from 'reka-ui'
+import { RadioGroupIndicator, RadioGroupItem, RadioGroupRoot } from 'reka-ui'
 import BaseModal from './BaseModal.vue'
+import ScopeTree from './ScopeTree.vue'
 import { dependOn, useModelStore } from '@/stores/model'
 import { useUiStore } from '@/stores/ui'
-import { exportProject } from '@/export'
+import { exportProjectJson, jsonScopeEmpty } from '@/export'
 import type { ExportPackaging } from '@/export'
-import { allRooms, buildScopeTree, countOf, scopeOf, stateOf, toggle } from '@/export/scopeTree'
-import { notify } from '@/notify'
-import type { CheckedState, ScopeNode } from '@/export/scopeTree'
-import type { RoomId } from '@/core/ids'
+import { allLeaves, buildScopeTree, countOf, scopeOf } from '@/export/scopeTree'
+import type { LeafId } from '@/export/scopeTree'
+import { useExportRun } from '@/export/useExportRun'
 import { t } from '@/i18n'
 import type { MessageKey } from '@/i18n'
 
@@ -40,12 +34,12 @@ const ui = useUiStore()
 
 const tree = computed(() => {
   dependOn(model.rev, model.structureRev)
-  return buildScopeTree(model.project)
+  return buildScopeTree(model.project, { leaf: 'room', isEmpty: jsonScopeEmpty })
 })
 
-const selected = ref<Set<RoomId>>(new Set())
+const selected = ref<Set<LeafId>>(new Set())
 const packaging = ref<ExportPackaging>('combined')
-const busy = ref(false)
+const { busy, run: attemptExport } = useExportRun()
 
 // Everything ticked on every opening, and nothing carried over from the last
 // one: a remembered subset would silently omit a tab the user had forgotten
@@ -55,66 +49,13 @@ watch(
   () => ui.exportOpen,
   (open) => {
     if (!open) return
-    selected.value = allRooms(tree.value)
+    selected.value = allLeaves(tree.value)
   },
   { immediate: true },
 )
 
-// One flat list of rows rather than nested lists, each carrying the level it
-// sits at. `key` is unique per row: a room id alone would collide with nothing,
-// but an area id repeats across tabs.
-interface Row {
-  key: string
-  level: 1 | 2 | 3
-  label: string
-  node: ScopeNode
-  empty: boolean
-}
-
-const rows = computed<Row[]>(() => {
-  const out: Row[] = []
-  for (const tab of tree.value) {
-    out.push({
-      key: tab.id,
-      level: 1,
-      label: tab.label,
-      node: tab,
-      empty: tab.areas.length === 0,
-    })
-    for (const area of tab.areas) {
-      out.push({
-        key: `${tab.id}/${area.id}`,
-        level: 2,
-        label: area.label,
-        node: area,
-        empty: false,
-      })
-      for (const room of area.rooms) {
-        out.push({
-          key: room.id,
-          level: 3,
-          label: room.label,
-          node: room,
-          empty: false,
-        })
-      }
-    }
-  }
-  return out
-})
-
 const count = computed(() => countOf(tree.value, selected.value))
-const nothingSelected = computed(() => count.value.rooms === 0)
-
-function stateFor(node: ScopeNode): CheckedState {
-  return stateOf(node, selected.value)
-}
-
-// Reka hands back the state it is moving to, which for a box currently
-// indeterminate is `true`: ticking a partly-filled area fills it.
-function onCheckedChange(node: ScopeNode, next: CheckedState): void {
-  selected.value = toggle(node, selected.value, next === true)
-}
+const nothingSelected = computed(() => count.value.leaves === 0)
 
 // Keys rather than resolved strings: `t` reads the locale ref, so resolving
 // here would freeze both labels at whatever language was current when the
@@ -133,28 +74,14 @@ const PACKAGING_OPTIONS: { value: ExportPackaging; labelKey: MessageKey; hintKey
 ]
 
 async function run(): Promise<void> {
-  if (nothingSelected.value || busy.value) return
-  busy.value = true
-  try {
-    const result = await exportProject(model.project, {
+  if (nothingSelected.value) return
+  const outcome = await attemptExport(() =>
+    exportProjectJson(model.project, {
       packaging: packaging.value,
       scope: scopeOf(tree.value, selected.value),
-    })
-    // Cancelled leaves everything as it was, including the dialog, and says
-    // nothing: dismissing a destination picker is not an outcome to report.
-    if (result.kind === 'written') {
-      ui.exportOpen = false
-      notify({ severity: 'success', bodyKey: 'modal.export.succeeded' })
-    } else if (result.kind === 'failed') {
-      notify({
-        severity: 'error',
-        bodyKey: 'modal.export.failed',
-        params: { message: result.message },
-      })
-    }
-  } finally {
-    busy.value = false
-  }
+    }),
+  )
+  if (outcome === 'close') ui.exportOpen = false
 }
 </script>
 
@@ -168,38 +95,17 @@ async function run(): Promise<void> {
     <div class="export-body">
       <section class="export-section">
         <h3 class="export-heading">{{ t('modal.export.scope') }}</h3>
-        <div class="export-tree" role="tree" :aria-label="t('modal.export.scope')">
-          <div
-            v-for="row in rows"
-            :key="row.key"
-            class="export-row"
-            role="treeitem"
-            :aria-level="row.level"
-            :aria-selected="stateFor(row.node) === true"
-            :data-row-kind="row.node.kind"
-            :data-row-id="row.node.id"
-            :style="{ '--row-level': row.level }"
-          >
-            <CheckboxRoot
-              class="export-check"
-              :aria-label="row.label"
-              :model-value="stateFor(row.node)"
-              :disabled="row.empty"
-              @update:model-value="onCheckedChange(row.node, $event)"
-            >
-              <CheckboxIndicator class="export-check-mark">
-                {{ stateFor(row.node) === 'indeterminate' ? '–' : '✓' }}
-              </CheckboxIndicator>
-            </CheckboxRoot>
-            <span class="export-label">{{ row.label }}</span>
-            <span v-if="row.empty" class="export-note">{{ t('modal.export.emptyTab') }}</span>
-          </div>
-        </div>
+        <ScopeTree
+          v-model:selected="selected"
+          :tree="tree"
+          :label="t('modal.export.scope')"
+          :empty-note="t('modal.export.emptyTab')"
+        />
         <p class="export-count">
           {{
             nothingSelected
               ? t('modal.export.nothing')
-              : t('modal.export.count', { tabs: count.tabs, rooms: count.rooms })
+              : t('modal.export.count', { tabs: count.tabs, rooms: count.leaves })
           }}
         </p>
       </section>
@@ -257,56 +163,6 @@ async function run(): Promise<void> {
   opacity: 0.7;
 }
 
-.export-tree {
-  max-height: 16rem;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 0.25rem;
-  padding: 0.25rem;
-}
-
-.export-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  /* Each level indents by one step; the checkbox column stays aligned with it
-     so the three levels read as a tree without nested containers. */
-  padding-left: calc((var(--row-level) - 1) * 1.25rem);
-  min-height: 1.75rem;
-}
-
-.export-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1rem;
-  height: 1rem;
-  flex: none;
-  border: 1px solid var(--border);
-  border-radius: 0.1875rem;
-  background: var(--bg);
-  color: var(--fg);
-  cursor: pointer;
-}
-
-.export-check[data-disabled] {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.export-check-mark {
-  font-size: 0.75rem;
-  line-height: 1;
-}
-
-.export-label {
-  font-size: 0.875rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.export-note,
 .export-count {
   font-size: 0.75rem;
   opacity: 0.7;

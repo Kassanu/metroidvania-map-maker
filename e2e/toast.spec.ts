@@ -21,8 +21,11 @@ declare global {
   }
 }
 
-async function boot(page: Page) {
-  await page.goto('/')
+// Blank unless a test needs a project with content, which the one that opens
+// the export dialog does: the export items are disabled on a project with
+// nothing to export.
+async function boot(page: Page, sample?: string) {
+  await page.goto(sample ? `/?sample=${sample}` : '/')
   await page.getByRole('button', { name: 'Get started' }).click()
 }
 
@@ -91,7 +94,7 @@ test('the severity accent comes from the theme token', async ({ page }) => {
 // two are stacked. That also means a toast raised over a dialog can be read
 // but not clicked.
 test('a toast stacks above an open dialog', async ({ page }) => {
-  await boot(page)
+  await boot(page, 'one-of-everything')
   await page.getByRole('button', { name: 'File', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Export' }).click()
   await page.getByRole('menuitem', { name: 'JSON…', exact: true }).click()

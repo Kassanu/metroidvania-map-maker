@@ -15,7 +15,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from 'reka-ui'
-import { PROJECT_SCOPE, useModelStore } from '@/stores/model'
+import { PROJECT_SCOPE, dependOn, useModelStore } from '@/stores/model'
 import { renameProject } from '@/core/ops/project'
 import { useUiStore } from '@/stores/ui'
 import { usePanelsStore } from '@/stores/panels'
@@ -34,6 +34,9 @@ import type { ActionId } from '@/hotkeys/keymap'
 import { t } from '@/i18n'
 import type { MessageKey } from '@/i18n'
 import { useInlineEdit } from '@/composables/useInlineEdit'
+import { jsonScopeEmpty } from '@/export'
+import { hasScopableTab } from '@/export/scopeTree'
+import type { EmptyPredicate } from '@/export/scopeTree'
 
 const model = useModelStore()
 const ui = useUiStore()
@@ -119,6 +122,43 @@ const fileItems = computed(() => [
   { key: 'menu.file.save' as MessageKey, run: () => void file.save(), enabled: !file.busy },
   { key: 'menu.file.saveAs' as MessageKey, run: () => void file.saveAs(), enabled: !file.busy },
 ])
+
+// One entry per exporter, so the submenu is one loop and a second exporter is a
+// row rather than more markup.
+//
+// A project with nothing a given exporter could write is told so from the item
+// itself: no dialog opens onto a tree of disabled rows and a disabled button
+// with no text. The reason rides on the item's `title`, since a disabled item
+// has nowhere else to put it, and `reasonKey` is null exactly when the item is
+// live: a reason attached to an item that works describes a refusal that is not
+// happening.
+//
+// Each entry refuses by the same predicate its dialog builds its tree from, so
+// an enabled item cannot open onto a dead picker.
+interface ExportItem {
+  key: MessageKey
+  reasonKey: MessageKey | null
+  run: () => void
+}
+
+const exportItems = computed<ExportItem[]>(() => {
+  dependOn(model.rev, model.structureRev)
+  return [
+    {
+      key: 'menu.file.export.json',
+      reasonKey: refusalFor(jsonScopeEmpty, 'menu.file.export.json.empty'),
+      run: () => ui.openExport(),
+    },
+  ]
+})
+
+// Busy first, because it is the one that passes: a project with rooms told it
+// has none while a save is in flight is a false statement, and the emptiness
+// reason is the only one an entry carries of its own.
+function refusalFor(isEmpty: EmptyPredicate, emptyKey: MessageKey): MessageKey | null {
+  if (file.busy) return 'menu.file.export.busy'
+  return hasScopableTab(model.project, isEmpty) ? null : emptyKey
+}
 
 // The file the project came from, beside its name. It says nothing rather than
 // guessing when the project has never been written: on a provider that cannot
@@ -251,7 +291,7 @@ const displayTitle = computed(() =>
             >
               {{ t(item.key) }}
             </DropdownMenuItem>
-            <!-- A submenu from the start, because image export joins it. -->
+            <!-- One item per exporter, from the entry list. -->
             <DropdownMenuSub>
               <DropdownMenuSubTrigger class="popover-item popover-subtrigger">
                 {{ t('menu.file.export') }}
@@ -263,11 +303,14 @@ const displayTitle = computed(() =>
                   :side-offset="4"
                 >
                   <DropdownMenuItem
+                    v-for="item in exportItems"
+                    :key="item.key"
                     class="popover-item"
-                    :disabled="file.busy"
-                    @select="ui.openExport()"
+                    :disabled="item.reasonKey !== null"
+                    :title="item.reasonKey ? t(item.reasonKey) : undefined"
+                    @select="item.run()"
                   >
-                    {{ t('menu.file.export.json') }}
+                    {{ t(item.key) }}
                   </DropdownMenuItem>
                 </DropdownMenuSubContent>
               </DropdownMenuPortal>

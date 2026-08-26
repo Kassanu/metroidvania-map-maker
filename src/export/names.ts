@@ -1,10 +1,13 @@
 // What an exported file is called.
 //
+// Two ways of earning uniqueness live here, and they hold over different
+// scopes. A room file earns it from the room id it appends: unique across the
+// project and stable across exports, so re-exporting overwrites rather than
+// accumulates. An archive entry earns it from its position among the other
+// entries: unique only within that archive, and not stable across exports.
+//
 // Room names are not unique, may be empty, and may hold anything a person can
-// type, so the name alone cannot identify a file. The id can, and always does,
-// which is why it is the half that never gets dropped: `<slug>--<room-id>.json`
-// is unique by construction, readable, and stable across exports, so
-// re-exporting overwrites rather than accumulates.
+// type, so the name alone cannot identify a file.
 
 const SEPARATOR = '--'
 
@@ -39,4 +42,32 @@ export function slugify(name: string): string {
 export function roomFileName(name: string, roomId: string): string {
   const slug = slugify(name)
   return slug ? `${slug}${SEPARATOR}${roomId}.json` : `${roomId}.json`
+}
+
+// Names made unique within one archive, in the order they were given, by
+// suffixing the second and later repeats before the extension. Order is the
+// caller's, so a picker that lists tabs in tab order gets `-2` on the later
+// tab rather than on whichever happened to be built first.
+//
+// Every name produced is reserved as it goes, so a suffix cannot collide with a
+// name that was already in the list: `a`, `a`, `a-2` yields `a`, `a-2`, `a-2-2`
+// rather than two files called `a-2`, one of which would be lost on extraction.
+export function uniqueNames(names: readonly string[]): string[] {
+  const taken = new Set<string>()
+  return names.map((name) => {
+    if (!taken.has(name)) {
+      taken.add(name)
+      return name
+    }
+    const dot = name.lastIndexOf('.')
+    const stem = dot > 0 ? name.slice(0, dot) : name
+    const extension = dot > 0 ? name.slice(dot) : ''
+    for (let suffix = 2; ; suffix++) {
+      const candidate = `${stem}-${suffix}${extension}`
+      if (!taken.has(candidate)) {
+        taken.add(candidate)
+        return candidate
+      }
+    }
+  })
 }

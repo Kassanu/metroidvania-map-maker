@@ -7,68 +7,11 @@
 
 import { describe, expect, it } from 'vitest'
 import { ZipError, buildZip, crc32, endOfCentralDirectory } from './zip'
+import { readZip } from './testUtils'
 
 const END_SIGNATURE = 0x06054b50
 const ZIP64_END_SIGNATURE = 0x06064b50
 const ZIP64_LOCATOR_SIGNATURE = 0x07064b50
-
-interface ReadEntry {
-  name: string
-  text: string
-  crcMatches: boolean
-}
-
-// Walks the archive from its end, exactly as a reader must: find the
-// end-of-central-directory record, take the directory from where it points,
-// and reach each entry's data through the offset in its own record.
-async function readZip(blob: Blob): Promise<ReadEntry[]> {
-  const bytes = new Uint8Array(await blob.arrayBuffer())
-  const view = new DataView(bytes.buffer)
-
-  let end = bytes.length - 22
-  while (end >= 0 && view.getUint32(end, true) !== END_SIGNATURE) end--
-  if (end < 0) throw new Error('no end-of-central-directory record')
-
-  const count = view.getUint16(10 + end, true)
-  let at = view.getUint32(16 + end, true)
-
-  const entries: ReadEntry[] = []
-  for (let i = 0; i < count; i++) {
-    const crc = view.getUint32(at + 16, true)
-    const compressedSize = view.getUint32(at + 20, true)
-    const nameLength = view.getUint16(at + 28, true)
-    const extraLength = view.getUint16(at + 30, true)
-    const commentLength = view.getUint16(at + 32, true)
-    const localOffset = view.getUint32(at + 42, true)
-    const name = new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLength))
-
-    // The local header repeats the name and extra lengths, and they are not
-    // required to match the central ones, so the data offset is computed from
-    // the local header's own fields.
-    const localNameLength = view.getUint16(localOffset + 26, true)
-    const localExtraLength = view.getUint16(localOffset + 28, true)
-    const dataAt = localOffset + 30 + localNameLength + localExtraLength
-    const raw = bytes.subarray(dataAt, dataAt + compressedSize)
-
-    const inflated = await inflateRaw(raw)
-    entries.push({
-      name,
-      text: new TextDecoder().decode(inflated),
-      crcMatches: crc32(inflated) === crc,
-    })
-
-    at += 46 + nameLength + extraLength + commentLength
-  }
-  return entries
-}
-
-async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new DecompressionStream('deflate-raw')
-  const writer = stream.writable.getWriter()
-  void writer.write(new Uint8Array(bytes))
-  void writer.close()
-  return new Uint8Array(await new Response(stream.readable).arrayBuffer())
-}
 
 function entry(name: string, text: string) {
   return { name, bytes: new TextEncoder().encode(text) }

@@ -113,6 +113,25 @@ print(json.dumps({'count': len(names), 'names': names, 'room': first['room']['id
     expect(archive.names[0]).toContain(archive.room)
   })
 
+  // The guard is on the entrance rather than inside the dialog, so it is read
+  // from the menu without opening anything. Both engines: nothing about it is
+  // download-provider work.
+  test('says why from the menu when the project has nothing to export', async ({ page }) => {
+    // Blank rather than a sample, which is the only state the guard is about.
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Get started' }).click()
+
+    await page.getByRole('button', { name: 'File', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Export' }).click()
+
+    const json = page.getByRole('menuitem', { name: 'JSON…', exact: true })
+    await expect(json).toHaveAttribute('data-disabled', '')
+    await expect(json).toHaveAttribute('title', 'Nothing to export: this project has no rooms.')
+
+    await json.click({ force: true })
+    await expect(page.getByRole('dialog')).toBeHidden()
+  })
+
   test('refuses to write an empty file when nothing is ticked', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== DOWNLOAD_ONLY, 'needs the download provider')
     await openApp(page)
