@@ -10,11 +10,14 @@
 //   * It is a fraction of the distance remaining to the endpoint, so it cannot
 //     clip. A pale colour still lightens where a move in absolute lightness
 //     points would hit the ceiling and go white.
-//   * Input is hex, in the four lengths a colour picker emits. That is the only
-//     form that reaches it: an area's colour is validated hex on the way in from
-//     a file, and the theme's fallbacks are hex declarations. `color.test.ts`
-//     reads `style.css` and holds them to it, because jsdom never loads the
-//     stylesheet and no other unit test can see a declaration change form.
+//   * Input is hex in the four lengths a colour picker emits, plus the `rgba()`
+//     form this file itself writes. An area's colour is validated hex on the way
+//     in from a file and the theme's fallbacks are hex declarations, so hex is
+//     what arrives from outside; the `rgba()` case is the module reading its own
+//     output back, which `blend` does because the dither's light half is already
+//     a lightened colour. `color.test.ts` reads `style.css` and holds the
+//     declarations to hex, because jsdom never loads the stylesheet and no other
+//     unit test can see a declaration change form.
 //   * Output is `rgba()` with the channels rounded here rather than `hsl()` left
 //     for the browser. A painted pixel is then a value this file decided, which
 //     is what lets an e2e probe assert an exact triple across two engines.
@@ -42,8 +45,20 @@ interface Hsla {
 
 const HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 
+// Exactly what `toRgbaString` writes, and nothing wider. A three-argument
+// `rgb()` or a comma-less modern form is still unreadable, which keeps the
+// parser's answer to anything from outside this file unchanged.
+const RGBA = /^rgba\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)$/
+
 export function parseColor(css: string): Rgba | null {
   const text = css.trim()
+
+  const rgba = RGBA.exec(text)
+  if (rgba) {
+    const [r, g, b, a] = rgba.slice(1).map(Number)
+    return { r: r!, g: g!, b: b!, a: a! }
+  }
+
   if (!HEX.test(text)) return null
 
   const digits = text.slice(1)
@@ -79,6 +94,44 @@ export function lighten(css: string, k: number = HEAT_LIGHTEN_K): string {
 
   const hsla = rgbToHsl(rgba)
   return toRgbaString(hslToRgb({ ...hsla, l: hsla.l + (1 - hsla.l) * k }))
+}
+
+// The liquid constant, and the one number here with nothing measured behind it.
+// It cannot have: the reference steps a palette for its dark half where this
+// derives one, so there is no pair of its colours that means the same thing.
+// Judged by eye against real area colours in both themes, which is the only
+// test that means anything for it.
+//
+// App-level for the same reason `HEAT_LIGHTEN_K` is.
+export const LIQUID_DARKEN_K = 0.5
+
+export function darken(css: string, k: number = LIQUID_DARKEN_K): string {
+  const rgba = parseColor(css)
+  if (rgba === null) return css
+
+  const hsla = rgbToHsl(rgba)
+  return toRgbaString(hslToRgb({ ...hsla, l: hsla.l * (1 - k) }))
+}
+
+// The checker's own average, and what replaces it once a square would fall
+// under an apparent pixel. Averaging is what keeps the region's tone the same
+// across that crossover instead of stepping to one of the two colours.
+//
+// A straight channel mean, which is exact only while both sides carry the same
+// alpha. They always do here: the pair is one colour taken through two moves
+// that each preserve it. A pair that disagreed on alpha would need the mean
+// premultiplied.
+export function blend(a: string, b: string): string {
+  const left = parseColor(a)
+  const right = parseColor(b)
+  if (left === null || right === null) return a
+
+  return toRgbaString({
+    r: (left.r + right.r) / 2,
+    g: (left.g + right.g) / 2,
+    b: (left.b + right.b) / 2,
+    a: (left.a + right.a) / 2,
+  })
 }
 
 function rgbToHsl({ r, g, b, a }: Rgba): Hsla {
