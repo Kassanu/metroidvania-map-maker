@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { renderMap, type HoveredHandle, type MapScene } from './renderMap'
-import { createRecordingContext, type RecordedFill } from './testContext'
+import { createRecordingContext, type PatternToken, type RecordedFill } from './testContext'
 import { DOOR_JAMB } from './doorRuns'
 import { outerWalls, resizableRuns, wallVertices } from '@/core/derive/walls'
 import type { CanvasPalette } from './palette'
 import { createProject } from '@/core/factory'
-import { paintCells, drawInnerWall, setRoomHeated } from '@/core/ops/rooms'
-import { lighten } from './color'
+import { paintCells, drawInnerWall, setRoomHeated, setRoomLiquidLevel } from '@/core/ops/rooms'
+import { blend, darken, lighten } from './color'
+import { recordsOf } from '@/test-setup'
 import { createFromBox, createTeleport, setDirection, setLock } from '@/core/ops/doors'
 import { addMap } from '@/core/ops/maps'
 import { teleportScene } from './teleports'
@@ -547,6 +548,287 @@ describe('renderMap drawing heated rooms', () => {
     draw(ctx, { map, areas: project.areas })
 
     expect(String(fills[2].style)).toContain(`, ${0x80 / 255})`)
+  })
+})
+
+// The liquid region is the room's own cells intersected with the half-plane
+// below the surface: the cell path clipped, and rectangles filled through it.
+// The row the surface crosses is what a clip does at a boundary, never a
+// per-cell fraction anybody calculated.
+//
+// The geometry below is all derived from `TILE` 20 and `DPR` 2, so a cell is 20
+// CSS pixels and 40 device pixels, the checker square is 5 device pixels and the
+// pattern tile is 10.
+describe('renderMap drawing a room holding liquid', () => {
+  const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
+    renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
+
+  const MAGMA = '#BD0000'
+
+  // A 3x3 room at the origin, so the box spans rows 0..2 and the bottom edge is
+  // at world y 3. At level 50 the surface lands mid-row-1.
+  function flooded(level: number, { heated = false, area = true } = {}) {
+    return withMap((tx, project, map) => {
+      const areaId = area
+        ? createNewArea(tx, project, 'Norfair', MAGMA, '#7A0000').id
+        : WORLD_AREA_ID
+      const cells: CellKey[] = []
+      for (let y = 0; y < 3; y += 1) for (let x = 0; x < 3; x += 1) cells.push(`${x},${y}`)
+      const room = paintCells(tx, project, map, cells, { areaId })
+      if (heated) setRoomHeated(tx, map, room.id, true)
+      setRoomLiquidLevel(tx, map, room.id, level)
+    })
+  }
+
+  // The two fills a liquid room makes, told apart by what they are filled with:
+  // the dither's style is a pattern token, the solid half's is a colour. Past
+  // the first two, which are the pasteboard and the page.
+  const solidFill = (fills: RecordedFill[]) =>
+    fills.slice(2).find((fill) => typeof fill.style === 'string')
+  const ditherFillOf = (fills: RecordedFill[]) =>
+    fills.slice(2).find((fill) => typeof fill.style === 'object')
+
+  // The tile's own two colours, read back through the pattern token.
+  function checkerColors(fills: RecordedFill[]) {
+    const token = ditherFillOf(fills)?.style as PatternToken
+    const tile = recordsOf(token.source as HTMLCanvasElement).fills
+    return { light: tile[0]?.style, dark: tile[1]?.style }
+  }
+
+  describe('a cell entirely above the surface', () => {
+    it('is solid C in a plain room', () => {
+      const { ctx, fills } = fakeContext()
+      const { project, map } = flooded(50)
+
+      draw(ctx, { map, areas: project.areas })
+
+      // Row 0 is CSS y 0..20, and the solid rect reaches the surface at 30.
+      expect(solidFill(fills)).toEqual({ style: MAGMA, rect: [0, 0, 60, 30] })
+    })
+
+    it('is solid L in a heated room', () => {
+      const { ctx, fills } = fakeContext()
+      const { project, map } = flooded(50, { heated: true })
+
+      draw(ctx, { map, areas: project.areas })
+
+      expect(solidFill(fills)).toEqual({ style: lighten(MAGMA), rect: [0, 0, 60, 30] })
+    })
+  })
+
+  describe('a cell crossed by the surface', () => {
+    // The whole of the "partial cell": the solid rect stops at the line and the
+    // dither starts there, both on the same device pixel, and row 1 is split by
+    // the two of them rather than by anything that knows about cells.
+    it('is solid above the line and dither below it, meeting on one pixel', () => {
+      const { ctx, fills } = fakeContext()
+      const { project, map } = flooded(50)
+
+      draw(ctx, { map, areas: project.areas })
+
+      const solid = solidFill(fills)!
+      const dither = ditherFillOf(fills)!
+
+      // Mid-row-1 in CSS pixels, and the same edge in device pixels.
+      expect(solid.rect[1] + solid.rect[3]).toBe(30)
+      expect(dither.rect[1]).toBe(60)
+      expect(dither.rect[1]).toBe((solid.rect[1] + solid.rect[3]) * DPR)
+    })
+
+    it('keeps the light half heated and the dark half not', () => {
+      const { ctx, fills } = fakeContext()
+      const { project, map } = flooded(50, { heated: true })
+
+      draw(ctx, { map, areas: project.areas })
+
+      expect(checkerColors(fills)).toEqual({ light: lighten(MAGMA), dark: darken(MAGMA) })
+    })
+  })
+
+  // Everything the table's three rows do not reach: the region's own shape, the
+  // anchoring, and which rooms take this path at all.
+  describe('the region, beyond the paint rule', () => {
+    it("clips to the room's cells, not to its bounding box", () => {
+      const { ctx, clips } = fakeContext()
+      // An L: a 2x2 block with the bottom-right cell missing.
+      const { project, map } = withMap((tx, project, map) => {
+        const area = createNewArea(tx, project, 'Norfair', MAGMA, '#7A0000')
+        const room = paintCells(tx, project, map, ['0,0', '1,0', '0,1'], { areaId: area.id })
+        setRoomLiquidLevel(tx, map, room.id, 100)
+      })
+
+      draw(ctx, { map, areas: project.areas })
+
+      // Three cells in the clip, not the box's four. The notch is what stays
+      // empty, and nothing else in this file would notice if it filled.
+      const clip = clips.at(-1)!
+      expect(clip.rects).toHaveLength(3)
+      expect(clip.rects).not.toContainEqual([20, 20, 20, 20])
+    })
+
+    it('takes one clip per room, not one per cell', () => {
+      const { ctx, clips } = fakeContext()
+      const { project, map } = flooded(50)
+
+      draw(ctx, { map, areas: project.areas })
+
+      // Nine cells, one clip holding nine rects.
+      expect(clips).toHaveLength(1)
+      expect(clips[0]!.rects).toHaveLength(9)
+    })
+
+    it('leaves a room at level 0 in the fill batch', () => {
+      const { ctx, fills, clips } = fakeContext()
+      const { project, map } = flooded(0)
+
+      draw(ctx, { map, areas: project.areas })
+
+      // Nine ordinary cell fills and no clip at all: level 0 holds no liquid,
+      // and dropping every room out of the batch would cost a bucket per room.
+      expect(clips).toHaveLength(0)
+      expect(fills.slice(2)).toHaveLength(9)
+      expect(fills.slice(2).every((fill) => fill.style === MAGMA)).toBe(true)
+    })
+
+    // The room's own fill is painted once, never painted and then dithered
+    // over: overpainting compounds alpha on a translucent area colour and shows
+    // the surface line as a seam through the light squares too.
+    it('paints a liquid room once rather than over its batch fill', () => {
+      const { ctx, fills } = fakeContext()
+      const { project, map } = flooded(50)
+
+      draw(ctx, { map, areas: project.areas })
+
+      // Two rects for the whole room, not nine plus two.
+      expect(fills.slice(2)).toHaveLength(2)
+    })
+
+    // World holds no colour, so the pair is resolved from the theme. The
+    // commonest case in the app, and the one a stored-value read would break.
+    it('resolves both halves from the theme in World', () => {
+      const { ctx, fills } = fakeContext()
+      const { project, map } = flooded(100, { area: false })
+
+      const themed = { ...palette, roomFill: '#3a3a3a' }
+      draw(ctx, { map, areas: project.areas, palette: themed })
+
+      expect(checkerColors(fills)).toEqual({ light: '#3a3a3a', dark: darken('#3a3a3a') })
+    })
+
+    // Below one CSS pixel per square there is no pattern at all, so the region
+    // is a flat blend. Asserted here as well as in `dither.test.ts` because
+    // this is the caller that has to keep passing the true cell size for the
+    // floor to fire on the right one.
+    it('fills flat rather than patterned when the cell falls under the floor', () => {
+      const { ctx, fills } = fakeContext()
+      const { project, map } = flooded(100)
+
+      draw(ctx, { map, areas: project.areas, camera: { pan: { x: 0, y: 0 }, zoom: 0.1 } })
+
+      expect(ditherFillOf(fills)).toBeUndefined()
+      expect(solidFill(fills)!.style).toBe(blend(MAGMA, darken(MAGMA)))
+    })
+  })
+
+  // Canvas 2D is painter's algorithm, so the draw slot is the z-level. Liquid
+  // sits at the cell fill, which means everything the corpus draws above the
+  // cell fill covers it and nothing here reaches over any of them.
+  //
+  // Asserted against the cell-selection tint, which is the nearest thing drawn
+  // after it that is also a `fillRect`: the transition markers and the room
+  // halo are strokes, and the two arrays cannot be ordered against each other.
+  it('draws under the marks that sit above the cell fill', () => {
+    const { ctx, fills } = fakeContext()
+    const { project, map } = flooded(50)
+
+    draw(ctx, { map, areas: project.areas, selectedCells: new Set<CellKey>(['1,1']) })
+
+    const liquid = fills.findIndex((fill) => typeof fill.style === 'object')
+    const tint = fills.findIndex((fill) => fill.style === palette.selectionFill)
+
+    expect(liquid).toBeGreaterThan(1)
+    expect(tint).toBeGreaterThan(liquid)
+  })
+
+  // The pattern is a function of world position, so it moves with the map
+  // rather than crawling under it, and two rooms at one level meet in step.
+  describe("the pattern's anchoring", () => {
+    // The tile is 10 device pixels here, so a pan that is not a whole number of
+    // tiles has to show up as a phase.
+    const panned = (x: number) => ({ pan: { x, y: 0 }, zoom: 1 })
+
+    it('phases the fill by where the world origin sits', () => {
+      const { ctx } = fakeContext()
+      const { project, map } = flooded(100)
+
+      // Pan by a third of a cell: the origin moves to device x -13.33, which
+      // reduces into the 10-pixel tile.
+      draw(ctx, { map, areas: project.areas, camera: panned(1 / 3) })
+
+      const transforms = ctx.setTransform.mock.calls.filter((call) => call.length === 6)
+      expect(transforms).toHaveLength(1)
+      expect(transforms[0]![4]).toBe(((Math.round(-(1 / 3) * 20 * 2) % 10) + 10) % 10)
+    })
+
+    // JS `%` keeps the sign of the dividend and the sample map spans columns
+    // -25 to 40, so a negative origin is the ordinary case rather than an edge.
+    it('keeps the phase positive when the world origin is left of the canvas', () => {
+      const { ctx } = fakeContext()
+      const { project, map } = flooded(100)
+
+      draw(ctx, { map, areas: project.areas, camera: panned(-7.35) })
+
+      const [, , , , phaseX, phaseY] = ctx.setTransform.mock.calls.find(
+        (call) => call.length === 6,
+      )!
+      expect(phaseX).toBeGreaterThanOrEqual(0)
+      expect(phaseX).toBeLessThan(10)
+      expect(phaseY).toBeGreaterThanOrEqual(0)
+    })
+
+    // Two rooms at the same level share one phase, which is what makes their
+    // patterns meet in step across a shared wall instead of each restarting.
+    it('gives every room on the map the same phase', () => {
+      const { ctx } = fakeContext()
+      const { project, map } = withMap((tx, project, map) => {
+        const area = createNewArea(tx, project, 'Norfair', MAGMA, '#7A0000')
+        for (const cell of ['0,0', '4,0']) {
+          const room = paintCells(tx, project, map, [cell], { areaId: area.id })
+          setRoomLiquidLevel(tx, map, room.id, 100)
+        }
+      })
+
+      draw(ctx, { map, areas: project.areas, camera: panned(1 / 3) })
+
+      const phases = ctx.setTransform.mock.calls
+        .filter((call) => call.length === 6)
+        .map((call) => call[4])
+      expect(phases).toHaveLength(2)
+      expect(new Set(phases).size).toBe(1)
+    })
+  })
+
+  describe('a cell entirely below the surface', () => {
+    it('is a C/D dither in a plain room', () => {
+      const { ctx, fills } = fakeContext()
+      const { project, map } = flooded(100)
+
+      draw(ctx, { map, areas: project.areas })
+
+      // Level 100 puts the surface on the top edge, so nothing is solid.
+      expect(solidFill(fills)).toBeUndefined()
+      expect(checkerColors(fills)).toEqual({ light: MAGMA, dark: darken(MAGMA) })
+    })
+
+    it('is an L/D dither in a heated room', () => {
+      const { ctx, fills } = fakeContext()
+      const { project, map } = flooded(100, { heated: true })
+
+      draw(ctx, { map, areas: project.areas })
+
+      expect(solidFill(fills)).toBeUndefined()
+      expect(checkerColors(fills)).toEqual({ light: lighten(MAGMA), dark: darken(MAGMA) })
+    })
   })
 })
 

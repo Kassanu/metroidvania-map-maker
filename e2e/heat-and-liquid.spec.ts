@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { openApp, gridMapping, pixelAt } from './support/canvas'
+import { openApp, gridMapping, pixelAt, colorsAlong } from './support/canvas'
 import { setAppearance } from './support/chrome'
 
 // The browser half of the canvas harness, and the paint rule it was built for:
@@ -154,6 +154,135 @@ test.describe('the paint rule for heat', () => {
     // The two passes really did run against two colours, rather than twice
     // against whichever theme the run opened in.
     expect(plainPerTheme[0]).not.toEqual(plainPerTheme[1])
+    expect(errors).toEqual([])
+  })
+})
+
+// The liquid region: the room's cells below a hard surface line, dithered.
+//
+// Every probe here reads a run rather than a point. A checkerboard answers
+// light or dark depending on which square a single read lands in, so a point
+// proves nothing about it; a run holding exactly two colours is both the
+// dither's own signature and the proof that it is a pattern, not a flat fill.
+//
+// Magma darkened by half: a pure hue at k = 0.5 halves its channels, and 189
+// halves to 94.5 which rounds away from zero.
+const DARK_MAGMA = [95, 0, 0, 255]
+
+// Cell rows of the sample's liquid rooms. Cistern is plain at 50% over rows
+// 0-2, so its surface lands mid-row-1; Magma Chamber is heated at 100%; Sump is
+// the L, 60% over rows 4-8 with only its left column reaching rows 7 and 8.
+const CISTERN_DRY = { y: 0.5, from: 8.3, to: 10.7 }
+const CISTERN_WET = { y: 2.5, from: 8.3, to: 10.7 }
+const CHAMBER = { y: 1.5, from: 12.3, to: 14.7 }
+const SUMP_PRONG = { y: 7.5, from: 0.3, to: 0.7 }
+const SUMP_NOTCH = { y: 7.5, from: 1.3, to: 2.7 }
+const CAVERN = { y: 1.5, from: 0.3, to: 2.7 }
+
+async function colorsAcross(
+  page: Parameters<typeof colorsAlong>[0],
+  grid: Awaited<ReturnType<typeof gridMapping>>,
+  run: { y: number; from: number; to: number },
+) {
+  return colorsAlong(page, grid.at(run.from, run.y), grid.at(run.to, run.y))
+}
+
+test.describe('the paint rule for liquid', () => {
+  test('paints below the surface as a dither and above it as the plain fill', async ({ page }) => {
+    const { errors } = await openApp(page, 'heat-and-liquid')
+    const grid = await gridMapping(page)
+
+    const dry = await colorsAcross(page, grid, CISTERN_DRY)
+    const wet = await colorsAcross(page, grid, CISTERN_WET)
+
+    // One colour above the line, two below: the same room, split by the surface.
+    expect(dry.map((seen) => seen.color)).toEqual([MAGMA])
+    expect(wet).toHaveLength(2)
+    expect(wet.map((seen) => seen.color).sort()).toEqual([MAGMA, DARK_MAGMA].sort())
+    expect(errors).toEqual([])
+  })
+
+  // The checker is half one colour and half the other, so neither can be a
+  // stray edge or an antialiased seam that happened to land in the run.
+  test('divides the region about evenly between the two colours', async ({ page }) => {
+    await openApp(page, 'heat-and-liquid')
+    const grid = await gridMapping(page)
+
+    const [most, least] = await colorsAcross(page, grid, CISTERN_WET)
+
+    expect(least!.count / most!.count).toBeGreaterThan(0.5)
+  })
+
+  test('fills a room at level 100 entirely, with no plain row left', async ({ page }) => {
+    const { errors } = await openApp(page, 'heat-and-liquid')
+    const grid = await gridMapping(page)
+
+    const chamber = await colorsAcross(page, grid, CHAMBER)
+
+    expect(chamber).toHaveLength(2)
+    expect(chamber.map((seen) => seen.color).sort()).toEqual([HOT_MAGMA, DARK_MAGMA].sort())
+    expect(errors).toEqual([])
+  })
+
+  // The departure from the reference, and the one rule a pixel probe is the
+  // only honest test of: both rooms are the same area, one heated and one not,
+  // and only their light halves differ.
+  test('leaves the dark half of the dither where heat cannot reach it', async ({ page }) => {
+    await openApp(page, 'heat-and-liquid')
+    const grid = await gridMapping(page)
+
+    const plain = await colorsAcross(page, grid, CISTERN_WET)
+    const heated = await colorsAcross(page, grid, CHAMBER)
+
+    const darkOf = (seen: { color: number[] }[]) =>
+      seen.find((one) => one.color.join() === DARK_MAGMA.join())
+    expect(darkOf(plain), 'plain room dark half').toBeDefined()
+    expect(darkOf(heated), 'heated room dark half').toBeDefined()
+
+    // The light halves did move, so the two runs really are different rooms.
+    expect(plain.map((seen) => seen.color)).toContainEqual(MAGMA)
+    expect(heated.map((seen) => seen.color)).toContainEqual(HOT_MAGMA)
+  })
+
+  // The L. Both runs are inside the room's bounding box and below its surface;
+  // only one of them is inside the room.
+  test('clips to the room shape, leaving the notch of an L empty', async ({ page }) => {
+    const { errors } = await openApp(page, 'heat-and-liquid')
+    const grid = await gridMapping(page)
+
+    const prong = await colorsAcross(page, grid, SUMP_PRONG)
+    const notch = await colorsAcross(page, grid, SUMP_NOTCH)
+
+    expect(prong.map((seen) => seen.color)).toContainEqual(DARK_MAGMA)
+    expect(notch.map((seen) => seen.color)).not.toContainEqual(DARK_MAGMA)
+    expect(notch.map((seen) => seen.color)).not.toContainEqual(MAGMA)
+    expect(errors).toEqual([])
+  })
+
+  test('leaves a room at level 0 undithered', async ({ page }) => {
+    await openApp(page, 'heat-and-liquid')
+    const grid = await gridMapping(page)
+
+    expect((await colorsAcross(page, grid, CAVERN)).map((seen) => seen.color)).toEqual([MAGMA])
+  })
+})
+
+// The suite's default ratio, where the file above runs at twice it. The square
+// is a device-pixel size and the pattern is anchored in device pixels, so a
+// renderer that dropped the ratio would still look right at one of the two.
+test.describe('the paint rule for liquid on an ordinary display', () => {
+  test.use({ deviceScaleFactor: 1 })
+
+  test('dithers below the surface and not above it', async ({ page }) => {
+    const { errors } = await openApp(page, 'heat-and-liquid')
+    const grid = await gridMapping(page)
+
+    const dry = await colorsAcross(page, grid, CISTERN_DRY)
+    const wet = await colorsAcross(page, grid, CISTERN_WET)
+
+    expect(dry.map((seen) => seen.color)).toEqual([MAGMA])
+    expect(wet).toHaveLength(2)
+    expect(wet.map((seen) => seen.color).sort()).toEqual([MAGMA, DARK_MAGMA].sort())
     expect(errors).toEqual([])
   })
 })
