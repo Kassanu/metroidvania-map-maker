@@ -16,6 +16,12 @@ const BARE_GRID = { x: 9.5, y: 3.5 }
 const THE_ICON = { x: 1.5, y: 1.5 }
 const ICON_LABEL_CHIP = { x: 1.5, y: 1.92 }
 
+// A colour's total light, for a claim about direction rather than about an
+// exact triple: heat is a lightness move, so both themes send this up.
+function sum([r, g, b]: number[]) {
+  return r + g + b
+}
+
 async function clickAt(page: Page, grid: GridMapping, world: { x: number; y: number }) {
   const point = grid.at(world.x, world.y)
   await page.mouse.click(point.x, point.y)
@@ -60,6 +66,32 @@ test.describe('Inspector', () => {
     expect(await undoLabel(page)).toBe('Undo Rename Room')
     await page.keyboard.press('Control+z')
     await expect(name).toHaveValue(original)
+    expect(errors).toEqual([])
+  })
+
+  // The one assertion that sees the panel and the renderer wired together:
+  // heat is not a colour anyone picks, so the only proof it arrived is the
+  // cells being painted lighter than they were.
+  test('heats the selected room, and the canvas lightens it', async ({ page }) => {
+    const { errors } = await openApp(page)
+    const grid = await gridMapping(page)
+    const inspector = page.locator('[data-panel-id="inspector"]')
+
+    await page.keyboard.press('2')
+    await clickAt(page, grid, IN_A_ROOM)
+
+    const cell = grid.at(IN_A_ROOM.x, IN_A_ROOM.y)
+    const plain = await pixelAt(page, cell)
+
+    await inspector.getByLabel('Heated', { exact: true }).check()
+
+    expect(await undoLabel(page)).toBe('Undo Change Heat')
+    // Lighter, not merely different: every other way the cell could change
+    // colour would satisfy an inequality.
+    await expect.poll(() => pixelAt(page, cell).then(sum)).toBeGreaterThan(sum(plain))
+
+    await page.keyboard.press('Control+z')
+    await expect.poll(() => pixelAt(page, cell)).toEqual(plain)
     expect(errors).toEqual([])
   })
 

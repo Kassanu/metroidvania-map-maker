@@ -233,6 +233,15 @@ describe('panel sweep', () => {
       reads: (f) => map(f.mapId).rooms.get(f.landing)!.notes,
     },
     {
+      row: 'Room · Heated',
+      id: 'inspector-room-heated',
+      control: 'toggle',
+      value: 'true',
+      label: 'Change Heat',
+      reads: (f) => map(f.mapId).rooms.get(f.landing)!.heated,
+      expected: true,
+    },
+    {
       row: 'Room · Area',
       id: 'inspector-room-area',
       control: 'select',
@@ -410,6 +419,10 @@ describe('panel sweep', () => {
         // of a colour drag would fail.
         model.undo()
         expect(testCase.reads(fixture)).toEqual(stored)
+        // And the stack is back where it started. The value check alone cannot
+        // see a second entry whose effect on this field cancels, which for a
+        // two-state control is every second entry there is.
+        expect(model.status.undoLabel).toBe(previousLabel)
       })
     }
   })

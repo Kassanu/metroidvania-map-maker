@@ -3,18 +3,20 @@ import { computed } from 'vue'
 import TextField from '../fields/TextField.vue'
 import NotesField from '../fields/NotesField.vue'
 import SelectField from '../fields/SelectField.vue'
+import ToggleField from '../fields/ToggleField.vue'
 import ColorSwatch from '../fields/ColorSwatch.vue'
 import { dependOn, mapScope, useModelStore } from '@/stores/model'
-import { assignRoomArea, renameRoom, setRoomNotes } from '@/core/ops/rooms'
+import { assignRoomArea, renameRoom, setRoomHeated, setRoomNotes } from '@/core/ops/rooms'
 import { WORLD_AREA_ID } from '@/core/ids'
 import { t } from '@/i18n'
 import type { AreaId, MapId, RoomId } from '@/core/ids'
 import type { Transaction } from '@/core/journal'
 import type { MapModel } from '@/core/types'
 
-// One room's identity: what it is called, what is written about it, and which
-// area owns its colours. Its geometry is the canvas's business and appears
-// nowhere here.
+// One room's identity, and the properties that change how its cells are
+// painted: what it is called, what is written about it, which area owns its
+// colours, and whether it is heated. Its geometry is the canvas's business and
+// appears nowhere here.
 
 const props = defineProps<{ mapId: MapId; roomId: RoomId }>()
 
@@ -46,6 +48,11 @@ const name = computed(() => {
 const notes = computed(() => {
   dependOn(model.rev)
   return currentRoom()?.notes ?? ''
+})
+
+const heated = computed(() => {
+  dependOn(model.rev)
+  return currentRoom()?.heated ?? false
 })
 
 const areaId = computed<string>(() => {
@@ -87,6 +94,10 @@ function commitNotes(next: string) {
   edit(t('history.roomNotes'), (tx, map) => setRoomNotes(tx, map, props.roomId, next))
 }
 
+function commitHeated(next: boolean) {
+  edit(t('history.setHeated'), (tx, map) => setRoomHeated(tx, map, props.roomId, next))
+}
+
 function commitArea(next: string) {
   edit(t('history.assignArea'), (tx, map) => assignRoomArea(tx, map, props.roomId, next as AreaId))
 }
@@ -111,6 +122,13 @@ function commitArea(next: string) {
         <ColorSwatch :color="areaFill" :title="t('inspector.areaColorHint')" />
       </template>
     </SelectField>
+    <!-- Between Area and Notes, because Notes is last on every kind's panel. -->
+    <ToggleField
+      id="inspector-room-heated"
+      :label="t('inspector.heated')"
+      :value="heated"
+      @commit="commitHeated"
+    />
     <NotesField
       id="inspector-room-notes"
       :label="t('inspector.notes')"
