@@ -61,6 +61,47 @@ export async function pixelAt(page: Page, point: { x: number; y: number }) {
   }, point)
 }
 
+// Every distinct colour along a horizontal run of the map canvas, commonest
+// first, each with how many device pixels carried it.
+//
+// What `pixelAt` cannot do: a checkerboard answers light or dark depending on
+// which square a single point lands in, so one read proves nothing about it. A
+// run does, and "this run holds exactly two colours" is also what tells a
+// pattern from a flat fill.
+//
+// One `page.evaluate` for the whole span rather than a read per pixel: a round
+// trip each would be hundreds of them.
+export async function colorsAlong(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+) {
+  return page.evaluate(
+    ({ from, to }) => {
+      const canvas = document.querySelector('.canvas-viewport canvas.canvas') as HTMLCanvasElement
+      const box = canvas.getBoundingClientRect()
+      const ratio = canvas.width / box.width
+      const ctx = canvas.getContext('2d')!
+
+      const x = Math.round((from.x - box.x) * ratio)
+      const y = Math.round((from.y - box.y) * ratio)
+      const width = Math.max(1, Math.round((to.x - from.x) * ratio))
+      const { data } = ctx.getImageData(x, y, width, 1)
+
+      const counts = new Map<string, number>()
+      for (let at = 0; at < data.length; at += 4) {
+        const key = [data[at], data[at + 1], data[at + 2], data[at + 3]].join(',')
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+
+      return [...counts]
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, count]) => ({ color: key.split(',').map(Number), count }))
+    },
+    { from, to },
+  )
+}
+
 // The world cell under a screen point, read off the coords overlay.
 export async function cellAt(page: Page, x: number, y: number) {
   await page.mouse.move(x, y)

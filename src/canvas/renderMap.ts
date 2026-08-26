@@ -1,6 +1,9 @@
 import { screenToWorld, worldToScreen, type Bounds } from './viewport'
 import type { Camera } from './camera'
-import { lighten } from './color'
+import { darken, lighten } from './color'
+import { ditherFill } from './dither'
+import { cellDevicePx, checkerSquarePx, snapToDevicePixel } from './devicePixels'
+import { liquidSurface } from '@/core/derive/liquid'
 import type { CanvasPalette } from './palette'
 import { doorOpening, doorRuns, wallGaps, type DoorRun, type OpenSpan } from './doorRuns'
 import { elevatorShafts, type ElevatorShaft } from './elevators'
@@ -8,7 +11,13 @@ import { drawIconBadge, drawIconPlate, UNKNOWN_ICON_ART, type IconArt } from './
 import { cellCentre, type TeleportEnd, type TeleportScene } from './teleports'
 import { parseCell, segmentFromEdge } from '@/core/cell'
 import type { CellKey, EdgeKey } from '@/core/cell'
-import { boundaryEdges, outerWalls, resizableRuns, wallVertices } from '@/core/derive/walls'
+import {
+  boundaryEdges,
+  outerWalls,
+  resizableRuns,
+  roomBounds,
+  wallVertices,
+} from '@/core/derive/walls'
 import { connectedComponents } from '@/core/derive/connectivity'
 import { clamp } from '@/lib/math'
 import type { AreaId, LockTypeId, RoomId, TransitionId } from '@/core/ids'
@@ -437,6 +446,10 @@ export function renderMap(
   // that: the pasteboard fill would otherwise eat it.
   drawShafts(ctx, scene, shafts)
   drawRoomFills(ctx, scene, map)
+  // The cell-fill z-level, which is a draw slot rather than a layer: canvas 2D
+  // is painter's algorithm, so everything below paints over this and nothing
+  // here reaches above it.
+  drawRoomLiquid(ctx, scene, map)
   // A selected room's halo shares the slot with the transition halo below, and
   // for the same reason: it is the room's own outline drawn wider, so the wall
   // has to paint back over the middle of it.
@@ -1168,12 +1181,19 @@ function drawLabelChip(
 // member of it: every heated room in one area shares a bucket the same way
 // every plain one does, and heat costs a second bucket per area rather than a
 // bucket per room.
+//
+// A room holding liquid is the one that leaves. Its region needs a clip, a clip
+// cannot be shared, and it has to be painted once rather than filled here and
+// dithered over: overpainting compounds alpha on a translucent area colour and
+// shows the surface line as a seam through the light squares. Level 0 holds no
+// liquid and stays an ordinary member.
 function drawRoomFills(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
   const byColor = new Map<string, CellKey[]>()
 
   for (const roomId of map.roomOrder) {
     const room = map.rooms.get(roomId)
     if (!room) continue
+    if (room.liquidLevel > 0) continue
     const fill = fillOf(room, scene)
     const cells = byColor.get(fill)
     if (cells) cells.push(...room.cells)
@@ -1187,6 +1207,96 @@ function drawRoomFills(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapM
       ctx.fillRect(x, y, w, h)
     }
   }
+}
+
+// A room's liquid: its own cells intersected with the half-plane below the
+// surface, filled solid above the line and with the checker dither below it.
+//
+// Five things here are load-bearing:
+//
+//   * Two regions, never a per-cell calculation. The cell path is the clip and
+//     the half-plane is the rectangle filled through it, so the row the surface
+//     crosses is what a clip does at a boundary rather than a case anyone wrote
+//     code for. Clipping to the cells and not the box is what leaves an
+//     L-shaped room's notch empty.
+//   * The surface is snapped to a whole device pixel, which is what makes the
+//     fill line hard instead of antialiased into a blended row. Both fills read
+//     the same snapped value, so they meet on one pixel and leave no seam.
+//   * The dither fills at identity transform, in device pixels. A pattern's
+//     source maps 1:1 onto user space and this context is pre-scaled by the
+//     ratio, so filling under that scale would draw every square ratio times
+//     too big. The clip is set before the reset and is already in device space,
+//     so it survives.
+//   * The pattern is phased to the world origin, so it moves with the map and
+//     two rooms at one level meet in step across a shared wall. The modulo is
+//     the positive one: columns go negative and a negative remainder puts a
+//     half-square jog down the origin column.
+//   * The dark half comes from the area's colour, never the room's fill, so
+//     heat cannot reach it.
+function drawRoomLiquid(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
+  const { camera, tileSize, dpr } = scene
+  const cell = cellDevicePx(tileSize, camera.zoom, dpr)
+  const tile = checkerSquarePx(cell) * 2
+
+  // The pattern's phase: where the world origin sits, in whole device pixels,
+  // reduced into the tile.
+  const origin = worldToScreen(0, 0, camera, tileSize)
+  const phaseX = positiveMod(Math.round(origin.x * dpr), tile)
+  const phaseY = positiveMod(Math.round(origin.y * dpr), tile)
+
+  for (const roomId of map.roomOrder) {
+    const room = map.rooms.get(roomId)
+    if (!room || room.liquidLevel <= 0) continue
+
+    const surface = liquidSurface(room)
+    const box = roomBounds(room)
+    if (surface === null || box === null) continue
+
+    const topLeft = worldToScreen(box.minCol, box.minRow, camera, tileSize)
+    const bottomRight = worldToScreen(box.maxCol + 1, box.maxRow + 1, camera, tileSize)
+    const line = snapToDevicePixel(worldToScreen(0, surface, camera, tileSize).y, dpr)
+
+    const fill = ditherFill(ctx, {
+      light: fillOf(room, scene),
+      dark: darken(cellColorOf(room, scene)),
+      cell,
+      dpr,
+    })
+
+    ctx.save()
+    ctx.beginPath()
+    for (const key of room.cells) {
+      const [x, y, width, height] = cellRect(key, scene)
+      ctx.rect(x, y, width, height)
+    }
+    ctx.clip()
+
+    if (line > topLeft.y) {
+      ctx.fillStyle = fillOf(room, scene)
+      ctx.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, line - topLeft.y)
+    }
+
+    if (bottomRight.y > line) {
+      // Device pixels from here: the transform carries the phase and nothing
+      // else, and the rectangle is expanded outward to whole ones so rounding
+      // cannot leave the clip's own edge unpainted.
+      const left = Math.floor(topLeft.x * dpr)
+      const right = Math.ceil(bottomRight.x * dpr)
+      const bottom = Math.ceil(bottomRight.y * dpr)
+      const top = line * dpr
+
+      ctx.setTransform(1, 0, 0, 1, phaseX, phaseY)
+      ctx.fillStyle = fill
+      ctx.fillRect(left - phaseX, top - phaseY, right - left, bottom - top)
+    }
+
+    ctx.restore()
+  }
+}
+
+// JS `%` keeps the sign of the dividend, and world columns go negative.
+function positiveMod(value: number, modulus: number): number {
+  return ((value % modulus) + modulus) % modulus
 }
 
 // Outer walls come from `derive/walls.ts`: never stored, memoised on the
