@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { HEAT_LIGHTEN_K, lighten, parseColor, toRgbaString } from './color'
+import {
+  blend,
+  darken,
+  HEAT_LIGHTEN_K,
+  LIQUID_DARKEN_K,
+  lighten,
+  parseColor,
+  toRgbaString,
+} from './color'
 
 // Read a channel back out of what `lighten` answers, so a test asserts on
 // numbers rather than on the shape of a string.
@@ -21,6 +29,23 @@ describe('parseColor', () => {
 
   it('answers null for anything that is not one of them', () => {
     for (const text of ['', '#', '#12', '#12345', 'red', 'rgb(1, 2, 3)', 'var(--x)', '#12345g']) {
+      expect(parseColor(text), text).toBeNull()
+    }
+  })
+
+  // The module reads its own output back, which `blend` needs: the dither's
+  // light half is `lighten`'s answer for a heated room, never hex.
+  it('round trips what toRgbaString writes', () => {
+    const rgba = toRgbaString({ r: 18, g: 52, b: 86, a: 0.5 })
+
+    expect(parseColor(rgba)).toEqual({ r: 18, g: 52, b: 86, a: 0.5 })
+    expect(parseColor(lighten('#123456'))).not.toBeNull()
+  })
+
+  // Widened to that one form and no wider, so nothing arriving from outside
+  // this file starts parsing where it did not before.
+  it('still reads no other functional form', () => {
+    for (const text of ['rgb(1, 2, 3)', 'rgba(1,2,3,1)', 'rgba(1 2 3 / 1)', 'hsl(1, 2%, 3%)']) {
       expect(parseColor(text), text).toBeNull()
     }
   })
@@ -115,6 +140,123 @@ describe('lighten', () => {
   it('defaults to the heat constant', () => {
     expect(lighten('#123456')).toBe(lighten('#123456', HEAT_LIGHTEN_K))
     expect(HEAT_LIGHTEN_K).toBe(0.5)
+  })
+})
+
+// The same move as `lighten` toward the other endpoint, and it has to hold the
+// same three things. Asserted separately rather than through a shared helper:
+// the two are one edit away from being written as one function with a sign, and
+// that function is the one that would silently drop alpha for both.
+describe('darken', () => {
+  it('holds hue and saturation, moving lightness alone', () => {
+    const before = parseColor('#123456')!
+    const [r, g, b] = channels(darken('#123456'))
+
+    const hue = ({ r, g, b }: { r: number; g: number; b: number }) => {
+      const span = Math.max(r, g, b) - Math.min(r, g, b)
+      if (b >= r && b >= g) return 60 * ((r - g) / span + 4)
+      return g >= r ? 60 * ((b - r) / span + 2) : 60 * (((g - b) / span + 6) % 6)
+    }
+    expect(hue({ r, g, b })).toBeCloseTo(hue(before), 0)
+
+    const saturation = (c: { r: number; g: number; b: number }) => {
+      const max = Math.max(c.r, c.g, c.b) / 255
+      const min = Math.min(c.r, c.g, c.b) / 255
+      return (max - min) / (1 - Math.abs(max + min - 1))
+    }
+    expect(saturation({ r, g, b })).toBeCloseTo(saturation(before), 2)
+  })
+
+  it('holds alpha rather than flattening it', () => {
+    // A translucent area would otherwise go opaque only where it is flooded.
+    expect(channels(darken('#12345680'))[3]).toBeCloseTo(0x80 / 255, 10)
+    expect(channels(darken('#12345600'))[3]).toBe(0)
+    expect(channels(darken('#123456'))[3]).toBe(1)
+  })
+
+  it('moves the fraction of the distance remaining that it is given', () => {
+    expect(darken('#123456', 0)).toBe('rgba(18, 52, 86, 1)')
+    expect(darken('#123456', 1)).toBe('rgba(0, 0, 0, 1)')
+    // Half of what a grey has left below it is the midpoint to black.
+    expect(darken('#404040', 0.5)).toBe('rgba(32, 32, 32, 1)')
+  })
+
+  it('cannot clip, because there is always distance left to take a fraction of', () => {
+    // A move in absolute lightness points would put all three at black and lose
+    // the differences between them.
+    const [near, nearer, nearest] = ['#0f0f0f', '#070707', '#030303'].map(
+      (css) => channels(darken(css))[0],
+    )
+
+    expect(nearest).toBeGreaterThan(0)
+    expect(near).toBeGreaterThan(nearer!)
+    expect(nearer).toBeGreaterThan(nearest!)
+  })
+
+  it('darkens black to black and white to grey', () => {
+    expect(darken('#000000')).toBe('rgba(0, 0, 0, 1)')
+    expect(darken('#ffffff')).toBe('rgba(128, 128, 128, 1)')
+  })
+
+  it('answers a colour it cannot read unchanged', () => {
+    // Painting `rgba(NaN, ...)` would take the room's liquid region with it.
+    expect(darken('color-mix(in srgb, red, blue)')).toBe('color-mix(in srgb, red, blue)')
+    expect(darken('rebeccapurple')).toBe('rebeccapurple')
+  })
+
+  it('defaults to the liquid constant', () => {
+    expect(darken('#123456')).toBe(darken('#123456', LIQUID_DARKEN_K))
+    expect(LIQUID_DARKEN_K).toBe(0.5)
+  })
+
+  // The dark half is derived, where the reference stepped a palette, so there
+  // is no measured pair to check it against the way heat has one.
+  it('is a different move from lighten, not the same one signed', () => {
+    expect(darken('#7f7f7f')).not.toBe(lighten('#7f7f7f'))
+    expect(channels(darken('#7f7f7f'))[0]).toBeLessThan(channels(lighten('#7f7f7f'))[0])
+  })
+})
+
+// What the checker is replaced by once a square would fall under an apparent
+// pixel: its own average, so the region holds its tone across the crossover
+// instead of stepping to one of the two colours.
+describe('blend', () => {
+  it('is the midpoint of the two colours', () => {
+    expect(blend('#000000', '#ffffff')).toBe('rgba(128, 128, 128, 1)')
+    expect(blend('#102030', '#304050')).toBe('rgba(32, 48, 64, 1)')
+  })
+
+  it('is the average of what the two transforms actually produce', () => {
+    // The real pair: one colour taken through both moves. The blend of them is
+    // what a zoomed-out flooded room is filled with.
+    const light = lighten('#BD0000')
+    const dark = darken('#BD0000')
+    const [r, g, b] = channels(blend(light, dark))
+
+    expect(r).toBe(Math.round((channels(light)[0] + channels(dark)[0]) / 2))
+    expect(g).toBe(Math.round((channels(light)[1] + channels(dark)[1]) / 2))
+    expect(b).toBe(Math.round((channels(light)[2] + channels(dark)[2]) / 2))
+  })
+
+  it('carries the alpha the pair shares', () => {
+    // Both sides descend from one colour through moves that preserve it, so the
+    // straight mean is exact rather than an approximation of a premultiplied one.
+    expect(channels(blend(lighten('#12345680'), darken('#12345680')))[3]).toBeCloseTo(
+      0x80 / 255,
+      10,
+    )
+    expect(channels(blend('#123456', '#654321'))[3]).toBe(1)
+  })
+
+  it('is order-independent', () => {
+    expect(blend('#102030', '#304050')).toBe(blend('#304050', '#102030'))
+  })
+
+  it('answers the first colour when either side is unreadable', () => {
+    // The same rule the two transforms follow: a colour this cannot read paints
+    // as itself rather than as `NaN`.
+    expect(blend('#123456', 'rebeccapurple')).toBe('#123456')
+    expect(blend('rebeccapurple', '#123456')).toBe('rebeccapurple')
   })
 })
 
