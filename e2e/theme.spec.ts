@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { setAppearance } from './support/chrome'
 
 // What an Appearance choice does to `color-scheme`, and so to native widget
 // chrome: scrollbars, selects, form controls. Only observable in a real engine,
@@ -11,16 +12,6 @@ import type { Page } from '@playwright/test'
 async function boot(page: Page) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Get started' }).click()
-}
-
-// Not `exact`: a ticked radio item's accessible name picks up the `✓` the
-// checkable gutter draws as generated content. No theme option's name is a
-// substring of another's, so the loose match stays unambiguous.
-async function setAppearance(page: Page, option: string) {
-  await page.getByRole('button', { name: 'View' }).click()
-  await page.getByRole('menuitem', { name: 'Appearance' }).click()
-  await page.getByRole('menuitemradio', { name: option }).click()
-  await page.keyboard.press('Escape')
 }
 
 function colorScheme(page: Page) {

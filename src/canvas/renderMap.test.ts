@@ -5,7 +5,8 @@ import { DOOR_JAMB } from './doorRuns'
 import { outerWalls, resizableRuns, wallVertices } from '@/core/derive/walls'
 import type { CanvasPalette } from './palette'
 import { createProject } from '@/core/factory'
-import { paintCells, drawInnerWall } from '@/core/ops/rooms'
+import { paintCells, drawInnerWall, setRoomHeated } from '@/core/ops/rooms'
+import { lighten } from './color'
 import { createFromBox, createTeleport, setDirection, setLock } from '@/core/ops/doors'
 import { addMap } from '@/core/ops/maps'
 import { teleportScene } from './teleports'
@@ -421,6 +422,131 @@ describe('renderMap drawing rooms', () => {
     draw(ctx, { map, areas: project.areas })
 
     expect(fills).toHaveLength(2)
+  })
+})
+
+// Heat is not a colour the user picks: it is a lightness move on the colour the
+// room's area already supplies, so recolouring an area moves every heated room
+// in it and no room can be made to disagree with its area.
+//
+// The expected values come from `color.ts` rather than being restated here,
+// except where a test is about the arithmetic itself: what these assert is that
+// the renderer applies the transform to the right colour, on the right rooms,
+// and to the fill and nothing else.
+describe('renderMap drawing heated rooms', () => {
+  const draw = (ctx: unknown, overrides: Partial<MapScene>) =>
+    renderMap(ctx as CanvasRenderingContext2D, 800, 600, scene(overrides))
+
+  // The reference's own fill, so the number below is the one the feature was
+  // measured against. Both channels land on exactly 94.5 and round away from
+  // zero, which is `Math.round`'s rule.
+  const MAGMA = '#BD0000'
+  const HOT_MAGMA = 'rgba(255, 95, 95, 1)'
+
+  it('paints a heated room at the lightened area colour', () => {
+    const { ctx, fills } = fakeContext()
+    const { project, map } = withMap((tx, project, map) => {
+      const area = createNewArea(tx, project, 'Norfair', MAGMA, '#7A0000')
+      const room = paintCells(tx, project, map, ['0,0'], { areaId: area.id })
+      setRoomHeated(tx, map, room.id, true)
+    })
+
+    draw(ctx, { map, areas: project.areas })
+
+    expect(fills[2].style).toBe(HOT_MAGMA)
+    expect(fills[2].style).toBe(lighten(MAGMA))
+  })
+
+  // The trap. An area holding `null` is not an area holding nothing to
+  // transform: it is the theme's colour, and World is the area every room is in
+  // before anyone makes one.
+  //
+  // A real colour in the palette rather than the fixture's `#roomfill`
+  // sentinel, which the transform cannot parse and so answers unchanged: the
+  // assertion would hold against a renderer that never applied heat at all.
+  it('paints a heated room in World at the lightened theme colour', () => {
+    const { ctx, fills } = fakeContext()
+    const { project, map } = withMap((tx, project, map) => {
+      const room = paintCells(tx, project, map, ['0,0'], { areaId: WORLD_AREA_ID })
+      setRoomHeated(tx, map, room.id, true)
+    })
+
+    const themed = { ...palette, roomFill: '#3a3a3a' }
+    draw(ctx, { map, areas: project.areas, palette: themed })
+
+    expect(fills[2].style).toBe(lighten('#3a3a3a'))
+    expect(fills[2].style).not.toBe('#3a3a3a')
+  })
+
+  it('leaves an unheated room in the same area alone', () => {
+    const { ctx, fills } = fakeContext()
+    const { project, map } = withMap((tx, project, map) => {
+      const area = createNewArea(tx, project, 'Norfair', MAGMA, '#7A0000')
+      const hot = paintCells(tx, project, map, ['0,0'], { areaId: area.id })
+      // Not adjacent: two touching rooms of one area would merge.
+      paintCells(tx, project, map, ['4,0'], { areaId: area.id })
+      setRoomHeated(tx, map, hot.id, true)
+    })
+
+    draw(ctx, { map, areas: project.areas })
+
+    const styles = fills.slice(2).map((fill) => fill.style)
+    expect(new Set(styles)).toEqual(new Set([HOT_MAGMA, MAGMA]))
+  })
+
+  // The derived colour is an ordinary member of the fill batch, not an escape
+  // from it: heat costs a second bucket per area, never a bucket per room.
+  //
+  // Painted alternating, so the grouping is what the drawn order proves. Two
+  // buckets come out as two runs; a bucket per room would come out interleaved
+  // in the order the rooms were painted.
+  it('groups the heated rooms of one area into one fill batch', () => {
+    const { ctx, fills } = fakeContext()
+    const { project, map } = withMap((tx, project, map) => {
+      const area = createNewArea(tx, project, 'Norfair', MAGMA, '#7A0000')
+      // Never adjacent: two touching rooms of one area would merge.
+      for (const [cell, heated] of [
+        ['0,0', true],
+        ['4,0', false],
+        ['8,0', true],
+        ['12,0', false],
+      ] as const) {
+        const room = paintCells(tx, project, map, [cell], { areaId: area.id })
+        if (heated) setRoomHeated(tx, map, room.id, true)
+      }
+    })
+
+    draw(ctx, { map, areas: project.areas })
+
+    expect(fills.slice(2).map((fill) => fill.style)).toEqual([HOT_MAGMA, HOT_MAGMA, MAGMA, MAGMA])
+  })
+
+  it('does not move the wall stroke', () => {
+    const { ctx, strokes } = fakeContext()
+    const { project, map } = withMap((tx, project, map) => {
+      const area = createNewArea(tx, project, 'Norfair', MAGMA, '#7A0000')
+      const room = paintCells(tx, project, map, ['0,0'], { areaId: area.id })
+      setRoomHeated(tx, map, room.id, true)
+    })
+
+    draw(ctx, { map, areas: project.areas })
+
+    expect(strokes.some((stroke) => stroke.style === '#7A0000')).toBe(true)
+    expect(strokes.some((stroke) => stroke.style === lighten('#7A0000'))).toBe(false)
+  })
+
+  // A translucent area would otherwise go opaque only where it is heated.
+  it('keeps a translucent area translucent', () => {
+    const { ctx, fills } = fakeContext()
+    const { project, map } = withMap((tx, project, map) => {
+      const area = createNewArea(tx, project, 'Norfair', '#BD000080', '#7A0000')
+      const room = paintCells(tx, project, map, ['0,0'], { areaId: area.id })
+      setRoomHeated(tx, map, room.id, true)
+    })
+
+    draw(ctx, { map, areas: project.areas })
+
+    expect(String(fills[2].style)).toContain(`, ${0x80 / 255})`)
   })
 })
 
