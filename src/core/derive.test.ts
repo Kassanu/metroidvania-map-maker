@@ -16,14 +16,21 @@ import {
   resizableRuns,
   wallVertices,
 } from './derive/walls'
-import { areaBoundsOnMap, contentBounds, ownedCellsIn, roomsOverlapping } from './derive/bounds'
+import {
+  areaBoundsOnMap,
+  contentBounds,
+  contentBoundsFor,
+  ownedCellsIn,
+  roomsOverlapping,
+} from './derive/bounds'
 import { liquidSurface } from './derive/liquid'
 import { createRoom } from './factory'
 import { WORLD_AREA_ID } from './ids'
 import type { RoomId } from './ids'
+import { createLine, placeIcon } from './ops/markup'
 import { setRoomLiquidLevel } from './ops/rooms'
 import type { Room } from './types'
-import { grid, makeRoom, rect, setup, sorted, tx } from './testUtils'
+import { grid, makeRoom, ok, rect, setup, sorted, TEST_ICON_COLORS, tx } from './testUtils'
 
 describe('connectivity', () => {
   it('finds one group for an orthogonally connected shape', () => {
@@ -435,6 +442,89 @@ describe('bounds', () => {
     expect(contentBounds(map)).toBeNull()
     makeRoom(project, map, rect(-3, 2, 2, 2))
     expect(contentBounds(map)).toEqual({ minCol: -3, minRow: 2, maxCol: -2, maxRow: 3 })
+  })
+
+  // What the visible layers draw, for image export: a layer that is off does
+  // not size the picture.
+  describe('scoped to the visible layers', () => {
+    function mapWithRoomAndFarLine() {
+      const { project, map } = setup()
+      makeRoom(project, map, rect(0, 0, 2, 2))
+      const transaction = tx(map)
+      ok(
+        createLine(transaction, map, [cellKey(40, 40), cellKey(41, 40)], {
+          color: '#ffffff',
+          arrowStart: false,
+          arrowEnd: false,
+        }),
+      )
+      transaction.commit()
+      return { project, map }
+    }
+
+    it('includes line points when the lines layer is on', () => {
+      const { map } = mapWithRoomAndFarLine()
+      expect(contentBoundsFor(map, { lines: true })).toEqual({
+        minCol: 0,
+        minRow: 0,
+        maxCol: 41,
+        maxRow: 40,
+      })
+    })
+
+    it('drops them when it is off, so the picture is of the room', () => {
+      const { map } = mapWithRoomAndFarLine()
+      expect(contentBoundsFor(map, { lines: false })).toEqual({
+        minCol: 0,
+        minRow: 0,
+        maxCol: 1,
+        maxRow: 1,
+      })
+    })
+
+    it('is null when the visible layers draw nothing', () => {
+      const { map } = setup()
+      expect(contentBoundsFor(map, { lines: true })).toBeNull()
+      const { map: lineOnly } = mapWithOnlyALine()
+      expect(contentBoundsFor(lineOnly, { lines: false })).toBeNull()
+    })
+
+    function mapWithOnlyALine() {
+      const { project, map } = setup()
+      const transaction = tx(map)
+      ok(
+        createLine(transaction, map, [cellKey(3, 3), cellKey(4, 3)], {
+          color: '#ffffff',
+          arrowStart: false,
+          arrowEnd: false,
+        }),
+      )
+      transaction.commit()
+      return { project, map }
+    }
+
+    // An icon cannot exist outside a room, so an icon term would union a
+    // subset. The derivation has two terms and this is what says so.
+    it('is not enlarged by an icon, which always sits on a room cell', () => {
+      const { project, map } = setup()
+      makeRoom(project, map, rect(0, 0, 2, 2))
+      const before = contentBoundsFor(map, { lines: true })
+      const transaction = tx(map)
+      ok(placeIcon(transaction, map, cellKey(1, 1), 'save', TEST_ICON_COLORS))
+      transaction.commit()
+      expect(contentBoundsFor(map, { lines: true })).toEqual(before)
+    })
+
+    // The cache above is keyed on `map.rev`, which only geometry bumps. This
+    // derivation answers per layer set, so a second entry under one revision
+    // would answer the previous caller's layers.
+    it('answers both layer sets at one revision', () => {
+      const { map } = mapWithRoomAndFarLine()
+      expect(contentBoundsFor(map, { lines: true })).not.toEqual(
+        contentBoundsFor(map, { lines: false }),
+      )
+      expect(contentBoundsFor(map, { lines: true })!.maxCol).toBe(41)
+    })
   })
 
   it('scopes an area’s bounding box to the rooms it has on this map', () => {

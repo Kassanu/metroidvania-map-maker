@@ -48,6 +48,17 @@ export interface MapScene {
   // them. Handed over rather than read, so nothing here touches `window` and a
   // test can render at any ratio.
   dpr: number
+  // How much larger than the canvas at zoom 1 the fixed-size marks are drawn:
+  // the label chip, the dotted dash period, the grid line, and the ceiling on
+  // every clamped stroke. The canvas passes 1; an export passes its own zoom.
+  //
+  // Those marks are fixed screen pixels here because on the canvas you can
+  // zoom, and zooming is what picks how large a label sits against the map. An
+  // export has no zoom: its size preset bakes that ratio in once, so an 11 px
+  // chip is nearly half a cell at 24 px per cell and vanishes when a 5,000 px
+  // image is viewed at 800. Scaling them makes every preset the canvas at zoom
+  // 1, larger or smaller.
+  annotationScale: number
   palette: CanvasPalette
   // Whether the page is painted. Presentation only: `bounds` is derived and
   // handed over either way, so nothing that reads the rectangle changes.
@@ -275,9 +286,10 @@ const INNER_WALL_PX = 1
 const MIN_WALL_PX = 1
 const MAX_WALL_PX = 6
 
-// A grid line's weight, in CSS pixels. Unclamped and unscaled, unlike the
-// walls: the grid is the paper rather than something drawn on it. Named
-// because `drawGrid` needs the number to place the stroke, not only to set it.
+// A grid line's weight, in CSS pixels, before the annotation scale. It does not
+// track zoom and it is not clamped, unlike the walls: the grid is the paper
+// rather than something drawn on it. Named because `drawGrid` needs the number
+// to place the stroke, not only to set it.
 const GRID_LINE_PX = 1
 
 // A door's marker, drawn in the hole its own wall gap left. Deliberately
@@ -378,19 +390,53 @@ const BOX_PREVIEW_PX = 2
 // to see what is selected any other way.
 const SELECTION_HALO_PX = 3
 
-// The drawn weight of an outer wall at a given zoom.
+// A stroke that belongs to the map: its weight tracks the drawn cell, clamped
+// at both ends.
+//
+// The ceiling scales with the annotation scale and the floor does not, and the
+// asymmetry is the point. The floor is about a stroke surviving a small cell,
+// which an export at 24 px per cell needs exactly as much as the canvas zoomed
+// out does. The ceiling is about a stroke not swelling into a slab on a screen
+// you are working at, and an export is not being worked at: left fixed, it makes
+// 128 px per cell a different-looking map rather than the same one larger, since
+// the door marker, the markup line and the arrowhead all reach it there.
+function inkWidth(base: number, min: number, max: number, scene: MapScene): number {
+  return clamp(base * scene.camera.zoom, min, max * scene.annotationScale)
+}
+
+// The drawn weight of an outer wall.
 //
 // Exported because hit-testing derives its grab band from it (see
 // `hitTest.ts`): a band narrower than the line it grabs is unusable, and two
 // constants that are meant to agree but are written down twice will drift.
 // Outer rather than inner, because it is the thicker of the two: a band sized
 // for the thicker line grabs both.
-export function wallWidth(zoom: number): number {
-  return clamp(OUTER_WALL_PX * zoom, MIN_WALL_PX, MAX_WALL_PX)
+export function wallWidth(zoom: number, annotationScale: number): number {
+  return clamp(OUTER_WALL_PX * zoom, MIN_WALL_PX, MAX_WALL_PX * annotationScale)
 }
 
-function doorMarkerWidth(zoom: number): number {
-  return clamp(DOOR_MARKER_PX * zoom, MIN_MARKER_PX, MAX_MARKER_PX)
+function doorMarkerWidth(scene: MapScene): number {
+  return inkWidth(DOOR_MARKER_PX, MIN_MARKER_PX, MAX_MARKER_PX, scene)
+}
+
+// The label chip's measurements, all fixed screen pixels scaled together: a
+// grown font in an ungrown plate is a chip its own text overflows.
+function labelMetrics(scene: MapScene) {
+  const s = scene.annotationScale
+  return {
+    font: LABEL_PX * s,
+    padX: LABEL_PAD_X * s,
+    padY: LABEL_PAD_Y * s,
+    radius: LABEL_RADIUS * s,
+    gap: LABEL_GAP * s,
+  }
+}
+
+// The dotted dash period. One helper for all three of its users, so a dotted
+// inner wall and the two gesture outlines cannot come to disagree about what
+// dotted means.
+function dottedDash(scene: MapScene): number[] {
+  return DOTTED_DASH.map((run) => run * scene.annotationScale)
 }
 
 export function renderMap(
@@ -647,7 +693,7 @@ function drawBoxPreview(ctx: CanvasRenderingContext2D, scene: MapScene, preview:
   // aiming aid beside the pointer, this one is the gesture. Still a screen
   // measure rather than a world one, because both are chrome over the map.
   ctx.lineWidth = BOX_PREVIEW_PX
-  ctx.setLineDash(refused ? [...DOTTED_DASH] : [])
+  ctx.setLineDash(refused ? dottedDash(scene) : [])
   traceRect(ctx, topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y)
   ctx.stroke()
   ctx.setLineDash([])
@@ -673,7 +719,7 @@ function drawBoxPreview(ctx: CanvasRenderingContext2D, scene: MapScene, preview:
 // at every turn.
 function drawRoomSelection(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
   ctx.strokeStyle = scene.palette.selection
-  ctx.lineWidth = wallWidth(scene.camera.zoom) + SELECTION_HALO_PX * 2
+  ctx.lineWidth = wallWidth(scene.camera.zoom, scene.annotationScale) + SELECTION_HALO_PX * 2
   ctx.lineCap = 'square'
   ctx.setLineDash([])
 
@@ -714,7 +760,7 @@ function drawCellSelection(ctx: CanvasRenderingContext2D, scene: MapScene) {
   }
 
   ctx.strokeStyle = scene.palette.selection
-  ctx.lineWidth = wallWidth(scene.camera.zoom) + SELECTION_HALO_PX * 2
+  ctx.lineWidth = wallWidth(scene.camera.zoom, scene.annotationScale) + SELECTION_HALO_PX * 2
   ctx.lineCap = 'square'
   ctx.setLineDash([])
   ctx.beginPath()
@@ -745,7 +791,7 @@ function drawSelection(
   doors: readonly DoorRun[],
   shafts: readonly ElevatorShaft[],
 ) {
-  const halo = doorMarkerWidth(scene.camera.zoom) + SELECTION_HALO_PX * 2
+  const halo = doorMarkerWidth(scene) + SELECTION_HALO_PX * 2
 
   ctx.strokeStyle = scene.palette.selection
   ctx.fillStyle = scene.palette.selection
@@ -805,7 +851,7 @@ function drawPendingTeleport(ctx: CanvasRenderingContext2D, scene: MapScene, cel
   // The box preview's weight, not a wall's: both are chrome drawn over the map
   // at a fixed screen size, and both are the gesture rather than the result.
   ctx.lineWidth = BOX_PREVIEW_PX
-  ctx.setLineDash([...DOTTED_DASH])
+  ctx.setLineDash(dottedDash(scene))
   traceRect(ctx, x + inset, y + inset, width - inset * 2, height - inset * 2)
   ctx.stroke()
   ctx.setLineDash([])
@@ -902,7 +948,7 @@ function drawGhost(ctx: CanvasRenderingContext2D, scene: MapScene, ghost: GhostS
 // preview hidden by the thing it is previewing.
 function drawBecoming(ctx: CanvasRenderingContext2D, scene: MapScene, cells: ReadonlySet<CellKey>) {
   ctx.strokeStyle = scene.palette.selection
-  ctx.lineWidth = wallWidth(scene.camera.zoom) + SELECTION_HALO_PX * 2
+  ctx.lineWidth = wallWidth(scene.camera.zoom, scene.annotationScale) + SELECTION_HALO_PX * 2
   ctx.lineCap = 'butt'
   ctx.setLineDash([...BECOMING_DASH])
 
@@ -923,10 +969,10 @@ function drawBecoming(ctx: CanvasRenderingContext2D, scene: MapScene, cells: Rea
 // kept inside it: a stroke centred on the span's far edge hangs its whole
 // width off the bitmap and renders nothing. A line beyond the span keeps its
 // true position, where clipping is what removes it.
-function gridLineAt(cssPx: number, min: number, max: number, dpr: number): number {
-  const centre = snapStrokeCentre(cssPx, GRID_LINE_PX, dpr)
+function gridLineAt(cssPx: number, min: number, max: number, dpr: number, width: number): number {
+  const centre = snapStrokeCentre(cssPx, width, dpr)
   if (cssPx < min || cssPx > max) return centre
-  return clamp(centre, min + GRID_LINE_PX / 2, max - GRID_LINE_PX / 2)
+  return clamp(centre, min + width / 2, max - width / 2)
 }
 
 function drawGrid(
@@ -956,17 +1002,20 @@ function drawGrid(
 
   // One path for every line, stroked once: an order of magnitude fewer
   // canvas state changes than stroking each line separately.
+  const lineWidth = GRID_LINE_PX * scene.annotationScale
   ctx.strokeStyle = palette.grid
-  ctx.lineWidth = GRID_LINE_PX
+  ctx.lineWidth = lineWidth
   ctx.setLineDash([])
   ctx.beginPath()
   for (let col = minCol; col <= maxCol; col++) {
-    const x = gridLineAt(worldToScreen(col, 0, camera, tileSize).x, topLeft.x, bottomRight.x, dpr)
+    const at = worldToScreen(col, 0, camera, tileSize).x
+    const x = gridLineAt(at, topLeft.x, bottomRight.x, dpr, lineWidth)
     ctx.moveTo(x, topLeft.y)
     ctx.lineTo(x, bottomRight.y)
   }
   for (let row = minRow; row <= maxRow; row++) {
-    const y = gridLineAt(worldToScreen(0, row, camera, tileSize).y, topLeft.y, bottomRight.y, dpr)
+    const at = worldToScreen(0, row, camera, tileSize).y
+    const y = gridLineAt(at, topLeft.y, bottomRight.y, dpr, lineWidth)
     ctx.moveTo(topLeft.x, y)
     ctx.lineTo(bottomRight.x, y)
   }
@@ -984,7 +1033,7 @@ function drawGrid(
 // Nothing here consults rooms. A line has no room owner and may run over rooms,
 // over transitions and across empty grid alike.
 function drawLines(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapModel) {
-  const width = clamp(MARKUP_LINE_PX * scene.camera.zoom, MIN_WALL_PX, MAX_WALL_PX)
+  const width = inkWidth(MARKUP_LINE_PX, MIN_WALL_PX, MAX_WALL_PX, scene)
 
   for (const line of map.lines.values()) {
     if (line.points.length < 2) continue
@@ -1077,7 +1126,7 @@ function drawMarkupSelection(ctx: CanvasRenderingContext2D, scene: MapScene, map
   ctx.strokeStyle = scene.palette.selection
 
   if (scene.showLines) {
-    const width = clamp(MARKUP_LINE_PX * scene.camera.zoom, MIN_WALL_PX, MAX_WALL_PX)
+    const width = inkWidth(MARKUP_LINE_PX, MIN_WALL_PX, MAX_WALL_PX, scene)
     ctx.lineWidth = width + SELECTION_HALO_PX * 2
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
@@ -1124,7 +1173,8 @@ function drawLabels(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapMode
   // without it every pan and zoom frame walks both collections to draw nothing.
   if (!scene.showAllLabels && scene.hoveredLabel === null) return
 
-  ctx.font = `${LABEL_PX}px ${MARKER_FONT}`
+  const metrics = labelMetrics(scene)
+  ctx.font = `${metrics.font}px ${MARKER_FONT}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
 
@@ -1145,7 +1195,7 @@ function drawLabels(ctx: CanvasRenderingContext2D, scene: MapScene, map: MapMode
         // Under the badge rather than over it: an icon's own cell is the one
         // place a label must not cover, since the badge is what identifies it.
         x: x + w / 2,
-        y: y + (h + badge) / 2 + LABEL_GAP + (LABEL_PX + LABEL_PAD_Y * 2) / 2,
+        y: y + (h + badge) / 2 + metrics.gap + (metrics.font + metrics.padY * 2) / 2,
       })
     }
   }
@@ -1168,9 +1218,10 @@ function lineLabelAt(points: readonly CellKey[], scene: MapScene) {
   const middle = (points.length - 1) / 2
   const before = worldPointOf(points[Math.floor(middle)], scene)
   const after = worldPointOf(points[Math.ceil(middle)], scene)
+  const metrics = labelMetrics(scene)
   return {
     x: (before.x + after.x) / 2,
-    y: (before.y + after.y) / 2 - LABEL_GAP - (LABEL_PX + LABEL_PAD_Y * 2) / 2,
+    y: (before.y + after.y) / 2 - metrics.gap - (metrics.font + metrics.padY * 2) / 2,
   }
 }
 
@@ -1180,12 +1231,13 @@ function drawLabelChip(
   text: string,
   at: { x: number; y: number },
 ) {
-  const width = ctx.measureText(text).width + LABEL_PAD_X * 2
-  const height = LABEL_PX + LABEL_PAD_Y * 2
+  const metrics = labelMetrics(scene)
+  const width = ctx.measureText(text).width + metrics.padX * 2
+  const height = metrics.font + metrics.padY * 2
 
   ctx.fillStyle = scene.palette.labelPlate
   ctx.beginPath()
-  ctx.roundRect(at.x - width / 2, at.y - height / 2, width, height, LABEL_RADIUS)
+  ctx.roundRect(at.x - width / 2, at.y - height / 2, width, height, metrics.radius)
   ctx.fill()
 
   ctx.fillStyle = scene.palette.labelText
@@ -1333,8 +1385,8 @@ function drawWalls(
   gaps: ReadonlyMap<EdgeKey, OpenSpan>,
 ) {
   const zoom = scene.camera.zoom
-  const outerWidth = wallWidth(zoom)
-  const innerWidth = clamp(INNER_WALL_PX * zoom, MIN_WALL_PX, MAX_WALL_PX)
+  const outerWidth = wallWidth(zoom, scene.annotationScale)
+  const innerWidth = inkWidth(INNER_WALL_PX, MIN_WALL_PX, MAX_WALL_PX, scene)
 
   for (const roomId of map.roomOrder) {
     const room = map.rooms.get(roomId)
@@ -1353,7 +1405,7 @@ function drawWalls(
     ctx.lineWidth = innerWidth
     for (const style of ['solid', 'dotted', 'doorway'] as WallStyle[]) {
       let any = false
-      ctx.setLineDash(style === 'dotted' ? [...DOTTED_DASH] : [])
+      ctx.setLineDash(style === 'dotted' ? dottedDash(scene) : [])
       ctx.beginPath()
       for (const [edge, edgeStyle] of room.innerWalls) {
         if (edgeStyle !== style) continue
@@ -1390,7 +1442,7 @@ function drawDoors(ctx: CanvasRenderingContext2D, scene: MapScene, runs: readonl
   }
 
   if (byColor.size > 0) {
-    ctx.lineWidth = doorMarkerWidth(scene.camera.zoom)
+    ctx.lineWidth = doorMarkerWidth(scene)
     ctx.setLineDash([])
     for (const [color, group] of byColor) {
       ctx.strokeStyle = color
@@ -1460,7 +1512,7 @@ function drawElevatorEnds(
   shafts: readonly ElevatorShaft[],
 ) {
   ctx.setLineDash([])
-  ctx.lineWidth = doorMarkerWidth(scene.camera.zoom)
+  ctx.lineWidth = doorMarkerWidth(scene)
 
   for (const shaft of shafts) {
     const ends = ['a', 'b'] as const
@@ -1497,8 +1549,6 @@ function drawElevatorEnds(
 // Teleports: the faint links first, then the markers, so a marker is never half
 // covered by the line leaving it.
 function drawTeleports(ctx: CanvasRenderingContext2D, scene: MapScene, teleports: TeleportScene) {
-  const zoom = scene.camera.zoom
-
   // The sub-toggle, and the whole of it: it only hides the faint connecting
   // lines while keeping teleport endpoint markers, so it wraps the line and its
   // one-way arrow and stops there. `ends` below is outside it on purpose: a
@@ -1506,7 +1556,7 @@ function drawTeleports(ctx: CanvasRenderingContext2D, scene: MapScene, teleports
   // the markers too would be the master toggle.
   if (scene.showTeleportLines && teleports.lines.length > 0) {
     ctx.strokeStyle = scene.palette.teleportLine
-    ctx.lineWidth = clamp(TELEPORT_LINE_PX * zoom, MIN_WALL_PX, MAX_WALL_PX)
+    ctx.lineWidth = inkWidth(TELEPORT_LINE_PX, MIN_WALL_PX, MAX_WALL_PX, scene)
     ctx.setLineDash([])
     ctx.beginPath()
     for (const line of teleports.lines) {
@@ -1571,7 +1621,7 @@ function drawArrow(
   direction: { dx: number; dy: number },
   color: string,
 ) {
-  const size = clamp(ARROW_PX * scene.camera.zoom, MIN_ARROW_PX, MAX_ARROW_PX)
+  const size = inkWidth(ARROW_PX, MIN_ARROW_PX, MAX_ARROW_PX, scene)
   const half = size / 2
   const apex = { x: at.x + direction.dx * half, y: at.y + direction.dy * half }
   const back = { x: at.x - direction.dx * half, y: at.y - direction.dy * half }
@@ -1579,7 +1629,7 @@ function drawArrow(
   const perp = { x: -direction.dy * half, y: direction.dx * half }
 
   ctx.strokeStyle = color
-  ctx.lineWidth = clamp(OUTER_WALL_PX * scene.camera.zoom, MIN_WALL_PX, MAX_WALL_PX)
+  ctx.lineWidth = inkWidth(OUTER_WALL_PX, MIN_WALL_PX, MAX_WALL_PX, scene)
   ctx.setLineDash([])
   ctx.beginPath()
   ctx.moveTo(back.x + perp.x, back.y + perp.y)

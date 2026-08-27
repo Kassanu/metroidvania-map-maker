@@ -19,12 +19,15 @@ import type { MapModel } from '../types'
 
 export type { CellBounds }
 
-// Every cell the map has content on: room cells, icon cells, and line points.
-// Icons always sit inside rooms so they never extend the extent, but lines are
-// an independent overlay and may live anywhere, including outside every room.
-function* contentCells(map: MapModel): Generator<CellKey> {
+// Every cell the map has content on: room cells, and line points.
+//
+// Two terms and not three. An icon cannot exist outside a room (`placeIcon`
+// refuses `not-in-a-room`), so every icon cell is a cell some room already
+// owns and an icon term would union a subset. Lines are an independent overlay
+// and may live anywhere, including outside every room.
+function* contentCells(map: MapModel, lines: boolean): Generator<CellKey> {
   for (const room of map.rooms.values()) yield* room.cells
-  for (const line of map.lines.values()) yield* line.points
+  if (lines) for (const line of map.lines.values()) yield* line.points
 }
 
 interface MapDerived {
@@ -47,7 +50,11 @@ function derived(map: MapModel): MapDerived {
     areaBounds.set(room.areaId, existing ? unionBounds(existing, box) : box)
   }
 
-  const fresh: MapDerived = { rev: map.rev, bounds: computeBounds(contentCells(map)), areaBounds }
+  const fresh: MapDerived = {
+    rev: map.rev,
+    bounds: computeBounds(contentCells(map, true)),
+    areaBounds,
+  }
   cache.set(map, fresh)
   return fresh
 }
@@ -66,6 +73,24 @@ export function unionBounds(a: CellBounds, b: CellBounds): CellBounds {
 // The map's drawn extent, or null when it is empty.
 export function contentBounds(map: MapModel): CellBounds | null {
   return derived(map).bounds
+}
+
+// Which layers a scoped extent counts. Rooms and walls have no flag: they are
+// what a map is, so there is no state in which they do not size it.
+export interface ContentLayers {
+  lines: boolean
+}
+
+// The extent of what a given set of layers draws, or null when they draw
+// nothing. A layer that is off does not size the rectangle: a map with one room
+// and a route line out to column 4000, with lines off, extends to the room.
+//
+// Uncached, unlike `contentBounds` above, and deliberately: the cache is keyed
+// on `map.rev`, so a second entry keyed on the same revision would answer the
+// previous caller's layer set. Keying on the layers as well would hold a cache
+// line per subset for a derivation that walks cells already in memory.
+export function contentBoundsFor(map: MapModel, layers: ContentLayers): CellBounds | null {
+  return computeBounds(contentCells(map, layers.lines))
 }
 
 // The bounding box for an area's labelled border on this map. An area may

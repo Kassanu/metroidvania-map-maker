@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cellAt, grabBand, hitTest, type HitScene } from './hitTest'
+import { cellAt, GRAB_MARGIN_PX, grabBand, hitTest, type HitScene } from './hitTest'
 import { createProject } from '@/core/factory'
 import { Transaction } from '@/core/journal'
 import { paintCells } from '@/core/ops/rooms'
@@ -204,6 +204,16 @@ describe('hitTest', () => {
         expect(band).toBeGreaterThan(0)
         expect(band).toBeLessThan(TILE / 2)
       }
+    })
+
+    // The wall weight the band derives from is the one the canvas draws, and
+    // the canvas draws at annotation scale 1. An export scales the ceiling on
+    // that weight, and nothing hit-tests an export: a band that followed the
+    // scale would grow past the line it grabs at exactly the zooms where the
+    // ceiling bites.
+    it('derives from the unscaled wall, so the ceiling still applies', () => {
+      // OUTER_WALL_PX 2 at zoom 8 wants 16 and MAX_WALL_PX is 6.
+      expect(grabBand({ camera: { pan: { x: 0, y: 0 }, zoom: 8 } })).toBe(3 + GRAB_MARGIN_PX)
     })
 
     // A screen-space band means the target is the same size under the pointer

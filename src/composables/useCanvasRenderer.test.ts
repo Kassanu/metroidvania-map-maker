@@ -80,6 +80,18 @@ function drawnScene(): MapScene {
 }
 
 describe('useCanvasRenderer', () => {
+  // The canvas is the fixed-scale case, at every ratio and every zoom: on
+  // screen you can zoom, and zooming is what picks how large a label sits
+  // against the map. An export passes its own.
+  it('draws at annotation scale 1, whatever the display is', () => {
+    atRatio(3)
+    const { renderer } = mounted()
+
+    renderer.draw()
+
+    expect(drawnScene().annotationScale).toBe(1)
+  })
+
   describe('the scene carries the ratio the context was scaled by', () => {
     it('hands the renderer the display it is drawing on', () => {
       atRatio(2)

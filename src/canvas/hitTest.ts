@@ -120,8 +120,11 @@ export function transitionAt(point: ScreenPoint, scene: HitScene): ObjectRef | n
 // Derived from the drawn wall weight rather than chosen independently: a band
 // narrower than the line it grabs is unusable, and two constants that are meant
 // to agree but are written down twice will drift.
+//
+// The annotation scale is 1 because a hit test is a pointer on the canvas, and
+// the canvas is where that scale is 1. Nothing hit-tests an export.
 export function grabBand(scene: Pick<HitScene, 'camera'>): number {
-  return wallWidth(scene.camera.zoom) / 2 + GRAB_MARGIN_PX
+  return wallWidth(scene.camera.zoom, 1) / 2 + GRAB_MARGIN_PX
 }
 
 // A line endpoint is a point target where the line itself is a line target, and
