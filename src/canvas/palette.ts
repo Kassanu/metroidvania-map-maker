@@ -102,6 +102,25 @@ function readVar(styles: CSSStyleDeclaration, name: string): string {
   return styles.getPropertyValue(name).trim()
 }
 
+// The palette of a theme that is not the one applied, for an export whose
+// appearance was chosen independently of the app's.
+//
+// It stamps `data-theme`, reads, and restores, all synchronously. A synchronous
+// task never yields to the compositor, so the document is never painted in the
+// borrowed theme and this cannot flash. Restoring means removing the attribute
+// where there was none, which is how 'system' is expressed.
+export function readCanvasPaletteAs(mode: 'light' | 'dark'): CanvasPalette {
+  const root = document.documentElement
+  const previous = root.getAttribute('data-theme')
+  root.setAttribute('data-theme', mode)
+  try {
+    return readCanvasPalette()
+  } finally {
+    if (previous === null) root.removeAttribute('data-theme')
+    else root.setAttribute('data-theme', previous)
+  }
+}
+
 export function readCanvasPalette(): CanvasPalette {
   const styles = getComputedStyle(document.documentElement)
   return {
