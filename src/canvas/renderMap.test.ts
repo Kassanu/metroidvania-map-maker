@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { renderMap, type HoveredHandle, type MapScene } from './renderMap'
-import { createRecordingContext, type PatternToken, type RecordedFill } from './testContext'
+import {
+  createRecordingContext,
+  type PatternToken,
+  type RecordedFill,
+  type RecordedStroke,
+} from './testContext'
 import { DOOR_JAMB } from './doorRuns'
 import { outerWalls, resizableRuns, wallVertices } from '@/core/derive/walls'
 import type { CanvasPalette } from './palette'
@@ -268,6 +273,98 @@ describe('renderMap', () => {
 
     expect(fills.map((f) => f.style)).toEqual(['#pasteboard', '#page'])
     expect(ctx.stroke).not.toHaveBeenCalled()
+  })
+
+  // What a stroke covers is decided by its two edges, not by its centre, and
+  // the centre alone says nothing about which columns take ink. Every
+  // assertion below is on the span in device pixels for that reason.
+  describe('the grid on the pixel grid', () => {
+    function gridSpans(strokes: RecordedStroke[], dpr: number) {
+      const grid = strokes.find((stroke) => stroke.style === '#grid')
+      if (!grid) throw new Error('no grid stroke recorded')
+      const half = grid.width / 2
+      const span = (centre: number) => [(centre - half) * dpr, (centre + half) * dpr]
+      return {
+        verticals: grid.segments.filter(([x1, , x2]) => x1 === x2).map(([x]) => span(x)),
+        horizontals: grid.segments.filter(([, y1, , y2]) => y1 === y2).map(([, y]) => span(y)),
+      }
+    }
+
+    function drawGridAt(overrides: Partial<MapScene>, dpr: number) {
+      const { ctx, strokes } = fakeContext()
+      renderMap(ctx as unknown as CanvasRenderingContext2D, 800, 600, scene({ ...overrides, dpr }))
+      return gridSpans(strokes, dpr)
+    }
+
+    // At ratio 1 a line stroked at the coordinate it names straddles the pixel
+    // boundary and smears across two columns at half alpha. Every grid
+    // coordinate is an exact integer in an export, so this is the guaranteed
+    // case there rather than a transient of where the canvas is panned.
+    it('covers whole device pixels at ratio 1', () => {
+      const { verticals, horizontals } = drawGridAt({ showPage: false }, 1)
+      const fractional = [...verticals, ...horizontals].filter(
+        (span) => !span.every(Number.isInteger),
+      )
+
+      expect(fractional).toEqual([])
+      expect(verticals.length).toBeGreaterThan(1)
+    })
+
+    // A 1 CSS pixel stroke is two device pixels at ratio 2, and an even width
+    // already lands on whole pixels: the snap is an identity there. This is
+    // what fails if the offset is written as a constant rather than derived,
+    // since half a CSS pixel shifts the whole grid one device pixel and half a
+    // device pixel smears it across three columns.
+    it('leaves an already-aligned stroke where it is at ratio 2', () => {
+      const { verticals, horizontals } = drawGridAt({ showPage: false }, 2)
+      const fractional = [...verticals, ...horizontals].filter(
+        (span) => !span.every(Number.isInteger),
+      )
+
+      expect(fractional).toEqual([])
+      // 800px of canvas at TILE px a cell: 41 lines, of which the two on the
+      // span's own edge are pulled inside it by the rule below and the other
+      // 39 stand where the camera puts them. Stated as a literal length, since
+      // an expectation counted off the actual passes against an empty grid.
+      expect(verticals).toHaveLength(41)
+      expect(verticals.slice(1, -1).map(([from]) => from)).toEqual(
+        Array.from({ length: 39 }, (_, index) => (index + 1) * TILE * 2 - 1),
+      )
+    })
+
+    // The export case: the rectangle is the bitmap, so a line centred on its
+    // far edge falls off it entirely and one centred on the near edge keeps
+    // half its ink. Both make the border a different weight from every line
+    // inside it.
+    it.each([1, 2])('keeps the page edges inside the page at ratio %i', (dpr) => {
+      const bounds = { minCol: 0, minRow: 0, maxCol: 19, maxRow: 14 }
+      const { verticals, horizontals } = drawGridAt({ bounds }, dpr)
+      // 20 x 15 cells at TILE px, zoom 1, panned to the origin.
+      const right = 20 * TILE * dpr
+      const bottom = 15 * TILE * dpr
+
+      const outside = [
+        ...verticals.filter(([from, to]) => from < 0 || to > right),
+        ...horizontals.filter(([from, to]) => from < 0 || to > bottom),
+      ]
+      expect(outside).toEqual([])
+      expect(verticals).toHaveLength(21)
+      expect(horizontals).toHaveLength(16)
+    })
+
+    // Containment is for a line the span contains. A fractional pan puts the
+    // outermost lines up to a cell beyond it, where clipping is what removes
+    // them, and pulling those in would draw a line hard against each edge at
+    // a position no camera put it.
+    it('leaves a line lying beyond the span where it is', () => {
+      const camera = { pan: { x: 0.3, y: 0.3 }, zoom: 1 }
+      const { verticals, horizontals } = drawGridAt({ showPage: false, camera }, 1)
+
+      expect(Math.min(...verticals.map(([from]) => from))).toBeLessThan(0)
+      expect(Math.max(...verticals.map(([, to]) => to))).toBeGreaterThan(800)
+      expect(Math.min(...horizontals.map(([from]) => from))).toBeLessThan(0)
+      expect(Math.max(...horizontals.map(([, to]) => to))).toBeGreaterThan(600)
+    })
   })
 
   it('moves the page with the camera', () => {

@@ -2,7 +2,7 @@ import { screenToWorld, worldToScreen, type Bounds } from './viewport'
 import type { Camera } from './camera'
 import { darken, lighten } from './color'
 import { ditherFill } from './dither'
-import { cellDevicePx, checkerSquarePx, snapToDevicePixel } from './devicePixels'
+import { cellDevicePx, checkerSquarePx, snapStrokeCentre, snapToDevicePixel } from './devicePixels'
 import { liquidSurface } from '@/core/derive/liquid'
 import type { CanvasPalette } from './palette'
 import { doorOpening, doorRuns, wallGaps, type DoorRun, type OpenSpan } from './doorRuns'
@@ -274,6 +274,11 @@ const OUTER_WALL_PX = 2
 const INNER_WALL_PX = 1
 const MIN_WALL_PX = 1
 const MAX_WALL_PX = 6
+
+// A grid line's weight, in CSS pixels. Unclamped and unscaled, unlike the
+// walls: the grid is the paper rather than something drawn on it. Named
+// because `drawGrid` needs the number to place the stroke, not only to set it.
+const GRID_LINE_PX = 1
 
 // A door's marker, drawn in the hole its own wall gap left. Deliberately
 // heavier than the wall it interrupts: the marker has to read as something
@@ -911,6 +916,19 @@ function drawBecoming(ctx: CanvasRenderingContext2D, scene: MapScene, cells: Rea
   ctx.lineWidth = 1
 }
 
+// Where a grid line's stroke is centred, given the coordinate it names and the
+// span it is drawn across. CSS pixels throughout.
+//
+// The stroke lands on whole device pixels, and a line the span contains is
+// kept inside it: a stroke centred on the span's far edge hangs its whole
+// width off the bitmap and renders nothing. A line beyond the span keeps its
+// true position, where clipping is what removes it.
+function gridLineAt(cssPx: number, min: number, max: number, dpr: number): number {
+  const centre = snapStrokeCentre(cssPx, GRID_LINE_PX, dpr)
+  if (cssPx < min || cssPx > max) return centre
+  return clamp(centre, min + GRID_LINE_PX / 2, max - GRID_LINE_PX / 2)
+}
+
 function drawGrid(
   ctx: CanvasRenderingContext2D,
   scene: MapScene,
@@ -919,7 +937,7 @@ function drawGrid(
   width: number,
   height: number,
 ) {
-  const { camera, bounds, tileSize, palette } = scene
+  const { camera, bounds, tileSize, dpr, palette } = scene
 
   // Only the lines that cross the canvas. The page is as large as the map's
   // content, which is unbounded, and a line stroked off-screen costs the same
@@ -939,16 +957,16 @@ function drawGrid(
   // One path for every line, stroked once: an order of magnitude fewer
   // canvas state changes than stroking each line separately.
   ctx.strokeStyle = palette.grid
-  ctx.lineWidth = 1
+  ctx.lineWidth = GRID_LINE_PX
   ctx.setLineDash([])
   ctx.beginPath()
   for (let col = minCol; col <= maxCol; col++) {
-    const x = worldToScreen(col, 0, camera, tileSize).x
+    const x = gridLineAt(worldToScreen(col, 0, camera, tileSize).x, topLeft.x, bottomRight.x, dpr)
     ctx.moveTo(x, topLeft.y)
     ctx.lineTo(x, bottomRight.y)
   }
   for (let row = minRow; row <= maxRow; row++) {
-    const y = worldToScreen(0, row, camera, tileSize).y
+    const y = gridLineAt(worldToScreen(0, row, camera, tileSize).y, topLeft.y, bottomRight.y, dpr)
     ctx.moveTo(topLeft.x, y)
     ctx.lineTo(bottomRight.x, y)
   }
