@@ -32,28 +32,36 @@ export const PAGE_PADDING = 2
 // middle vertex.
 export const PAGE_HOME: CellBounds = { minCol: -10, minRow: -10, maxCol: 10, maxRow: 10 }
 
-// The map's own framed rectangle: its drawn extent with the page's padding
-// around it, or null for an empty map.
+// A drawn extent with a margin of whole cells around it, or null for an empty
+// map.
 //
-// The half of the page that is about the map rather than about the canvas.
-// Everything that wants to frame the content itself takes this: the camera's
-// default, so opening a file looks at the rooms rather than at the void
-// between them and the home rectangle, and image export, which must not pad a
-// two-cell map out to the home rectangle's size.
-export function paddedContentBounds(content: CellBounds | null): CellBounds | null {
+// The half of the page that is about the map rather than about the canvas, and
+// it has four callers: the page below, the camera's default, so opening a file
+// looks at the rooms rather than at the void between them and the home
+// rectangle, Fit selection, and image export, which must not pad a two-cell map
+// out to the home rectangle's size.
+//
+// The padding is an argument with no default because the fourth caller's is the
+// user's, from the export dialog, and the other three are the page's. A default
+// would make the export's margin look like a variation on the page's rather
+// than a separate number that happens to share a formula.
+export function paddedContentBounds(
+  content: CellBounds | null,
+  padding: number,
+): CellBounds | null {
   if (!content) return null
   return {
-    minCol: content.minCol - PAGE_PADDING,
-    minRow: content.minRow - PAGE_PADDING,
-    maxCol: content.maxCol + PAGE_PADDING,
-    maxRow: content.maxRow + PAGE_PADDING,
+    minCol: content.minCol - padding,
+    minRow: content.minRow - padding,
+    maxCol: content.maxCol + padding,
+    maxRow: content.maxRow + padding,
   }
 }
 
 // The sheet to render for a map's drawn extent. `content` is null for an
 // empty map.
 export function pageBounds(content: CellBounds | null): CellBounds {
-  const padded = paddedContentBounds(content)
+  const padded = paddedContentBounds(content, PAGE_PADDING)
   // Copied rather than returned directly: a caller holding the page must not
   // be able to write through to the constant every other page contains.
   if (!padded) return { ...PAGE_HOME }

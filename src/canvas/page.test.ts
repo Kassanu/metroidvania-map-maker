@@ -35,16 +35,29 @@ describe('the home rectangle', () => {
 // default and image export take this, so the home rectangle never reaches them.
 describe('the padded content', () => {
   it('is null for an empty map, so callers can say what empty means for them', () => {
-    expect(paddedContentBounds(null)).toBeNull()
+    expect(paddedContentBounds(null, PAGE_PADDING)).toBeNull()
   })
 
   it('pads the content and does not reach for home', () => {
-    expect(paddedContentBounds(box(0, 0, 1, 1))).toEqual(box(-2, -2, 3, 3))
+    expect(paddedContentBounds(box(0, 0, 1, 1), PAGE_PADDING)).toEqual(box(-2, -2, 3, 3))
   })
 
   it('stays with content far from the origin, where the page spans the gap', () => {
-    expect(paddedContentBounds(box(200, 200, 202, 202))).toEqual(box(198, 198, 204, 204))
+    expect(paddedContentBounds(box(200, 200, 202, 202), PAGE_PADDING)).toEqual(
+      box(198, 198, 204, 204),
+    )
     expect(pageBounds(box(200, 200, 202, 202)).minCol).toBe(PAGE_HOME.minCol)
+  })
+
+  // Image export's margin is the user's and is measured in the same unit, so
+  // the padding is the caller's number rather than the page's.
+  it('pads by whatever it was given, on all four sides', () => {
+    expect(paddedContentBounds(box(0, 0, 1, 1), 1)).toEqual(box(-1, -1, 2, 2))
+    expect(paddedContentBounds(box(0, 0, 1, 1), 20)).toEqual(box(-20, -20, 21, 21))
+  })
+
+  it('is unaffected by the page padding it no longer reads', () => {
+    expect(paddedContentBounds(box(5, 5, 6, 6), 0)).toEqual(box(5, 5, 6, 6))
   })
 })
 

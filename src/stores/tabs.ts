@@ -9,7 +9,7 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref, watch } from 'vue'
 import { PROJECT_SCOPE, dependOn, mapScope, useModelStore } from './model'
-import { PAGE_HOME, pageBounds, paddedContentBounds } from '@/canvas/page'
+import { PAGE_HOME, PAGE_PADDING, pageBounds, paddedContentBounds } from '@/canvas/page'
 import { centerOn, clampZoom, steppedZoom, type Camera } from '@/canvas/camera'
 import { type Bounds, type Pan } from '@/canvas/viewport'
 import { contentBounds, type CellBounds } from '@/core/derive/bounds'
@@ -119,7 +119,7 @@ export const useTabsStore = defineStore('tabs', () => {
   function framedBounds(mapId: MapId): CellBounds | null {
     const map = model.project.mapsById.get(mapId)
     if (!map) return null
-    return paddedContentBounds(contentBounds(map)) ?? PAGE_HOME
+    return paddedContentBounds(contentBounds(map), PAGE_PADDING) ?? PAGE_HOME
   }
 
   // A camera looking at the middle of `framed` at the given zoom. Null when
@@ -185,7 +185,7 @@ export const useTabsStore = defineStore('tabs', () => {
   function fitToSelection(mapId: MapId, refs: readonly ObjectRef[]): void {
     const map = model.project.mapsById.get(mapId)
     if (!map) return
-    const framed = paddedContentBounds(selectionBounds(refs, map))
+    const framed = paddedContentBounds(selectionBounds(refs, map), PAGE_PADDING)
     if (!framed) return
     const zoom = zoomFitting(framed)
     if (zoom === null) return

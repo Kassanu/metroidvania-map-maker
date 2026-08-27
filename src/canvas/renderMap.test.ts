@@ -103,6 +103,9 @@ function scene(overrides: Partial<MapScene> = {}): MapScene {
     bounds: { minCol: 0, minRow: 0, maxCol: 19, maxRow: 14 },
     tileSize: TILE,
     dpr: DPR,
+    // The canvas's value, so every assertion here measures the fixed sizes the
+    // renderer has always drawn. The scaled cases override it.
+    annotationScale: 1,
     map: null,
     // Both layer toggles default on, so a scene that does not override them
     // is fully visible; the toggles' own tests are what turn them off.
@@ -364,6 +367,147 @@ describe('renderMap', () => {
       expect(Math.max(...verticals.map(([, to]) => to))).toBeGreaterThan(800)
       expect(Math.min(...horizontals.map(([from]) => from))).toBeLessThan(0)
       expect(Math.max(...horizontals.map(([, to]) => to))).toBeGreaterThan(600)
+    })
+
+    // The grid is the paper, so its weight does not track zoom. It does track
+    // the annotation scale: left at 1 CSS pixel, an export at 128 px per cell
+    // draws a hairline under an 8 px wall.
+    it('scales its weight with the annotation scale, and still snaps', () => {
+      const { ctx, strokes } = fakeContext()
+      renderMap(
+        ctx as unknown as CanvasRenderingContext2D,
+        800,
+        600,
+        scene({ showPage: false, dpr: 1, annotationScale: 4 }),
+      )
+      const grid = strokes.find((stroke) => stroke.style === '#grid')!
+
+      expect(grid.width).toBe(4)
+      const spans = grid.segments
+        .filter(([x1, , x2]) => x1 === x2)
+        .map(([x]) => [x - grid.width / 2, x + grid.width / 2])
+      expect(spans.filter((span) => !span.every(Number.isInteger))).toEqual([])
+    })
+  })
+
+  // Fixed-size marks are fixed against the canvas, where you can zoom. An
+  // export has no zoom, so its preset picks that ratio once and this is what
+  // carries it.
+  describe('the annotation scale', () => {
+    function drawWith(
+      built: ReturnType<typeof withMap>,
+      overrides: Partial<MapScene>,
+      records = fakeContext(),
+    ) {
+      const { project, map } = built
+      renderMap(
+        records.ctx as unknown as CanvasRenderingContext2D,
+        800,
+        600,
+        scene({
+          map,
+          areas: project.areas,
+          lockTypes: project.lockTypes,
+          ...overrides,
+        }),
+      )
+      return records
+    }
+
+    // The whole chip and not only the font: a grown font in an ungrown plate is
+    // a chip its own text overflows. The height is what says so, since the
+    // double's `measureText` does not follow the font the way a real one does.
+    it('scales the label chip, plate and all', () => {
+      const built = withMap((tx, project, map) => {
+        paintCells(tx, project, map, ['2,2'], { areaId: WORLD_AREA_ID })
+        const icon = ok(placeIcon(tx, map, '2,2', 'save', TEST_ICON_COLORS))
+        setIconLabel(tx, map, icon.id, 'Save')
+      })
+
+      function chip(annotationScale: number) {
+        const records = drawWith(built, { showAllLabels: true, annotationScale })
+        return {
+          height: records.chips.at(-1)!.rect[3],
+          font: records.ctx.font,
+        }
+      }
+
+      // LABEL_PX 11 with LABEL_PAD_Y 2 either side.
+      expect(chip(1)).toEqual({ height: 15, font: expect.stringContaining('11px') })
+      expect(chip(4)).toEqual({ height: 60, font: expect.stringContaining('44px') })
+    })
+
+    it('scales the dotted dash period', () => {
+      const built = withMap((tx, project, map) => {
+        const room = paintCells(tx, project, map, ['0,0', '1,0'], { areaId: WORLD_AREA_ID })
+        drawInnerWall(tx, map, room.id, edgeKey(1, 0, 'V'), 'dotted')
+      })
+
+      function dash(annotationScale: number) {
+        const { strokes } = drawWith(built, { annotationScale })
+        return strokes.find((stroke) => stroke.dash.length > 0)!.dash
+      }
+
+      expect(dash(1)).toEqual([3, 3])
+      expect(dash(4)).toEqual([12, 12])
+    })
+
+    // The ceiling scales and the floor does not. Without this, 96 and 128 px
+    // per cell are a different-looking map rather than the same one larger:
+    // the door marker, the markup line and the arrowhead all reach the ceiling
+    // there while the walls have not.
+    describe('the stroke clamps', () => {
+      const oneCell = () =>
+        withMap((tx, project, map) => {
+          paintCells(tx, project, map, ['0,0'], { areaId: WORLD_AREA_ID })
+        })
+
+      function wallAt(zoom: number, annotationScale: number) {
+        const { strokes } = drawWith(oneCell(), {
+          camera: { pan: { x: 0, y: 0 }, zoom },
+          annotationScale,
+        })
+        return strokes.find((stroke) => stroke.style === '#roomwall')!.width
+      }
+
+      // The markup line carries its own colour, so it can be told apart from the
+      // walls, and it is clamped by the shared helper every ink weight goes
+      // through rather than by the wall's own expression.
+      function markupLineAt(zoom: number, annotationScale: number) {
+        const built = withMap((tx, project, map) => {
+          paintCells(tx, project, map, ['0,0', '1,0'], { areaId: WORLD_AREA_ID })
+          ok(
+            createLine(tx, map, ['0,0', '1,0'], {
+              color: '#markupline',
+              arrowStart: false,
+              arrowEnd: false,
+            }),
+          )
+        })
+        const { strokes } = drawWith(built, {
+          camera: { pan: { x: 0, y: 0 }, zoom },
+          annotationScale,
+        })
+        return strokes.find((stroke) => stroke.style === '#markupline')!.width
+      }
+
+      it('lifts the ceiling by the scale, so ink stays proportional', () => {
+        // OUTER_WALL_PX 2 at zoom 4 wants 8, and MAX_WALL_PX is 6.
+        expect(wallAt(4, 1)).toBe(6)
+        expect(wallAt(4, 4)).toBe(8)
+        // MARKUP_LINE_PX 3 at zoom 4 wants 12, against the same ceiling of 6.
+        expect(markupLineAt(4, 1)).toBe(6)
+        expect(markupLineAt(4, 4)).toBe(12)
+      })
+
+      it('leaves the floor where it is, which is what protects a small cell', () => {
+        expect(wallAt(0.75, 0.75)).toBe(1.5)
+        // 2 x 0.25 is 0.5, under MIN_WALL_PX, and the scale does not lower it.
+        expect(wallAt(0.25, 0.25)).toBe(1)
+        // 3 x 0.25 is 0.75, likewise under it. A floor that scaled would let
+        // this through at 0.75 and draw a sub-pixel hairline.
+        expect(markupLineAt(0.25, 0.25)).toBe(1)
+      })
     })
   })
 

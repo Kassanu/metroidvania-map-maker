@@ -143,6 +143,12 @@ export function useCanvasRenderer(
       bounds: current.bounds,
       tileSize: current.tileSize,
       dpr: ratio,
+      // The canvas is the fixed-scale case, and it is a constant here rather
+      // than a `SceneInput` field because no canvas state could vary it: on
+      // screen you can zoom, so a label that grew with the map would be
+      // illegible exactly when the map got dense enough to need it. An export
+      // has no zoom and passes its own.
+      annotationScale: 1,
       map: current.map,
       areas: current.areas,
       lockTypes: current.lockTypes,
