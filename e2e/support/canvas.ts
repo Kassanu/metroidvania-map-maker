@@ -9,7 +9,9 @@
 
 import type { Page } from '@playwright/test'
 
-export async function openApp(page: Page, sample = 'one-of-everything') {
+// Null opens the blank project the app starts with, whose page is the fixed
+// home rectangle: a spec needing bare grid knows where it is without measuring.
+export async function openApp(page: Page, sample: string | null = 'one-of-everything') {
   const errors: string[] = []
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text())
@@ -18,7 +20,7 @@ export async function openApp(page: Page, sample = 'one-of-everything') {
 
   // The app starts blank, so a spec that needs content asks for a sample by
   // name. `one-of-everything` is the project these specs were written against.
-  await page.goto(`/?sample=${sample}`)
+  await page.goto(sample === null ? '/' : `/?sample=${sample}`)
   await page.getByRole('button', { name: 'Get started' }).click()
   return { errors }
 }

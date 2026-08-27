@@ -1,4 +1,5 @@
-// The dither's geometry, in device pixels.
+// Geometry that has to be stated in device pixels: the dither's squares, and
+// the coordinates a stroke has to land on to come out crisp.
 //
 // Everything else under `src/canvas/` works in CSS pixels: the composable
 // pre-scales the context by the device pixel ratio, so a renderer length is a
@@ -51,4 +52,14 @@ export function flattensToBlend(cell: number, dpr: number): boolean {
 // of antialiased into a blended row.
 export function snapToDevicePixel(cssPx: number, dpr: number): number {
   return Math.round(cssPx * dpr) / dpr
+}
+
+// The centre a stroke of `widthCss` takes to cover whole device pixels, for a
+// line nominally at `cssPx`. Arguments and answer are CSS pixels.
+//
+// It is the leading edge that gets snapped, since a stroke spans
+// `centre ± width / 2` and the edges are what decide which columns take ink.
+// An identity whenever the width is already an even number of device pixels.
+export function snapStrokeCentre(cssPx: number, widthCss: number, dpr: number): number {
+  return snapToDevicePixel(cssPx - widthCss / 2, dpr) + widthCss / 2
 }

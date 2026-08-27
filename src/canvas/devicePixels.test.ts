@@ -4,6 +4,7 @@ import {
   cellDevicePx,
   checkerSquarePx,
   flattensToBlend,
+  snapStrokeCentre,
   snapToDevicePixel,
 } from './devicePixels'
 
@@ -99,6 +100,50 @@ describe('snapToDevicePixel', () => {
   it('snaps a negative coordinate the same way', () => {
     expect(snapToDevicePixel(-10.4, 1)).toBe(-10)
     expect(snapToDevicePixel(-10.6, 1)).toBe(-11)
+  })
+})
+
+// A stroke covers `centre ± width / 2`, so every assertion here is on that
+// span in device pixels: the centre on its own says nothing about which
+// columns take ink, which is the whole reason the rule is about edges.
+describe('snapStrokeCentre', () => {
+  function span(centre: number, widthCss: number, dpr: number) {
+    return [(centre - widthCss / 2) * dpr, (centre + widthCss / 2) * dpr]
+  }
+
+  it('moves an odd device width onto whole device pixels', () => {
+    expect(span(snapStrokeCentre(32, 1, 1), 1, 1)).toEqual([32, 33])
+    expect(span(snapStrokeCentre(0, 1, 1), 1, 1)).toEqual([0, 1])
+  })
+
+  // Two device pixels centred on a whole one already covers two whole
+  // columns, so there is nothing to move. A rule stated about the centre
+  // rather than the edge would shift this by half a device pixel and smear a
+  // line that was crisp.
+  it('leaves an even device width alone', () => {
+    expect(snapStrokeCentre(32, 1, 2)).toBe(32)
+    expect(span(snapStrokeCentre(32, 1, 2), 1, 2)).toEqual([63, 65])
+    expect(snapStrokeCentre(10, 2, 1)).toBe(10)
+  })
+
+  it('leaves a stroke already on the pixel grid where it is', () => {
+    expect(snapStrokeCentre(32.5, 1, 1)).toBe(32.5)
+    expect(snapStrokeCentre(10.25, 1, 4)).toBe(10.25)
+  })
+
+  it('snaps a negative coordinate the same way', () => {
+    expect(span(snapStrokeCentre(-32, 1, 1), 1, 1)).toEqual([-32, -31])
+    expect(span(snapStrokeCentre(-32.4, 1, 1), 1, 1)).toEqual([-33, -32])
+  })
+
+  // A fractional ratio cannot put both edges of a 1 CSS pixel stroke on whole
+  // device pixels, since the stroke is 1.5 of them. The leading edge is the
+  // one that lands, which is what the rule promises and all it promises: the
+  // trailing edge is half a device pixel in and carries float residue with it.
+  it('lands the leading edge at a fractional ratio', () => {
+    const [from, to] = span(snapStrokeCentre(32, 1, 1.5), 1, 1.5)
+    expect(from).toBe(47)
+    expect(to).toBeCloseTo(48.5)
   })
 })
 
