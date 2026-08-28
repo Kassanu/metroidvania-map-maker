@@ -35,6 +35,8 @@ import { t } from '@/i18n'
 import type { MessageKey } from '@/i18n'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { jsonScopeEmpty } from '@/export'
+import { imageScopeEmpty } from '@/export/image'
+import { IMAGE_FORMATS } from '@/export/image/formats'
 import { hasScopableTab } from '@/export/scopeTree'
 import type { EmptyPredicate } from '@/export/scopeTree'
 
@@ -136,16 +138,33 @@ const fileItems = computed(() => [
 // Each entry refuses by the same predicate its dialog builds its tree from, so
 // an enabled item cannot open onto a dead picker.
 interface ExportItem {
-  key: MessageKey
+  // Resolved rather than a key: the image entries are named by their
+  // descriptor, and a format's name is the same in every language.
+  label: string
+  // Which run of items this belongs to. A separator is drawn where the group
+  // changes rather than at a counted position, so a format added to the table
+  // lands on the right side of the rule with no menu code written for it.
+  group: string
   reasonKey: MessageKey | null
   run: () => void
 }
 
+// Pictures first: exporting a map to show somebody is the common errand, and
+// the game-ready JSON is the specialist one.
 const exportItems = computed<ExportItem[]>(() => {
   dependOn(model.rev, model.structureRev)
   return [
+    // One item per image format, from the table itself. Nothing here reads what
+    // the format is: the entry carries its own descriptor to the dialog.
+    ...IMAGE_FORMATS.map((format) => ({
+      label: `${format.label}…`,
+      group: 'image',
+      reasonKey: refusalFor(imageScopeEmpty, 'menu.file.export.image.empty'),
+      run: () => ui.openImageExport(format),
+    })),
     {
-      key: 'menu.file.export.json',
+      label: t('menu.file.export.json'),
+      group: 'data',
       reasonKey: refusalFor(jsonScopeEmpty, 'menu.file.export.json.empty'),
       run: () => ui.openExport(),
     },
@@ -302,16 +321,20 @@ const displayTitle = computed(() =>
                   style="--popover-min-width: 12rem"
                   :side-offset="4"
                 >
-                  <DropdownMenuItem
-                    v-for="item in exportItems"
-                    :key="item.key"
-                    class="popover-item"
-                    :disabled="item.reasonKey !== null"
-                    :title="item.reasonKey ? t(item.reasonKey) : undefined"
-                    @select="item.run()"
-                  >
-                    {{ t(item.key) }}
-                  </DropdownMenuItem>
+                  <template v-for="(item, index) in exportItems" :key="item.label">
+                    <DropdownMenuSeparator
+                      v-if="index > 0 && item.group !== exportItems[index - 1]!.group"
+                      class="popover-separator"
+                    />
+                    <DropdownMenuItem
+                      class="popover-item"
+                      :disabled="item.reasonKey !== null"
+                      :title="item.reasonKey ? t(item.reasonKey) : undefined"
+                      @select="item.run()"
+                    >
+                      {{ item.label }}
+                    </DropdownMenuItem>
+                  </template>
                 </DropdownMenuSubContent>
               </DropdownMenuPortal>
             </DropdownMenuSub>

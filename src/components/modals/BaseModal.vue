@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   DialogClose,
   DialogContent,
@@ -17,30 +18,48 @@ import { t } from '@/i18n'
 // would let the same Escape fall through to a lower tier and also clear a
 // selection or abort a gesture). It's exactly the kind of thing that gets
 // forgotten.
-withDefaults(
+const props = withDefaults(
   defineProps<{
     // Screen-reader description; there's no visible duplicate.
     description: string
     title: string
     width?: string
+    // False while the dialog is doing something that closing would abandon: an
+    // export mid-write, where the bytes are already on their way and there is
+    // no cancel. Every route out is refused together, since Esc, the overlay
+    // and the close button are one decision and a dialog that Esc dismisses
+    // while its button is disabled is worse than one that refuses both.
+    closable?: boolean
   }>(),
-  { width: '32rem' },
+  { width: '32rem', closable: true },
 )
 
 const open = defineModel<boolean>('open', { required: true })
 
-useDialogEscTier(open)
+// The one gate every route out passes through. Reka closes by writing the
+// model, so refusing here covers the ones that never reach a handler of ours.
+const shown = computed({
+  get: () => open.value,
+  set: (next: boolean) => {
+    if (!next && !props.closable) return
+    open.value = next
+  },
+})
+
+useDialogEscTier(shown)
 </script>
 
 <template>
-  <DialogRoot v-model:open="open">
+  <DialogRoot v-model:open="shown">
     <DialogPortal>
       <DialogOverlay class="modal-overlay" />
       <DialogContent class="modal-content" :style="{ '--modal-width': width }">
         <div class="modal-header">
           <DialogTitle class="modal-title">{{ title }}</DialogTitle>
           <DialogDescription class="visually-hidden">{{ description }}</DialogDescription>
-          <DialogClose class="modal-close" :aria-label="t('common.close')">✕</DialogClose>
+          <DialogClose class="modal-close" :disabled="!closable" :aria-label="t('common.close')">
+            ✕
+          </DialogClose>
         </div>
         <slot />
       </DialogContent>

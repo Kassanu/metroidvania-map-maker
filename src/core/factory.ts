@@ -22,7 +22,6 @@ export function defaultSettings(): ProjectSettings {
     tileSize: DEFAULT_TILE_SIZE,
     backgroundColor: null,
     gridColor: null,
-    gridInExports: true,
   }
 }
 

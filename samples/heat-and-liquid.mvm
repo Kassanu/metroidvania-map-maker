@@ -6,8 +6,7 @@
     "settings": {
       "tileSize": 32,
       "backgroundColor": null,
-      "gridColor": null,
-      "gridInExports": true
+      "gridColor": null
     },
     "lockTypes": [
       {

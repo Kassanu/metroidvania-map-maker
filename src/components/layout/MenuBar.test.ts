@@ -16,6 +16,8 @@ import { registerAction } from '@/hotkeys/actions'
 import { renameProject } from '@/core/ops/project'
 import { paintCells } from '@/core/ops/rooms'
 import { createFromBox } from '@/core/ops/doors'
+import { createLine } from '@/core/ops/markup'
+import { IMAGE_FORMATS } from '@/export/image/formats'
 import { ok } from '@/core/testUtils'
 import { WORLD_AREA_ID } from '@/core/ids'
 import type { ActionId } from '@/hotkeys/keymap'
@@ -694,6 +696,22 @@ describe('MenuBar', () => {
       })
     }
 
+    // A tab holding markup and no rooms: nothing for the JSON exporter and a
+    // picture for the image one.
+    function drawALine() {
+      const model = useModelStore()
+      const mapId = useTabsStore().activeTabId
+      model.run('Line', mapScope(mapId), (tx) => {
+        ok(
+          createLine(tx, model.project.mapsById.get(mapId)!, ['0,0', '1,0'], {
+            color: '#ffffff',
+            arrowStart: false,
+            arrowEnd: false,
+          }),
+        )
+      })
+    }
+
     async function exportItem(label: string) {
       await openFileMenu()
       await openSubmenu('Export')
@@ -716,6 +734,10 @@ describe('MenuBar', () => {
     // items as there are exporters and no more. An item hand-written beside
     // them is what this refuses, and it is the count rather than the labels
     // that catches one.
+    //
+    // The image entries are read from the format table rather than written out
+    // here: an entry hand-written per format would pass a list of two names
+    // while proving nothing about what a third format costs.
     it('renders one item per entry and nothing hand-written beside them', async () => {
       paintARoom()
       await openFileMenu()
@@ -729,7 +751,62 @@ describe('MenuBar', () => {
       const labels = Array.from(submenu.querySelectorAll('[role="menuitem"]')).map((el) =>
         el.textContent?.trim(),
       )
-      expect(labels).toEqual(['JSON\u2026'])
+      expect(labels).toEqual([
+        ...IMAGE_FORMATS.map((format) => `${format.label}\u2026`),
+        'JSON\u2026',
+      ])
+    })
+
+    // A rule drawn where the group changes rather than at a counted position:
+    // the images sit above it however many of them the table holds.
+    it('rules the image formats off from the game-ready export', async () => {
+      paintARoom()
+      await openFileMenu()
+      await openSubmenu('Export')
+
+      const submenu = Array.from(document.querySelectorAll('[role="menu"]')).find((menu) =>
+        Array.from(menu.querySelectorAll('[role="menuitem"]')).some(
+          (item) => item.textContent?.trim() === 'JSON\u2026',
+        ),
+      )!
+      const rows = Array.from(submenu.querySelectorAll('[role="menuitem"], [role="separator"]'))
+
+      expect(rows.map((row) => row.getAttribute('role'))).toEqual([
+        ...IMAGE_FORMATS.map(() => 'menuitem'),
+        'separator',
+        'menuitem',
+      ])
+    })
+
+    // Each entry carries its own descriptor to the dialog it opens, so the two
+    // ends of the table are asserted rather than one: an item that opened the
+    // dialog for whatever format came first would pass on the first alone.
+    for (const format of [IMAGE_FORMATS[0]!, IMAGE_FORMATS[IMAGE_FORMATS.length - 1]!]) {
+      it(`opens the image dialog for ${format.label}`, async () => {
+        paintARoom()
+        const ui = useUiStore()
+
+        const item = await exportItem(`${format.label}\u2026`)
+        item.click()
+        await nextTick()
+
+        expect(ui.imageExportFormat).toMatchObject({ mediaType: format.mediaType })
+      })
+    }
+
+    // The image exporter's emptiness is its own question: a tab holding only
+    // lines has nothing to write as JSON and a picture to draw. Both items are
+    // read from one opening, since opening the menu twice closes it.
+    it('offers an image export of a project that has lines and no rooms', async () => {
+      drawALine()
+
+      const png = await exportItem(`${IMAGE_FORMATS[0]!.label}\u2026`)
+      const json = Array.from(document.querySelectorAll('.popover-item')).find(
+        (el) => el.textContent?.trim() === 'JSON\u2026',
+      ) as HTMLElement
+
+      expect(png.hasAttribute('data-disabled')).toBe(false)
+      expect(json.hasAttribute('data-disabled')).toBe(true)
     })
 
     it('opens the export dialog', async () => {

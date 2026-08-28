@@ -44,6 +44,20 @@ export function roomFileName(name: string, roomId: string): string {
   return slug ? `${slug}${SEPARATOR}${roomId}.json` : `${roomId}.json`
 }
 
+// An archive entry for one map. The slug alone, since a map has no id worth
+// putting in a filename somebody is going to look at, and uniqueness comes from
+// `uniqueNames` over the whole archive instead.
+//
+// A name that slugs to nothing falls back to the project's slug and then to a
+// bare word: `renameTab` trims and accepts, so a map called `!!!` is legal and
+// would otherwise produce a file called `.png`, which extracts as a hidden file
+// with no name.
+export function mapEntryName(mapName: string, projectName: string, extension: string): string {
+  return `${slugify(mapName) || slugify(projectName) || FALLBACK_MAP_SLUG}${extension}`
+}
+
+const FALLBACK_MAP_SLUG = 'map'
+
 // Names made unique within one archive, in the order they were given, by
 // suffixing the second and later repeats before the extension. Order is the
 // caller's, so a picker that lists tabs in tab order gets `-2` on the later

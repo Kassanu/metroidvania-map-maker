@@ -604,11 +604,6 @@ function loadSettings(raw: JsonSettings | undefined, log: LoadLog): ProjectSetti
     else log.add({ kind: 'setting-reset', setting: key })
   }
 
-  if (raw.gridInExports !== undefined) {
-    if (typeof raw.gridInExports === 'boolean') settings.gridInExports = raw.gridInExports
-    else log.add({ kind: 'setting-reset', setting: 'gridInExports' })
-  }
-
   return settings
 }
 

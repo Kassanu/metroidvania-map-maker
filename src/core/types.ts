@@ -30,12 +30,6 @@ export interface ProjectSettings {
   // light and dark.
   backgroundColor: string | null
   gridColor: string | null
-  // Whether an exported image draws the grid. Named gridInExports to avoid
-  // confusion with canvasView.showGrid, the View menu's grid toggle. This is
-  // project state (serialised, undoable, dirties the file); the View toggle is a
-  // per-user preference in localStorage that follows the user across every
-  // project. Nothing syncs them.
-  gridInExports: boolean
 }
 
 export interface Area {
