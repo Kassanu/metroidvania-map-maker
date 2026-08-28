@@ -126,6 +126,9 @@ export const en = {
   // the exporter's own question; being busy is not, since it refuses every
   // entry for the same reason.
   'menu.file.export.json.empty': 'Nothing to export: this project has no rooms.',
+  // The image exporter's own emptiness, which is a different question: a tab
+  // holding only lines has nothing to write as JSON and a picture to draw.
+  'menu.file.export.image.empty': 'Nothing to export: this project is empty.',
   'menu.file.export.busy': 'Another file operation is still running.',
 
   // The file the project came from, beside the project name. Absent until a
@@ -507,6 +510,65 @@ export const en = {
   // stays open on the other.
   'modal.export.succeeded': 'The export was written.',
   'modal.export.failed': 'The export could not be written: {message}',
+
+  // The image dialog's title names the format it was opened for, since the
+  // format is picked in the menu and there is no control in here to say which.
+  'modal.imageExport.title': 'Export {format}',
+  'modal.imageExport.description':
+    'Choose which tabs to export as images, at what size, and what the picture contains.',
+  'modal.imageExport.scope': 'Which tabs',
+  // A tab with neither rooms nor lines has no rectangle to frame, so there is
+  // no picture to make of it.
+  'modal.imageExport.emptyTab': 'Empty',
+  'modal.imageExport.size': 'Size',
+  'modal.imageExport.pxPerCell': '{value} px per cell',
+  'modal.imageExport.layers': 'Layers',
+  'modal.imageExport.layer.grid': 'Grid',
+  'modal.imageExport.layer.transitions': 'Doors and transitions',
+  'modal.imageExport.layer.teleportLines': 'Teleport lines',
+  'modal.imageExport.layer.icons': 'Icons',
+  'modal.imageExport.layer.lines': 'Lines',
+  'modal.imageExport.layer.allLabels': 'Labels',
+  'modal.imageExport.advanced': 'Advanced',
+  'modal.imageExport.margin': 'Margin',
+  'modal.imageExport.marginCells': '{value} cells',
+  'modal.imageExport.background': 'Background',
+  'modal.imageExport.opaque': 'Solid',
+  'modal.imageExport.transparent': 'Transparent',
+  // Why Transparent is refused. A format that carries no alpha would write
+  // black behind the map rather than nothing.
+  'modal.imageExport.noAlpha': '{format} does not support transparency.',
+  'modal.imageExport.appearance': 'Appearance',
+  'modal.imageExport.light': 'Light',
+  'modal.imageExport.dark': 'Dark',
+  'modal.imageExport.quality': 'Quality',
+  // The dimensions and the weight, before anything is drawn. Several ticked
+  // tabs report the largest, which is the one a ceiling refuses first, and the
+  // total, which is what the zip weighs.
+  'modal.imageExport.readout': '{width} × {height} · about {size}',
+  'modal.imageExport.readoutMany': 'Largest {width} × {height} · about {size} in total',
+  'modal.imageExport.sizeKb': '{value} KB',
+  'modal.imageExport.sizeMb': '{value} MB',
+  'modal.imageExport.nothing': 'No tabs selected',
+  // Both refusals name the tab and the levers. The margin is named only when it
+  // is one, since it lives inside the advanced container: a refusal that names
+  // it opens that container rather than describing a control the user cannot
+  // see.
+  'modal.imageExport.drawsNothing':
+    '{tab} draws nothing with Lines turned off. Turn Lines back on, or deselect that tab.',
+  'modal.imageExport.tooLarge':
+    '{tab} would be {width} × {height}, larger than this device can produce. Choose a smaller size, or deselect that tab.',
+  'modal.imageExport.tooLargeMargin':
+    '{tab} would be {width} × {height}, larger than this device can produce. Choose a smaller size, reduce the margin, or deselect that tab.',
+
+  // A batch abandoned partway names the map it failed on: which one it was is
+  // the only actionable part of the message.
+  'export.image.mapFailed': '{map} could not be exported: {reason}',
+  'export.image.reason.drawsNothing': 'it is empty with the selected layers',
+  'export.image.reason.tooLarge': 'it is larger than this device can produce',
+  'export.image.reason.blobNull': 'the browser produced no image data',
+  'export.image.reason.typeSubstituted': 'the browser cannot encode that format',
+  'export.image.reason.noContext': 'the browser gave no drawing surface',
 
   'modal.about.title': 'Metroidvania Map Maker',
   'modal.about.description': 'App version and links.',

@@ -43,13 +43,19 @@ describe('the frozen v1 file', () => {
     // nowhere else, because the zero-events check above only sees the read.
     //
     // Every field the format has gained since the fixture was frozen is listed
-    // here and nowhere else, with the default the loader supplies. The list is
-    // the writer's whole licence to differ from the file: anything not on it
-    // fails, which is the point.
+    // here and nowhere else, with the default the loader supplies, and so is
+    // every field it has dropped. The list is the writer's whole licence to
+    // differ from the file: anything not on it fails, which is the point.
     const expected = JSON.parse(JSON.stringify(fixture)) as JsonFile
     const icon = expected.project.maps[0].icons[0]
     icon.plateColor = '#e0e0e0'
     icon.glyphColor = '#202020'
+
+    // A setting the format has since lost. Removing a field nothing reads does
+    // not bump the version: the writer stops emitting it and the loader keeps
+    // ignoring it, so this file still opens with nothing to repair and simply
+    // saves back without it.
+    delete (expected.project.settings as unknown as Record<string, unknown>).gridInExports
 
     // v2 replaced `oneWay: boolean` with `direction`, which is the one change
     // here that translates a value rather than defaulting an absent one: every

@@ -1654,20 +1654,38 @@ describe('settings are validated, not trusted', () => {
     const file = toJSON(project)
     file.project.settings = {
       tileSize: 'huge',
-      gridInExports: 'no',
       backgroundColor: 42,
     } as unknown as typeof file.project.settings
 
     const { project: loaded, report } = fromJSON(file)
     // tileSize drives all canvas geometry; a string there is a blank editor.
     expect(loaded.settings.tileSize).toBeGreaterThan(0)
-    expect(loaded.settings.gridInExports).toBe(true)
     expect(loaded.settings.backgroundColor).toBeNull()
     expect(
       eventsOf(report, 'setting-reset')
         .map((event) => event.setting)
         .sort(),
-    ).toEqual(['backgroundColor', 'gridInExports', 'tileSize'])
+    ).toEqual(['backgroundColor', 'tileSize'])
+  })
+
+  // A field the app no longer has. The loader ignores it rather than repairing
+  // it: a file written by a build that had it is not a damaged file, and a
+  // repair notice for a value nothing reads is a report about nothing.
+  it('ignores a setting this build no longer carries, and says nothing', () => {
+    const { project, map } = setup()
+    makeRoom(project, map, ['0,0'])
+    const file = toJSON(project)
+    ;(file.project.settings as unknown as Record<string, unknown>).gridInExports = false
+
+    const { project: loaded, report } = fromJSON(file)
+
+    expect(report.events).toEqual([])
+    expect(Object.keys(loaded.settings).sort()).toEqual([
+      'backgroundColor',
+      'gridColor',
+      'tileSize',
+    ])
+    expect(toJSON(loaded).project.settings).not.toHaveProperty('gridInExports')
   })
 
   it('rejects a tile size of zero as firmly as a string', () => {
@@ -1686,11 +1704,11 @@ describe('settings are validated, not trusted', () => {
     makeRoom(project, map, ['0,0'])
     const file = toJSON(project)
     file.project.settings.tileSize = 48
-    file.project.settings.gridInExports = false
+    file.project.settings.gridColor = '#123456'
 
     const { project: loaded, report } = fromJSON(file)
     expect(loaded.settings.tileSize).toBe(48)
-    expect(loaded.settings.gridInExports).toBe(false)
+    expect(loaded.settings.gridColor).toBe('#123456')
     expect(report.events).toEqual([])
   })
 })

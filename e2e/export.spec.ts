@@ -15,13 +15,13 @@ import { openApp } from './support/canvas'
 
 const DOWNLOAD_ONLY = 'firefox'
 
-async function openExportDialog(page: Page) {
+async function openExportDialog(page: Page, item = 'JSON…') {
   await page.getByRole('button', { name: 'File', exact: true }).click()
   // Not an exact match: the submenu marker is a CSS `::after`, and Chromium
   // folds generated content into the accessible name, so the item answers to
   // "Export \u25b8" there and to "Export" elsewhere.
   await page.getByRole('menuitem', { name: 'Export' }).click()
-  await page.getByRole('menuitem', { name: 'JSON…', exact: true }).click()
+  await page.getByRole('menuitem', { name: item, exact: true }).click()
   await expect(page.getByRole('tree')).toBeVisible()
 }
 
@@ -130,6 +130,68 @@ print(json.dumps({'count': len(names), 'names': names, 'room': first['room']['id
 
     await json.click({ force: true })
     await expect(page.getByRole('dialog')).toBeHidden()
+  })
+
+  // The image half, end to end: the menu item the format table generated, the
+  // dialog it opens, and a real PNG on disk. The unit tests stand in a double
+  // for the encoder, so this is the only place the browser's own encoder runs
+  // against the app's own scene.
+  test('writes a PNG of the current tab, framed on its content', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== DOWNLOAD_ONLY, 'needs the download provider')
+    await openApp(page)
+    const tabName = await page.locator('.tab.active').innerText()
+
+    await openExportDialog(page, 'PNG…')
+    const readout = await page.locator('[data-readout]').innerText()
+    const file = await download(page, testInfo)
+
+    // Named for the map, not the project: each file is a map rather than a
+    // fragment of one.
+    expect(file.name).toBe(`${tabName}.png`)
+
+    // Judged by a tool that did not write it: the signature, and the
+    // dimensions the dialog promised before anything was drawn.
+    const probe = execFileSync('python3', [
+      '-c',
+      `import struct,sys
+data = open(sys.argv[1], 'rb').read()
+assert data[:8] == b'\\x89PNG\\r\\n\\x1a\\n', 'not a PNG'
+width, height = struct.unpack('>II', data[16:24])
+print(f'{width} \u00d7 {height}')`,
+      file.path,
+    ])
+
+    expect(readout).toContain(probe.toString().trim())
+  })
+
+  test('writes several ticked tabs as one zip named for the project', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== DOWNLOAD_ONLY, 'needs the download provider')
+    await openApp(page)
+    const projectName = await page.locator('.project-title-button').innerText()
+
+    await openExportDialog(page, 'WebP…')
+    for (const box of await page.getByRole('treeitem').getByRole('checkbox').all()) {
+      if ((await box.getAttribute('aria-checked')) === 'false' && (await box.isEnabled())) {
+        await box.click()
+      }
+    }
+    const file = await download(page, testInfo)
+
+    expect(file.name).toBe(`${projectName}.zip`)
+
+    const listing = execFileSync('python3', [
+      '-c',
+      `import zipfile,sys
+z = zipfile.ZipFile(sys.argv[1])
+assert z.testzip() is None
+print('\\n'.join(z.namelist()))`,
+      file.path,
+    ])
+    const names = listing.toString().trim().split('\n')
+    expect(names.length).toBeGreaterThan(1)
+    for (const name of names) expect(name).toMatch(/^[\p{L}\p{N}-]+\.webp$/u)
   })
 
   test('refuses to write an empty file when nothing is ticked', async ({ page }, testInfo) => {

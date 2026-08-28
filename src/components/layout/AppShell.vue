@@ -9,6 +9,7 @@ import CheatSheetModal from '../modals/CheatSheetModal.vue'
 import WelcomeModal from '../modals/WelcomeModal.vue'
 import AboutModal from '../modals/AboutModal.vue'
 import ExportDialog from '../modals/ExportDialog.vue'
+import ImageExportDialog from '../modals/ImageExportDialog.vue'
 import ConfirmUnsavedChanges from '../modals/ConfirmUnsavedChanges.vue'
 import LoadOutcomeDialog from '../modals/LoadOutcomeDialog.vue'
 import RecoveryOffer from '../modals/RecoveryOffer.vue'
@@ -100,6 +101,7 @@ function forgetFailedFile() {
     <WelcomeModal />
     <AboutModal />
     <ExportDialog />
+    <ImageExportDialog />
     <ConfirmUnsavedChanges
       :open="file.unsavedPromptOpen"
       :name="model.projectName"

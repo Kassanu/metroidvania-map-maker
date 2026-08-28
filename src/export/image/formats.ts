@@ -32,6 +32,15 @@ export interface ImageFormat {
   // transparent background option when this is false.
   alpha: boolean
   quality: EncodeQuality | null
+  // What a pixel of this content costs once encoded, for the dialog's readout.
+  // An order of magnitude rather than a promise: both encoders are driven by
+  // how much of the picture is flat, and a dense map costs several times a
+  // sparse one. The readout says "about" for that reason and the number is
+  // never checked against a file.
+  //
+  // Measured on Zebes (251 rooms) at 32 px per cell, 2240x1952: PNG 125 KiB,
+  // WebP 31 KiB.
+  bytesPerPixel: number
 }
 
 // PNG first: it is the default, being lossless, alpha-carrying, and filtered
@@ -49,6 +58,7 @@ export const IMAGE_FORMATS: readonly ImageFormat[] = [
     mediaType: 'image/png',
     alpha: true,
     quality: null,
+    bytesPerPixel: 0.03,
   },
   {
     id: 'webp',
@@ -57,5 +67,6 @@ export const IMAGE_FORMATS: readonly ImageFormat[] = [
     mediaType: 'image/webp',
     alpha: true,
     quality: { value: 1, adjustable: false },
+    bytesPerPixel: 0.008,
   },
 ]

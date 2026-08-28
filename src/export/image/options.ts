@@ -5,6 +5,8 @@
 // export and nothing else reads them: the dialog offers them, the preference
 // store validates against them, and the scene builder clamps to them.
 
+import type { ExportLayers } from './scene'
+
 // The size control, in pixels per cell. A grid map has one natural unit of
 // size and it is the cell, so this is the whole of the size control: 32 px per
 // cell reads the same on a ten-cell map and a five-hundred-cell one, where a
@@ -29,3 +31,22 @@ export const DEFAULT_PX_PER_CELL = 32
 export const MARGIN_MIN = 1
 export const MARGIN_MAX = 20
 export const DEFAULT_MARGIN = 2
+
+// What the picture holds on a fresh install. All labels is the one layer that
+// starts off, and it is a decision rather than an oversight: the app defaults
+// `showAllLabels` false because a map with a label on everything is unreadable
+// at a glance, and that reason applies at least as hard to a picture somebody
+// else will read cold.
+export const DEFAULT_LAYERS: ExportLayers = {
+  grid: true,
+  transitions: true,
+  teleportLines: true,
+  icons: true,
+  lines: true,
+  allLabels: false,
+}
+
+// Off, so the picture lands on a solid background. A transparent PNG dropped
+// on a light forum page shows dark labels on white and reads as broken, which
+// is a failure nobody sees until after they have posted it.
+export const DEFAULT_TRANSPARENT = false

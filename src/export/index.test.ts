@@ -211,7 +211,7 @@ describe('export is write-only', () => {
 // exporters written later: a rule that names one file stops guarding the
 // moment a second producer lands beside it.
 describe('an exporter delivers rather than writes', () => {
-  const sources = import.meta.glob('/src/export/*.ts', {
+  const sources = import.meta.glob('/src/export/**/*.ts', {
     eager: true,
     query: '?raw',
     import: 'default',
@@ -225,8 +225,13 @@ describe('an exporter delivers rather than writes', () => {
     ([path]) => !path.endsWith('.test.ts') && !ALLOWED.includes(path),
   )
 
+  // Including the subfolders, which is what `*.ts` would quietly leave out: a
+  // pattern that does not cross a directory guards nothing the moment an
+  // exporter grows a folder of its own.
   it('is looking at the folder, not an empty glob', () => {
-    expect(guarded.map(([path]) => path)).toContain('/src/export/index.ts')
+    const paths = guarded.map(([path]) => path)
+    expect(paths).toContain('/src/export/index.ts')
+    expect(paths).toContain('/src/export/image/raster.ts')
     expect(guarded.length).toBeGreaterThan(1)
   })
 

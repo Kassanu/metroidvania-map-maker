@@ -6,15 +6,17 @@
 // the only place the two meet.
 //
 // Two extensions to the schema:
-//   * `settings` carries `backgroundColor`, `gridColor`, and `gridInExports`.
+//   * `settings` carries `backgroundColor` and `gridColor`.
 //   * Edge door segments carry `aSide` to name which boundary cell owns `locks.a`.
 
 export const FILE_FORMAT = 'metroidvania-map-maker'
 // A field holding user data bumps this; a derivable or presentational one does
-// not. The version protects the forward direction only: it is what makes an
-// older build refuse a file outright rather than read it, drop the fields it
-// does not recognise, and write the loss back on the next save. Backwards needs
-// nothing, since an absent field is its documented default.
+// not, and neither does removing one that nothing reads: the writer stops
+// emitting it and the loader keeps ignoring it, so an old file neither breaks
+// nor reports a repair. The version protects the forward direction only: it is
+// what makes an older build refuse a file outright rather than read it, drop
+// the fields it does not recognise, and write the loss back on the next save.
+// Backwards needs nothing, since an absent field is its documented default.
 //
 // 2: `oneWay: boolean` became `direction`. A replaced field owes a real
 // migration as well, or a v1 file's one-way transitions load two-way.
@@ -29,7 +31,6 @@ export interface JsonSettings {
   tileSize: number
   backgroundColor?: string | null
   gridColor?: string | null
-  gridInExports?: boolean
 }
 
 export interface JsonArea {
