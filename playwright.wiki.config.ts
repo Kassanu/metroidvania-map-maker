@@ -18,6 +18,11 @@ export default defineConfig({
   // and a second worker's half-written output would look like an orphan.
   workers: 1,
   fullyParallel: false,
+  // Every image is captured inside one test, so the budget is the whole
+  // manifest rather than one shot: a GIF is a screenshot per pointer step, and
+  // the list only grows. Generous rather than tuned, because the failure this
+  // guards against is a hung page, not a slow one.
+  timeout: 15 * 60 * 1000,
   forbidOnly: !!process.env.CI,
   reporter: 'list',
   use: {

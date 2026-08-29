@@ -32,16 +32,30 @@ export interface CaptureOptions {
   // A file in samples/, by basename. Omitted boots the app's own project:
   // Untitled Project, one map, and the World area.
   sample?: string
+  // Which sidebars start collapsed. Seeded rather than clicked, for the reason
+  // the theme is: a preference read before mount cannot capture a panel
+  // mid-animation. Omitted leaves both open, which is the app's own default.
+  collapse?: { left?: boolean; right?: boolean }
 }
 
 export async function openForCapture(page: Page, options: CaptureOptions = {}) {
+  // Only the collapse flags: the persistence plugin keeps the default for any
+  // field a stored value omits, so the sidebar widths stay the app's own.
+  const prefs: Record<string, unknown> = {
+    ...SEEDED_PREFS,
+    sidebarLayout: {
+      leftSidebarCollapsed: options.collapse?.left ?? false,
+      rightSidebarCollapsed: options.collapse?.right ?? false,
+    },
+  }
+
   await page.addInitScript(
     ({ namespace, version, prefs }) => {
       for (const [key, data] of Object.entries(prefs)) {
         localStorage.setItem(namespace + key, JSON.stringify({ v: version, data }))
       }
     },
-    { namespace: NAMESPACE, version: PREFS_VERSION, prefs: SEEDED_PREFS },
+    { namespace: NAMESPACE, version: PREFS_VERSION, prefs },
   )
 
   // Relative, so it resolves under the Vite base rather than relying on the

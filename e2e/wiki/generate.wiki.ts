@@ -37,7 +37,7 @@ import { SHOTS } from './manifest'
 import { CURSOR_CLASS, installCursor } from './support/cursor'
 import { encodeGif, frameName } from './support/gif'
 import { openForCapture } from './support/shell'
-import { panView } from './support/view'
+import { focusOn, panView, setZoom } from './support/view'
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const DEFAULT_CLONE = path.join(path.dirname(REPO), 'metroidvania-map-maker-wiki')
@@ -59,8 +59,12 @@ test('the wiki images regenerate', async ({ browser, contextOptions }) => {
     })
     try {
       const page = await context.newPage()
-      await openForCapture(page, { sample: shot.sample })
+      await openForCapture(page, { sample: shot.sample, collapse: shot.collapse })
+      // Zoom before framing: zooming leaves the camera's pan alone, so it moves
+      // whatever was in frame and any framing done first is undone by it.
+      if (shot.zoom) await setZoom(page, shot.zoom)
       if (shot.pan) await panView(page, shot.pan.x, shot.pan.y)
+      if (shot.focus) await focusOn(page, shot.focus.x, shot.focus.y)
       await shot.prepare?.(page)
 
       written.add(shot.gesture ? await captureGif(page, shot) : await captureStill(page, shot))
